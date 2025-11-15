@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Prompt Architect v1.1</title>
+    <!-- Version 1.1 - Premium UI with Enhance Tab -->
+    <style>
+        /* Premium Jony Ive-Inspired Design System */
+        :root {
+            --primary-blue: #007AFF;
+            --primary-blue-dark: #0051D5;
+            --primary-blue-light: rgba(0, 122, 255, 0.1);
+            --background-base: #F5F5F7;
+            --background-elevated: rgba(255, 255, 255, 0.8);
+            --text-primary: #1D1D1F;
+            --text-secondary: rgba(60, 60, 67, 0.6);
+            --text-tertiary: rgba(60, 60, 67, 0.4);
+            --border-subtle: rgba(0, 0, 0, 0.06);
+            --border-light: rgba(255, 255, 255, 0.8);
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 100%);
+            width: 420px;
+            min-height: 500px;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        /* Tab Navigation */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 0.5px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 4px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 10px 16px;
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .tab-button:hover {
+            color: var(--text-primary);
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .tab-button.active {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Glass Card */
+        .glass-card {
+            background: var(--background-elevated);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 0.5px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Setup View */
+        .setup-section {
+            display: none !important;
+        }
+
+        .setup-section.active {
+            display: flex !important;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .section-title {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            margin: 0 0 4px 0;
+        }
+
+        .section-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin: 0 0 16px 0;
+        }
+
+        /* Premium Input */
+        .premium-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+        }
+
+        .premium-input:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 0 4px var(--primary-blue-light);
+        }
+
+        .premium-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Premium Textarea */
+        .premium-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        .premium-textarea:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 0 4px var(--primary-blue-light);
+        }
+
+        .premium-textarea::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Mode Selector */
+        .mode-selector {
+            display: flex;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 0.5px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 4px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .mode-option {
+            flex: 1;
+            padding: 8px 12px;
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .mode-option:hover {
+            color: var(--text-primary);
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .mode-option.active {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Premium Button */
+        .premium-button {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(180deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: white;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 
+                0 2px 8px rgba(0, 122, 255, 0.25),
+                0 4px 16px rgba(0, 122, 255, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            user-select: none;
+        }
+
+        .premium-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 
+                0 4px 12px rgba(0, 122, 255, 0.3),
+                0 8px 24px rgba(0, 122, 255, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .premium-button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .premium-button:disabled {
+            background: rgba(142, 142, 147, 0.3);
+            color: rgba(60, 60, 67, 0.4);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Result Display */
+        .result-container {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .result-container.show {
+            display: block;
+            animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .result-title {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .copy-button {
+            padding: 6px 12px;
+            background: rgba(0, 122, 255, 0.1);
+            border: 0.5px solid rgba(0, 122, 255, 0.2);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--primary-blue);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .copy-button:hover {
+            background: rgba(0, 122, 255, 0.15);
+            transform: scale(1.05);
+        }
+
+        /* Platform Toggle Switch */
+        .platform-toggle-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 0.5px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .platform-toggle-item:hover {
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .platform-toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .platform-toggle-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: rgba(142, 142, 147, 0.3);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        }
+
+        .toggle-switch.active {
+            background: var(--primary-blue);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle-switch.active::after {
+            left: 22px;
+        }
+
+        .result-text {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-size: 13px;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        /* Loading Spinner */
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2.5px solid rgba(0, 122, 255, 0.15);
+            border-top: 2.5px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 0.7s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            margin: 0 auto;
+        }
+
+        .loading-spinner.show {
+            display: block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            text-align: center;
+            display: none;
+        }
+
+        .status-message.show {
+            display: block;
+            animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .status-success {
+            background: rgba(52, 199, 89, 0.1);
+            color: #30D158;
+            border: 0.5px solid rgba(52, 199, 89, 0.2);
+        }
+
+        .status-error {
+            background: rgba(255, 59, 48, 0.1);
+            color: #FF3B30;
+            border: 0.5px solid rgba(255, 59, 48, 0.2);
+        }
+
+        /* Link */
+        .link {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--primary-blue);
+            text-decoration: none;
+            text-align: center;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .link:hover {
+            color: var(--primary-blue-dark);
+        }
+
+        /* Key Saved State */
+        .key-saved-state {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .key-saved-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="header-title">Prompt Architect</h1>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-button active" data-tab="enhance">Enhance</button>
+            <button class="tab-button" data-tab="setup">Setup</button>
+        </div>
+
+        <!-- Enhance Tab -->
+        <div id="enhance-section" class="setup-section active">
+            <div class="glass-card">
+                <h2 class="section-title">Enhance Your Prompt</h2>
+                <p class="section-subtitle">Transform your prompt into a powerful, context-aware request optimized for AI models.</p>
+                
+                <textarea 
+                    id="prompt-input" 
+                    class="premium-textarea" 
+                    placeholder="Enter your prompt here..."
+                ></textarea>
+
+                <div class="mode-selector">
+                    <button class="mode-option active" data-mode="TEXT_ENHANCEMENT">Text</button>
+                    <button class="mode-option" data-mode="CODE_ENHANCEMENT">Code</button>
+                    <button class="mode-option" data-mode="IMAGE_ENHANCEMENT">Image</button>
+                </div>
+
+                <button id="enhance-button" class="premium-button">
+                    <span id="enhance-button-text">Enhance Prompt</span>
+                    <div id="enhance-spinner" class="loading-spinner"></div>
+                </button>
+
+                <div id="status-message" class="status-message"></div>
+
+                <div id="result-container" class="result-container">
+                    <div class="result-header">
+                        <h3 class="result-title">Enhanced Prompt</h3>
+                        <button class="copy-button" id="copy-button">Copy</button>
+                    </div>
+                    <div id="result-text" class="result-text"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Setup Tab -->
+        <div id="setup-section" class="setup-section">
+            <div class="glass-card">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">
+                        🔑
+                    </div>
+                    <div>
+                        <h2 class="section-title" style="margin: 0;">API Key Setup</h2>
+                        <p class="section-subtitle" style="margin: 4px 0 0 0; font-size: 12px;">Configure your AI provider API key</p>
+                    </div>
+                </div>
+                
+                <div style="margin: 20px 0 16px 0; padding: 12px; background: rgba(0, 122, 255, 0.05); border-radius: 8px; border-left: 3px solid var(--primary-blue);">
+                    <p style="margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary);">
+                        <strong>Why do I need this?</strong><br>
+                        Your API key enables prompt enhancement. It's stored locally and never shared.
+                    </p>
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; letter-spacing: -0.01em;">
+                        AI Provider
+                    </label>
+                    <select id="provider-selector" class="premium-input" style="margin-bottom: 12px; cursor: pointer;">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openai">OpenAI (GPT-4)</option>
+                        <option value="anthropic">Anthropic Claude</option>
+                    </select>
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <label id="api-key-label" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; letter-spacing: -0.01em;">
+                        API Key
+                    </label>
+                    <input 
+                        type="password" 
+                        id="api-key-input" 
+                        class="premium-input" 
+                        placeholder="Enter your API key..."
+                        style="font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 13px; letter-spacing: 0.5px;"
+                    />
+                    <div id="api-key-help" style="margin-top: 6px; font-size: 11px; color: var(--text-secondary);">
+                        <a id="api-key-link" href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" class="link" style="font-size: 11px;">Get your API key</a>
+                    </div>
+                </div>
+                
+                <button id="save-button" class="premium-button" style="margin-bottom: 16px;">
+                    <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <span>💾</span>
+                        <span>Save & Activate</span>
+                    </span>
+                </button>
+                
+            </div>
+
+            <!-- Platform Settings -->
+            <div class="glass-card" style="margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);">
+                        ⚙️
+                    </div>
+                    <div>
+                        <h2 class="section-title" style="margin: 0;">Platform Settings</h2>
+                        <p class="section-subtitle" style="margin: 4px 0 0 0; font-size: 12px;">Choose where the extension appears</p>
+                    </div>
+                </div>
+                
+                <div style="margin: 16px 0;">
+                    <div id="platform-toggles" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Platform toggles will be inserted here by JavaScript -->
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+                        <button id="enable-all-platforms" class="copy-button" style="flex: 1; padding: 8px; font-size: 11px;">
+                            Enable All
+                        </button>
+                        <button id="disable-all-platforms" class="copy-button" style="flex: 1; padding: 8px; font-size: 11px;">
+                            Disable All
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="saved-view" class="glass-card" style="display: none;">
+                <div class="key-saved-state">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #30D158 0%, #28C850 100%); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; box-shadow: 0 4px 12px rgba(48, 209, 88, 0.3); font-size: 32px;">
+                        ✓
+                    </div>
+                    <h2 class="section-title" style="margin-bottom: 8px;">API Key Active</h2>
+                    <p class="section-subtitle" style="margin-bottom: 20px; max-width: 320px; margin-left: auto; margin-right: auto;">
+                        Your API key is securely stored. You're all set to enhance prompts in the Enhance tab or directly in AI chat interfaces.
+                    </p>
+                    <button id="change-key-link" class="copy-button" style="margin: 0 auto; display: block; padding: 10px 20px; font-size: 13px;">
+                        Change/Update Key
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
