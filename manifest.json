@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Gemini Prompt Architect",
+  "name": "Prompt Architect",
+  "short_name": "PromptArch",
   "version": "1.1",
-  "description": "Intelligent prompt refinement using Gemini for Text, Code, and Image generation. A frictionless enhancement experience.",
+  "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience.",
+  "homepage_url": "https://github.com/yourusername/prompt-architect",
   "permissions": [
     "activeTab",
     "contextMenus",

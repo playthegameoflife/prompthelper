@@ -198,28 +198,32 @@
         /* Mode Selector */
         .mode-selector {
             display: flex;
-            gap: 6px;
+            gap: 8px;
             background: rgba(255, 255, 255, 0.7);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             border: 0.5px solid var(--border-light);
             border-radius: var(--radius-md);
-            padding: 4px;
+            padding: 6px;
             box-shadow: var(--shadow-sm);
+            margin-bottom: 16px;
         }
 
         .mode-option {
             flex: 1;
-            padding: 8px 12px;
+            padding: 10px 16px;
             background: transparent;
             border: none;
             border-radius: var(--radius-sm);
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
             letter-spacing: -0.01em;
             color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .mode-option:hover {
@@ -435,7 +439,6 @@
         <div id="enhance-section" class="setup-section active">
             <div class="glass-card">
                 <h2 class="section-title">Enhance Your Prompt</h2>
-                <p class="section-subtitle">Transform your prompt into a powerful, context-aware request optimized for AI models.</p>
                 
                 <textarea 
                     id="prompt-input" 
@@ -443,10 +446,25 @@
                     placeholder="Enter your prompt here..."
                 ></textarea>
 
+                <div style="margin-top: 16px; margin-bottom: 12px;">
+                    <p style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; font-weight: 500;">
+                        Controls Enhance button in chatbots
+                    </p>
+                </div>
+
                 <div class="mode-selector">
-                    <button class="mode-option active" data-mode="TEXT_ENHANCEMENT">Text</button>
-                    <button class="mode-option" data-mode="CODE_ENHANCEMENT">Code</button>
-                    <button class="mode-option" data-mode="IMAGE_ENHANCEMENT">Image</button>
+                    <button class="mode-option active" data-mode="TEXT_ENHANCEMENT" title="Text generation and conversation">
+                        Text
+                    </button>
+                    <button class="mode-option" data-mode="CODE_ENHANCEMENT" title="Code generation">
+                        Code
+                    </button>
+                    <button class="mode-option" data-mode="IMAGE_ENHANCEMENT" title="Image generation (DALL-E, Midjourney)">
+                        Image
+                    </button>
+                    <button class="mode-option" data-mode="VIDEO_ENHANCEMENT" title="Video generation (Runway, Pika, Luma)">
+                        Video
+                    </button>
                 </div>
 
                 <button id="enhance-button" class="premium-button">

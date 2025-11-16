@@ -145,6 +145,7 @@ const ENHANCEMENT_MODES = [
     { label: 'Text', value: 'TEXT_ENHANCEMENT', icon: '📝' },
     { label: 'Code', value: 'CODE_ENHANCEMENT', icon: '💻' },
     { label: 'Image', value: 'IMAGE_ENHANCEMENT', icon: '🎨' },
+    { label: 'Video', value: 'VIDEO_ENHANCEMENT', icon: '🎬' },
 ];
 
 /**
@@ -386,7 +387,7 @@ function findInjectionTarget(inputElement) {
  */
 function createModeSelector() {
     const segmentedControl = document.createElement('div');
-    segmentedControl.id = 'gemini-mode-selector';
+    segmentedControl.id = 'prompt-architect-mode-selector';
     
     // Compact glassmorphism container - much smaller than before
     segmentedControl.className = 'flex items-center rounded-lg';
@@ -464,7 +465,7 @@ function createModeSelector() {
 
         // Function to apply/remove active style with compact premium effects
         const updateStyles = () => {
-            document.querySelectorAll('#gemini-mode-selector input').forEach(i => {
+            document.querySelectorAll('#prompt-architect-mode-selector input').forEach(i => {
                 const l = document.querySelector(`label[for="${i.id}"]`);
                 if (i.checked) {
                     // Active state: Compact white background with subtle shadow
@@ -502,24 +503,90 @@ function createModeSelector() {
 }
 
 /**
- * Creates a simple "Improve" button - clean, minimal, focused.
+ * Gets platform-specific design tokens (colors, styling)
+ */
+function getPlatformDesign(platform) {
+    const designs = {
+        chatgpt: {
+            primary: '#007AFF', // System blue - our own identity
+            primaryHover: '#0051D5',
+            borderRadius: '6px',
+            height: '32px',
+            fontSize: '14px',
+            fontWeight: '500'
+        },
+        gemini: {
+            primary: '#1a73e8', // Google blue
+            primaryHover: '#1557b0',
+            borderRadius: '20px',
+            height: '36px',
+            fontSize: '14px',
+            fontWeight: '500'
+        },
+        claude: {
+            primary: '#d97757', // Claude orange
+            primaryHover: '#c4694a',
+            borderRadius: '8px',
+            height: '36px',
+            fontSize: '14px',
+            fontWeight: '500'
+        },
+        grok: {
+            primary: '#1d9bf0', // Twitter/X blue
+            primaryHover: '#1a8cd8',
+            borderRadius: '20px',
+            height: '36px',
+            fontSize: '14px',
+            fontWeight: '600'
+        },
+        perplexity: {
+            primary: '#6366f1', // Perplexity indigo
+            primaryHover: '#4f46e5',
+            borderRadius: '8px',
+            height: '36px',
+            fontSize: '14px',
+            fontWeight: '500'
+        }
+    };
+    
+    return designs[platform] || {
+        primary: '#007AFF',
+        primaryHover: '#0051D5',
+        borderRadius: '8px',
+        height: '36px',
+        fontSize: '13px',
+        fontWeight: '600'
+    };
+}
+
+/**
+ * Creates an "Enhance" button - matches platform design language.
  */
 function createEnhanceButton(inputElement, enhancerDiv) {
+    const platform = detectPlatform();
+    const design = getPlatformDesign(platform);
+    
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'main-enhance-button';
-    button.textContent = 'Improve';
+    button.title = 'Enhance prompt with AI';
     
-    // Simple, clean button styling
-    button.className = 'text-white font-semibold rounded-lg text-sm';
-    button.style.setProperty('height', '36px', 'important');
-    button.style.setProperty('padding', '0 16px', 'important');
-    button.style.setProperty('background', '#007AFF', 'important');
+    // Create button content
+    const buttonText = document.createElement('span');
+    buttonText.textContent = 'Enhance';
+    
+    button.appendChild(buttonText);
+    
+    // Platform-specific styling
+    button.className = 'text-white font-semibold text-sm';
+    button.style.setProperty('height', design.height, 'important');
+    button.style.setProperty('padding', '0 14px', 'important');
+    button.style.setProperty('background', design.primary, 'important');
     button.style.setProperty('border', 'none', 'important');
     button.style.setProperty('white-space', 'nowrap', 'important');
     button.style.setProperty('font-family', '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'important');
-    button.style.setProperty('font-size', '13px', 'important');
-    button.style.setProperty('font-weight', '600', 'important');
+    button.style.setProperty('font-size', design.fontSize, 'important');
+    button.style.setProperty('font-weight', design.fontWeight, 'important');
     button.style.setProperty('letter-spacing', '-0.01em', 'important');
     button.style.setProperty('flex-shrink', '0', 'important');
     button.style.setProperty('cursor', 'pointer', 'important');
@@ -530,20 +597,45 @@ function createEnhanceButton(inputElement, enhancerDiv) {
     button.style.setProperty('visibility', 'visible', 'important');
     button.style.setProperty('opacity', '1', 'important');
     button.style.setProperty('z-index', '1000000', 'important');
-    button.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
-    button.style.transition = 'all 0.2s ease';
-    button.style.borderRadius = '8px';
+    button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+    button.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    button.style.borderRadius = design.borderRadius;
     
-    // Simple hover effect
+    // Store original colors for restoration
+    button.dataset.originalColor = design.primary;
+    button.dataset.originalHover = design.primaryHover;
+    
+    // Hover effect
     button.onmouseenter = () => {
-        button.style.background = '#0051D5';
-        button.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)';
+        button.style.background = design.primaryHover;
+        button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
     };
     
     button.onmouseleave = () => {
-        button.style.background = '#007AFF';
-        button.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+        button.style.background = design.primary;
+        button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
     };
+    
+    // First-time discovery animation
+    const hasSeenButton = sessionStorage.getItem('prompt-architect-seen');
+    if (!hasSeenButton) {
+        sessionStorage.setItem('prompt-architect-seen', 'true');
+        // Gentle pulse animation on first appearance
+        setTimeout(() => {
+            button.style.animation = 'gentlePulse 2s ease-in-out';
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes gentlePulse {
+                    0%, 100% { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 0 ${design.primary}40; }
+                    50% { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 4px ${design.primary}20; }
+                }
+            `;
+            document.head.appendChild(style);
+            setTimeout(() => {
+                button.style.animation = '';
+            }, 2000);
+        }, 500);
+    }
     
     // Prevent form submission
     let parentForm = button.closest('form');
@@ -573,12 +665,21 @@ function createEnhanceButton(inputElement, enhancerDiv) {
         parentForm.addEventListener('submit', preventFormSubmit, true);
     }
     
-    // Button click handler - always use TEXT_ENHANCEMENT mode
-    button.onclick = (event) => {
+    // Button click handler - use saved mode from storage
+    button.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        handleButtonClick(inputElement, 'TEXT_ENHANCEMENT', enhancerDiv);
+        
+        // Get saved enhancement mode from storage
+        const result = await new Promise((resolve) => {
+            chrome.storage.local.get(['selectedEnhancementMode'], (result) => {
+                resolve(result);
+            });
+        });
+        
+        const selectedMode = result.selectedEnhancementMode || 'TEXT_ENHANCEMENT';
+        handleButtonClick(inputElement, selectedMode, enhancerDiv);
         return false;
     };
     
@@ -610,7 +711,7 @@ function setupButtonProtection(enhancerDiv, inputElement) {
     // Function to enforce visibility styles
     const enforceVisibility = () => {
         const button = document.getElementById('main-enhance-button');
-        const container = document.getElementById('gemini-enhancer-buttons-container');
+        const container = document.getElementById('prompt-architect-buttons-container');
         
         if (button) {
             button.style.setProperty('display', 'flex', 'important');
@@ -636,7 +737,7 @@ function setupButtonProtection(enhancerDiv, inputElement) {
             if (mutation.type === 'childList') {
                 for (const node of mutation.removedNodes) {
                     if (node === enhancerDiv || (node.nodeType === 1 && node.contains && node.contains(enhancerDiv))) {
-                        console.warn('[Gemini Architect] Button container was removed! Re-injecting...');
+                        console.warn('[Prompt Architect] Button container was removed! Re-injecting...');
                         needsReinjection = true;
                         break;
                     }
@@ -649,7 +750,7 @@ function setupButtonProtection(enhancerDiv, inputElement) {
                 if (button && mutation.target === button) {
                     const style = window.getComputedStyle(button);
                     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-                        console.warn('[Gemini Architect] Button visibility was changed! Restoring...');
+                        console.warn('[Prompt Architect] Button visibility was changed! Restoring...');
                         enforceVisibility();
                     }
                 }
@@ -662,7 +763,7 @@ function setupButtonProtection(enhancerDiv, inputElement) {
             setTimeout(() => {
                 if (inputElement && document.body.contains(inputElement)) {
                     injectUI(inputElement).catch(err => {
-                        console.error('[Gemini Architect] Failed to re-inject after removal:', err);
+                        console.error('[Prompt Architect] Failed to re-inject after removal:', err);
                     });
                 }
             }, 100);
@@ -938,9 +1039,69 @@ async function injectGrok(inputElement) {
  * Perplexity-specific injection
  */
 async function injectPerplexity(inputElement) {
-    // Perplexity uses search button
-    const sendButton = inputElement.closest('form')?.querySelector('button[type="submit"], button[aria-label*="Search" i]') ||
-                       document.querySelector('button[type="submit"][class*="search"]');
+    // Perplexity uses search button - try multiple strategies
+    let sendButton = null;
+    
+    // Strategy 1: Look in the form containing the input
+    const form = inputElement.closest('form');
+    if (form) {
+        sendButton = form.querySelector('button[type="submit"]') ||
+                     form.querySelector('button[aria-label*="Search" i]') ||
+                     form.querySelector('button[aria-label*="Ask" i]') ||
+                     form.querySelector('button[class*="search"]') ||
+                     form.querySelector('button[class*="submit"]');
+    }
+    
+    // Strategy 2: Search in parent hierarchy
+    if (!sendButton) {
+        let parent = inputElement.parentElement;
+        for (let i = 0; i < 25 && parent; i++) {
+            sendButton = parent.querySelector('button[type="submit"]') ||
+                         parent.querySelector('button[aria-label*="Search" i]') ||
+                         parent.querySelector('button[aria-label*="Ask" i]') ||
+                         parent.querySelector('button[class*="search"]') ||
+                         parent.querySelector('button[class*="submit"]');
+            if (sendButton && sendButton.offsetParent !== null) break;
+            parent = parent.parentElement;
+        }
+    }
+    
+    // Strategy 3: Search entire document for buttons near input
+    if (!sendButton) {
+        const inputRect = inputElement.getBoundingClientRect();
+        const allButtons = document.querySelectorAll('button');
+        let closestButton = null;
+        let closestDistance = Infinity;
+        
+        for (const btn of allButtons) {
+            if (btn.offsetParent === null) continue;
+            const btnRect = btn.getBoundingClientRect();
+            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+            
+            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+            const className = (btn.className || '').toLowerCase();
+            const hasSearchIcon = btn.querySelector('svg');
+            const isSubmit = btn.type === 'submit';
+            
+            if ((isSubmit || ariaLabel.includes('search') || ariaLabel.includes('ask') || 
+                 className.includes('search') || className.includes('submit') || hasSearchIcon) && 
+                distance < 200) {
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestButton = btn;
+                }
+            }
+        }
+        
+        if (closestButton) {
+            sendButton = closestButton;
+        }
+    }
+    
+    // Strategy 4: Look for any submit button in the document
+    if (!sendButton) {
+        sendButton = document.querySelector('button[type="submit"]');
+    }
     
     if (!sendButton || !sendButton.parentElement) {
         throw new Error('Perplexity send button not found');
@@ -956,7 +1117,7 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
     return new Promise(async (resolve, reject) => {
         try {
             // Check if already injected
-            const existingContainer = document.getElementById('gemini-enhancer-buttons-container');
+            const existingContainer = document.getElementById('prompt-architect-buttons-container');
             if (existingContainer && document.body.contains(existingContainer)) {
                 resolve();
                 return;
@@ -978,19 +1139,19 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
 
             // Create UI elements
             const enhancerDiv = document.createElement('div');
-            enhancerDiv.id = 'gemini-enhancer-buttons-container';
+            enhancerDiv.id = 'prompt-architect-buttons-container';
             enhancerDiv.className = 'flex items-center';
             enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
             enhancerDiv.style.setProperty('align-items', 'center', 'important');
-            enhancerDiv.style.setProperty('gap', '8px', 'important');
-            enhancerDiv.style.setProperty('margin-right', '8px', 'important');
+            enhancerDiv.style.setProperty('gap', '6px', 'important');
+            enhancerDiv.style.setProperty('margin-right', '6px', 'important');
             enhancerDiv.style.setProperty('z-index', '999999', 'important');
             enhancerDiv.style.setProperty('visibility', 'visible', 'important');
             enhancerDiv.style.setProperty('opacity', '1', 'important');
 
             // Status area
             const statusArea = document.createElement('div');
-            statusArea.id = 'gemini-status-area';
+            statusArea.id = 'prompt-architect-status-area';
             statusArea.style.cssText = `
                 height: 36px; 
                 display: none;
@@ -1011,7 +1172,24 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 display: none;
             `;
             
+            // Status message element for errors
+            const statusMessage = document.createElement('div');
+            statusMessage.id = 'prompt-architect-status';
+            statusMessage.style.cssText = `
+                font-size: 11px;
+                font-weight: 500;
+                padding: 6px 10px;
+                border-radius: 6px;
+                white-space: nowrap;
+                max-width: 200px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                display: none;
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            `;
+            
             statusArea.appendChild(loadingSpinner);
+            statusArea.appendChild(statusMessage);
             enhancerDiv.appendChild(statusArea);
             enhancerDiv.appendChild(createEnhanceButton(inputElement, enhancerDiv));
 
@@ -1020,7 +1198,7 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
             if (!containerStyle.display.includes('flex')) {
                 targetContainer.style.display = 'flex';
                 targetContainer.style.alignItems = 'center';
-                targetContainer.style.gap = '8px';
+                targetContainer.style.gap = '6px';
             }
 
             // Verify send button is still in the container before inserting
@@ -1043,7 +1221,7 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 }
             }, 100);
         } catch (error) {
-            console.error('[Gemini Architect] Injection error:', error);
+            console.error('[Prompt Architect] Injection error:', error);
             reject(error);
         }
     });
@@ -1093,7 +1271,7 @@ function updateInputAndDispatch(newText, inputElement = null) {
     }
     
     if (!targetElement) {
-        console.warn('[Gemini Architect] Could not find input element to update');
+        console.warn('[Prompt Architect] Could not find input element to update');
         return Promise.resolve(false);
     }
     
@@ -1184,7 +1362,7 @@ function updateInputAndDispatch(newText, inputElement = null) {
  * Displays a status message in the injected UI with premium styling.
  */
 function showStatus(message, color, bgColor) {
-    const statusEl = document.querySelector('#gemini-enhancer-status');
+    const statusEl = document.querySelector('#prompt-architect-status');
     const spinnerEl = document.querySelector('.spinner');
     
     if (statusEl) {
@@ -1242,6 +1420,44 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
             if (text) {
                 return text;
             }
+            // For Perplexity and similar: extract text from all child nodes recursively
+            const extractFromNodes = (node) => {
+                let result = '';
+                if (node.nodeType === Node.TEXT_NODE) {
+                    result = (node.textContent || '').trim();
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Skip script, style, and hidden elements
+                    const tagName = node.tagName?.toLowerCase();
+                    const style = window.getComputedStyle(node);
+                    if (tagName !== 'script' && tagName !== 'style' && 
+                        style.display !== 'none' && style.visibility !== 'hidden') {
+                        // Get direct text content
+                        result = (node.textContent || node.innerText || '').trim();
+                        // If no direct text, check children
+                        if (!result) {
+                            for (const child of node.childNodes) {
+                                const childText = extractFromNodes(child);
+                                if (childText) {
+                                    result += (result ? ' ' : '') + childText;
+                                }
+                            }
+                        }
+                    }
+                }
+                return result.trim();
+            };
+            
+            // Try extracting from all child nodes
+            for (const child of element.childNodes) {
+                const childText = extractFromNodes(child);
+                if (childText) {
+                    text = (text ? text + ' ' : '') + childText;
+                }
+            }
+            if (text) {
+                return text;
+            }
+            
             // For nested contenteditable structures, try finding the deepest contenteditable child
             const nestedContentEditable = element.querySelector('[contenteditable="true"], [contenteditable=""]');
             if (nestedContentEditable && nestedContentEditable !== element) {
@@ -1249,6 +1465,15 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
                 if (text) {
                     return text;
                 }
+            }
+            
+            // Last resort: try getting text from data attributes or React state (if accessible)
+            // Some React apps store text in data attributes
+            const dataText = element.getAttribute('data-text') || 
+                           element.getAttribute('data-value') ||
+                           element.getAttribute('data-content');
+            if (dataText) {
+                return dataText.trim();
             }
         }
         
@@ -1364,12 +1589,41 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
         }
     }
     
-    const statusEl = statusContainer.querySelector('#gemini-enhancer-status');
+    const statusEl = document.querySelector('#prompt-architect-status');
     const spinnerEl = statusContainer.querySelector('.spinner');
     const enhanceButton = document.getElementById('main-enhance-button');
+    
+    // Store original text to preserve it on error
+    let originalText = '';
+    if (currentInputElement) {
+        if (currentInputElement.tagName === 'TEXTAREA' || currentInputElement.tagName === 'INPUT') {
+            originalText = currentInputElement.value || '';
+        } else {
+            originalText = currentInputElement.textContent || currentInputElement.innerText || '';
+        }
+    }
 
+    // Special handling for Perplexity: try to get text from the element even if it seems empty
+    if (!rawPrompt && inputElement && inputElement.id === 'ask-input') {
+        // Perplexity might store text in a specific way - try multiple approaches
+        const perplexityText = 
+            inputElement.textContent?.trim() ||
+            inputElement.innerText?.trim() ||
+            Array.from(inputElement.querySelectorAll('*'))
+                .map(el => el.textContent?.trim())
+                .filter(t => t && t.length > 0)
+                .join(' ')
+                .trim() ||
+            '';
+        
+        if (perplexityText) {
+            rawPrompt = perplexityText;
+            currentInputElement = inputElement;
+        }
+    }
+    
     if (!rawPrompt) {
-        console.warn('[Gemini Architect] No prompt found after all strategies. Element details:', {
+        console.warn('[Prompt Architect] No prompt found after all strategies. Element details:', {
             passedElement: inputElement?.tagName,
             passedElementId: inputElement?.id,
             passedElementClass: inputElement?.className,
@@ -1377,19 +1631,44 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
             passedElementValue: inputElement?.value?.substring(0, 50),
             passedElementTextContent: inputElement?.textContent?.substring(0, 50)
         });
-        // No status message - just return silently
+        
+        // Show user-friendly message if no text found
+        const statusArea = document.getElementById('prompt-architect-status-area');
+        const statusEl = document.querySelector('#prompt-architect-status');
+        if (statusArea && statusEl) {
+            statusArea.style.display = 'inline-flex';
+            statusArea.style.width = 'auto';
+            statusEl.textContent = 'No text found. Please type a prompt first.';
+            statusEl.style.color = '#f59e0b';
+            statusEl.style.background = 'rgba(245, 158, 11, 0.1)';
+            statusEl.style.border = '0.5px solid rgba(245, 158, 11, 0.2)';
+            statusEl.style.display = 'inline-flex';
+            
+            setTimeout(() => {
+                if (statusArea) statusArea.style.display = 'none';
+                if (statusEl) statusEl.style.display = 'none';
+            }, 3000);
+        }
+        
         return;
     }
     
     // Update inputElement reference for later use
     inputElement = currentInputElement;
 
-    // 1. Disable controls and show loading
+    // 1. Disable controls and show loading with refined visual feedback
     enhanceButton.disabled = true;
-    enhanceButton.style.background = 'rgba(142, 142, 147, 0.3)'; // Gray out the button
-    enhanceButton.style.transform = 'scale(0.98)';
+    const platform = detectPlatform();
+    const design = getPlatformDesign(platform);
+    
+    // Subtle loading state - keep color but reduce opacity
+    enhanceButton.style.background = design.primary;
+    enhanceButton.style.transition = 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    enhanceButton.style.opacity = '0.7';
+    enhanceButton.style.cursor = 'wait';
+    
     // Show spinner and status area only when processing
-    const statusArea = document.getElementById('gemini-status-area');
+    const statusArea = document.getElementById('prompt-architect-status-area');
     if (statusArea) {
         statusArea.style.display = 'inline-flex';
         statusArea.style.width = 'auto';
@@ -1408,37 +1687,99 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
 
         // 3. Update the input field using the currentInputElement we found
         if (improvedPrompt.startsWith("Error:")) {
-            // Silent failure - let the error text in the input speak for itself
-            if (currentInputElement) {
-                if (currentInputElement.tagName === 'TEXTAREA' || currentInputElement.tagName === 'INPUT') {
-                    currentInputElement.value = improvedPrompt;
-                } else {
-                    currentInputElement.textContent = improvedPrompt;
-                }
+            // Show error in status area, preserve user's original text
+            const errorMessage = improvedPrompt.replace("Error: ", "");
+            const statusArea = document.getElementById('prompt-architect-status-area');
+            
+            if (statusArea && statusEl) {
+                statusArea.style.display = 'inline-flex';
+                statusArea.style.width = 'auto';
+                statusArea.style.gap = '8px';
+                
+                statusEl.textContent = errorMessage;
+                statusEl.style.color = '#ef4444';
+                statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+                statusEl.style.border = '0.5px solid rgba(239, 68, 68, 0.2)';
+                statusEl.style.display = 'inline-flex';
+                statusEl.style.alignItems = 'center';
+                statusEl.style.opacity = '0';
+                statusEl.style.transform = 'translateY(-4px)';
+                
+                setTimeout(() => {
+                    statusEl.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                    statusEl.style.opacity = '1';
+                    statusEl.style.transform = 'translateY(0)';
+                }, 10);
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    if (statusEl) {
+                        statusEl.style.opacity = '0';
+                        setTimeout(() => {
+                            if (statusArea) {
+                                statusArea.style.display = 'none';
+                                statusArea.style.width = '0';
+                            }
+                            if (statusEl) {
+                                statusEl.style.display = 'none';
+                            }
+                        }, 300);
+                    }
+                }, 5000);
             }
+            
+            // Show subtle error feedback on button
+            enhanceButton.style.background = '#ef4444';
+            enhanceButton.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
+            setTimeout(() => {
+                if (enhanceButton) {
+                    enhanceButton.style.background = design.primary;
+                    enhanceButton.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+                }
+            }, 2000);
+            
+            // DO NOT replace user's text - keep original intact
         } else {
             // updateInputAndDispatch now returns a Promise
             updateInputAndDispatch(improvedPrompt, currentInputElement).then(updateSuccess => {
                 // Success - the improved prompt in the input field is the feedback
                 if (!updateSuccess) {
-                    console.error('[Gemini Architect] Update failed');
+                    console.error('[Prompt Architect] Update failed');
                 }
             }).catch(error => {
-                console.error('[Gemini Architect] Error updating input:', error);
+                console.error('[Prompt Architect] Error updating input:', error);
             });
         }
 
     } catch (error) {
-        console.error('Gemini Architect communication error:', error);
-        // Silent error - logged to console for debugging
+        console.error('[Prompt Architect] Communication error:', error);
+        // Show error feedback on button
+        const platform = detectPlatform();
+        const design = getPlatformDesign(platform);
+        enhanceButton.style.background = '#ef4444'; // Red for error
+        enhanceButton.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
+        setTimeout(() => {
+            if (enhanceButton) {
+                enhanceButton.style.background = design.primary;
+                enhanceButton.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+            }
+        }, 2000);
     } finally {
         // 4. Re-enable controls and hide loading
         spinnerEl.style.display = 'none';
         enhanceButton.disabled = false;
-        enhanceButton.style.background = '#007AFF'; // Restore button color
+        
+        // Restore button state with smooth transition
+        const platform = detectPlatform();
+        const design = getPlatformDesign(platform);
+        enhanceButton.style.background = design.primary;
+        enhanceButton.style.transition = 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        enhanceButton.style.opacity = '1';
+        enhanceButton.style.cursor = 'pointer';
         enhanceButton.style.transform = 'translateY(0) scale(1)';
+        
         // Hide status area completely when done (no text messages shown)
-        const statusArea = document.getElementById('gemini-status-area');
+        const statusArea = document.getElementById('prompt-architect-status-area');
         if (statusArea) {
             statusArea.style.display = 'none';
             statusArea.style.width = '0';
@@ -1451,8 +1792,8 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'contextMenuResult') {
         const inputElement = document.querySelector(SELECTORS.PROMPT_INPUT);
-        const statusContainer = document.querySelector('#gemini-enhancer-buttons-container');
-        const statusEl = statusContainer ? statusContainer.querySelector('#gemini-enhancer-status') : null;
+        const statusContainer = document.querySelector('#prompt-architect-buttons-container');
+        const statusEl = statusContainer ? statusContainer.querySelector('#prompt-architect-status') : null;
 
         if (inputElement) {
             if (request.resultText && !request.resultText.startsWith("Error:")) {
@@ -1460,14 +1801,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 updateInputAndDispatch(request.resultText, inputElement).then(updateSuccess => {
                     // Success - the improved prompt in the input field is the feedback
                     if (!updateSuccess) {
-                        console.error('[Gemini Architect] Context menu update failed');
+                        console.error('[Prompt Architect] Context menu update failed');
                     }
                 }).catch(error => {
-                    console.error('[Gemini Architect] Error updating input from context menu:', error);
+                    console.error('[Prompt Architect] Error updating input from context menu:', error);
                 });
             } else {
                 // Silent error - logged to console for debugging
-                console.error('[Gemini Architect] Context menu error');
+                console.error('[Prompt Architect] Context menu error');
             }
         }
         sendResponse({ success: true });
@@ -1683,6 +2024,83 @@ function findPlatformSpecificInput() {
             }
         }
         
+    } else if (platform === 'perplexity') {
+        // Perplexity uses textarea or contenteditable - try multiple selectors
+        const perplexitySelectors = [
+            // Textarea selectors
+            'textarea[placeholder*="Ask" i]',
+            'textarea[placeholder*="Search" i]',
+            'textarea[placeholder*="question" i]',
+            'textarea[aria-label*="Ask" i]',
+            'textarea[aria-label*="Search" i]',
+            'textarea[class*="input" i]',
+            'textarea[class*="search" i]',
+            'textarea[class*="query" i]',
+            // Contenteditable selectors
+            '[contenteditable="true"][placeholder*="Ask" i]',
+            '[contenteditable="true"][placeholder*="Search" i]',
+            '[contenteditable="true"][aria-label*="Ask" i]',
+            '[contenteditable="true"][aria-label*="Search" i]',
+            '[contenteditable="true"][class*="input" i]',
+            '[contenteditable="true"][class*="search" i]',
+            '[contenteditable="true"][role="textbox"]',
+            // Search within containers
+            'form textarea',
+            'form [contenteditable="true"]',
+            '[class*="input-container"] textarea',
+            '[class*="input-container"] [contenteditable="true"]',
+            '[class*="search"] textarea',
+            '[class*="search"] [contenteditable="true"]',
+            'main textarea',
+            'main [contenteditable="true"]',
+        ];
+        
+        for (const selector of perplexitySelectors) {
+            try {
+                const elements = document.querySelectorAll(selector);
+                for (const elem of elements) {
+                    const rect = elem.getBoundingClientRect();
+                    const style = window.getComputedStyle(elem);
+                    if (rect.width > 30 && rect.height > 10 && 
+                        style.display !== 'none' && 
+                        style.visibility !== 'hidden' &&
+                        elem.offsetParent !== null) {
+                        input = elem;
+                        break;
+                    }
+                }
+                if (input) break;
+            } catch (e) {
+                continue;
+            }
+        }
+        
+        // Fallback: find largest visible textarea or contenteditable
+        if (!input) {
+            const allInputs = document.querySelectorAll('textarea, [contenteditable="true"]');
+            let largestElement = null;
+            let largestArea = 0;
+            
+            for (const elem of allInputs) {
+                const rect = elem.getBoundingClientRect();
+                const style = window.getComputedStyle(elem);
+                if (rect.width > 30 && rect.height > 10 && 
+                    style.display !== 'none' && 
+                    style.visibility !== 'hidden' &&
+                    elem.offsetParent !== null) {
+                    const area = rect.width * rect.height;
+                    if (area > largestArea && rect.width > 100) {
+                        largestArea = area;
+                        largestElement = elem;
+                    }
+                }
+            }
+            
+            if (largestElement) {
+                input = largestElement;
+            }
+        }
+        
     }
     
     // Fallback to generic selectors with relaxed checks
@@ -1703,7 +2121,7 @@ function findPlatformSpecificInput() {
     }
     
     if (!input) {
-        console.warn('[Gemini Architect] No input element found after all search strategies');
+        console.warn('[Prompt Architect] No input element found after all search strategies');
     }
     
     return input;
@@ -1749,7 +2167,7 @@ function retryInjection() {
                 return;
             }
             
-            const existingUI = document.getElementById('gemini-enhancer-buttons-container');
+            const existingUI = document.getElementById('prompt-architect-buttons-container');
             if (existingUI && document.body.contains(existingUI)) {
                 retryCount = 0; // Reset for future attempts
                 if (retryMutationObserver) {
@@ -1770,7 +2188,7 @@ function retryInjection() {
                 }).catch(err => {
                     // Silent retry - only log after max retries
                     if (retryCount >= MAX_RETRIES) {
-                        console.error('[Gemini Architect] Max retries reached, injection failed');
+                        console.error('[Prompt Architect] Max retries reached, injection failed');
                     }
                     if (retryCount < MAX_RETRIES) {
                         retryInjection();
@@ -1854,7 +2272,7 @@ function observeDOM() {
             isPlatformEnabled().then(enabled => {
                 if (!enabled) {
                     // Remove UI if platform was disabled
-                    const existingUI = document.getElementById('gemini-enhancer-buttons-container');
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
                     if (existingUI && document.body.contains(existingUI)) {
                         existingUI.remove();
                     }
@@ -1869,7 +2287,7 @@ function observeDOM() {
                     // 1. We haven't injected before, OR
                     // 2. The input element changed, OR
                     // 3. The UI container is missing from DOM
-                    const existingUI = document.getElementById('gemini-enhancer-buttons-container');
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
                     const needsInjection = !existingUI || 
                                           !document.body.contains(existingUI) ||
                                           currentInput !== lastInjectedInput;
@@ -1885,7 +2303,7 @@ function observeDOM() {
                     }
                 } else {
                     // Input disappeared, might need to retry
-                    const existingUI = document.getElementById('gemini-enhancer-buttons-container');
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
                     if (!existingUI || !document.body.contains(existingUI)) {
                         if (retryCount < MAX_RETRIES) {
                             retryInjection();
@@ -1917,28 +2335,13 @@ function observeDOM() {
             return;
         }
         
-        // Temporary debug for Grok
-        if (platform === 'grok') {
-            console.log('[Gemini Architect] Grok detected on:', window.location.hostname);
-            setTimeout(() => {
-                const input = findPlatformSpecificInput();
-                console.log('[Gemini Architect] Grok input found:', input ? 'YES' : 'NO');
-                if (input) {
-                    console.log('[Gemini Architect] Input element:', input.tagName, input.className);
-                    const sendButton = document.querySelector('[data-testid="tweetButton"]') ||
-                                     document.querySelector('button[data-testid*="tweetButton"]');
-                    console.log('[Gemini Architect] Grok send button found:', sendButton ? 'YES' : 'NO');
-                }
-            }, 3000);
-        }
-        
         // Start the detection process immediately
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 try {
                     observeDOM();
                 } catch (error) {
-                    console.error('[Gemini Architect] Error in observeDOM after DOMContentLoaded:', error);
+                    console.error('[Prompt Architect] Error in observeDOM after DOMContentLoaded:', error);
                 }
             });
         } else {
@@ -1946,13 +2349,13 @@ function observeDOM() {
             try {
                 observeDOM();
             } catch (error) {
-                console.error('[Gemini Architect] Error in observeDOM (immediate):', error);
+                console.error('[Prompt Architect] Error in observeDOM (immediate):', error);
             }
         }
         
         // Also try after a short delay to catch late-loading pages
         setTimeout(() => {
-            const existingUI = document.getElementById('gemini-enhancer-buttons-container');
+            const existingUI = document.getElementById('prompt-architect-buttons-container');
             if (!existingUI || !document.body.contains(existingUI)) {
                 const input = findPlatformSpecificInput();
                 if (input) {
@@ -1964,7 +2367,7 @@ function observeDOM() {
         }, 2000);
         
     } catch (error) {
-        console.error('[Gemini Architect] Fatal error during initialization:', error);
-        console.error('[Gemini Architect] Stack:', error.stack);
+        console.error('[Prompt Architect] Fatal error during initialization:', error);
+        console.error('[Prompt Architect] Stack:', error.stack);
     }
 })();

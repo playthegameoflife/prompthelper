@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     anthropic: 'userAnthropicApiKey'
   };
   const STORAGE_PROVIDER = 'selectedProvider';
+  const STORAGE_ENHANCEMENT_MODE = 'selectedEnhancementMode';
   
   // Provider configuration
   const PROVIDERS = {
@@ -257,11 +258,34 @@ document.addEventListener('DOMContentLoaded', () => {
    * Mode Selection
    */
   let selectedMode = 'TEXT_ENHANCEMENT';
+  
+  // Load saved mode on popup open
+  chrome.storage.local.get([STORAGE_ENHANCEMENT_MODE], (result) => {
+    const savedMode = result[STORAGE_ENHANCEMENT_MODE] || 'TEXT_ENHANCEMENT';
+    selectedMode = savedMode;
+    
+    // Update UI to reflect saved mode
+    modeOptions.forEach(opt => {
+      if (opt.dataset.mode === savedMode) {
+        opt.classList.add('active');
+      } else {
+        opt.classList.remove('active');
+      }
+    });
+  });
+  
   modeOptions.forEach(option => {
     option.addEventListener('click', () => {
       modeOptions.forEach(opt => opt.classList.remove('active'));
       option.classList.add('active');
       selectedMode = option.dataset.mode;
+      
+      // Save to storage
+      chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: selectedMode }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error saving enhancement mode:', chrome.runtime.lastError);
+        }
+      });
     });
   });
 

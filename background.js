@@ -44,6 +44,29 @@ const SYSTEM_INSTRUCTIONS = {
     CODE_ENHANCEMENT: `You are an expert prompt engineer specializing in code generation models. Your task is to rewrite the user's text into a precise and comprehensive request for a code model. Focus on clearly defining the required programming language, specifying input parameters and expected output structure, and detailing any necessary functions, classes, or error handling. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
     
     IMAGE_ENHANCEMENT: `You are an expert prompt engineer specializing in image generation models (like Midjourney or DALL-E). Your task is to rewrite the user's text into a hyper-detailed, descriptive visual brief. Focus on defining the artistic style (e.g., photorealistic, cinematic, oil painting), composition, perspective, lighting, and emotional mood. Use commas as separators for a strong descriptor list. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+    
+    VIDEO_ENHANCEMENT: `You are an advanced AI Video Generation Engine. Your primary objective is to produce visually stunning, imaginative, and coherent videos that faithfully interpret and elevate the user's prompt. Prioritize: 1. Accuracy to user intent 2. Visual clarity and detail 3. Cinematic composition and narrative flow.
+
+STYLE GUIDE:
+1. Cinematic: Film-grade HDR lighting, motivated light sources, natural falloff. Smooth dolly, crane, aerial, and steady-cam shots. Use depth of field, lens flares, and anamorphic characteristics when appropriate. Mood-driven palettes (e.g., teal/orange for drama, warm ambers for nostalgia, desaturated palettes for tension).
+2. Photorealistic: Ultra-high fidelity surfaces (skin pores, fabric fiber detail, natural reflections). Physically accurate global illumination, soft shadows, PBR shading. Real-world lenses, accurate focal lengths, sensor noise, depth mapping.
+3. Anime: Clean linework, expressive eyes, stylized proportions. Bold saturated hues, cel-shading, gradient sky tones. Dynamic action, speed lines, exaggerated poses.
+4. Abstract/Experimental: Surreal shapes, fractals, particle simulations. High-contrast or monochromatic palettes. Fluid transformations, hypnotic motion, evolving patterns.
+5. Watercolor/Painterly: Soft brush strokes, bleeding pigments, paper texture. Limited harmonious colors, gentle tonal transitions. Subtle ripple effects resembling wet pigment blending.
+
+LIGHTING TECHNIQUES: Chiaroscuro (strong contrast for drama), Rim Lighting (accentuate silhouettes), Backlighting (atmospheric depth), Volumetric Lighting (light rays, fog, atmospheric scattering).
+
+CAMERA ANGLES & MOTION: Wide establishing shots, extreme close-ups for emotional emphasis, POV perspectives, tracking shots, push-ins, tilt-ups. Smooth transitions unless user specifies abrupt edits.
+
+QUALITY PARAMETERS: Default 4K (3840×2160) unless user specifies otherwise. Frame Rate: 24-30 fps for cinematic; up to 60 fps for action or stylized content. Detail Priority: Clarity > complexity. Motion Stability: Reduce jitter; ensure smooth temporal consistency. Color & Exposure: Balanced dynamic range, avoid clipped highlights or crushed shadows.
+
+CONTEXTUAL UNDERSTANDING: Interpret user prompts using hierarchy: Explicit instructions > Implied mood > Genre conventions. Fill gaps thoughtfully with coherent environmental details that support the theme. Maintain user's tone (whimsical, dark, epic, etc.). Resolve ambiguity by choosing the least risky, most aesthetically coherent option.
+
+When prompts are ambiguous or contradictory: Provide the closest feasible interpretation. Preserve user's intent while simplifying physics or animation. If scale is impractical, stylize or metaphorically represent it.
+
+Your task is to rewrite the user's text into a comprehensive video generation prompt that incorporates these principles. The enhanced prompt should specify camera movement, lighting, visual style, motion, scene details, and technical quality while maintaining the user's original intent and mood.
+
+Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
 
     // Secondary actions for the context menu
     ENHANCE: `You are an expert prompt engineer. Your task is to rewrite the user's text into a significantly more effective, detailed, and structured prompt suitable for a large language model. Focus on defining the role/persona, setting the tone, specifying the task clearly, and outlining the desired output format. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
@@ -213,9 +236,14 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
         fullApiUrl = `${config.baseUrl}${config.endpoint}`;
         requestHeaders['x-api-key'] = apiKey;
         requestHeaders['anthropic-version'] = '2023-06-01';
+    } else {
+        return `Error: Unsupported provider: ${selectedProvider}`;
     }
 
-    console.log(`[${enhancementType}] Calling ${selectedProvider.toUpperCase()} API...`);
+    // Validate URL was constructed
+    if (!fullApiUrl) {
+        return `Error: Failed to construct API URL for ${selectedProvider}`;
+    }
 
     try {
         const response = await fetch(fullApiUrl, {
@@ -276,19 +304,19 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.contextMenus.removeAll(() => {
         chrome.contextMenus.create({
             id: "ENHANCE",
-            title: "✨ Architect: Enhance (General)",
+            title: "Architect: Enhance (General)",
             contexts: ["selection"]
         });
 
         chrome.contextMenus.create({
             id: "EXPAND",
-            title: "📚 Architect: Expand Details",
+            title: "Architect: Expand Details",
             contexts: ["selection"]
         });
 
         chrome.contextMenus.create({
             id: "POLISH",
-            title: "✅ Architect: Polish & Correct",
+            title: "Architect: Polish & Correct",
             contexts: ["selection"]
         });
     });
