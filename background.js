@@ -12,6 +12,180 @@ const STORAGE_KEYS = {
     anthropic: 'userAnthropicApiKey'
 };
 const STORAGE_PROVIDER = 'selectedProvider';
+const STORAGE_PROMPT_HISTORY = 'promptHistory';
+const MAX_HISTORY_ITEMS = 50;
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
+/**
+ * Structured error class for better error handling
+ */
+class EnhancementError extends Error {
+    constructor(message, code, recoverable = false, userMessage = null) {
+        super(message);
+        this.name = 'EnhancementError';
+        this.code = code;
+        this.recoverable = recoverable;
+        this.userMessage = userMessage || message;
+    }
+}
+
+/**
+ * User-friendly error messages
+ */
+const ERROR_MESSAGES = {
+    API_KEY_INVALID: "Your API key appears invalid. Please check it in the Setup tab.",
+    API_KEY_MISSING: "API key not found. Please set your API key in the Setup tab first.",
+    QUOTA_EXCEEDED: "You've hit your API limit. Try again in a few minutes or check your API usage.",
+    NETWORK_ERROR: "Connection failed. Check your internet connection and try again.",
+    CONTENT_BLOCKED: "Content was blocked by the AI provider. Try rephrasing your prompt.",
+    INVALID_ENHANCEMENT_TYPE: "Invalid enhancement type. Please try again.",
+    UNKNOWN_PROVIDER: "Unknown AI provider. Please select a valid provider.",
+    UNEXPECTED_ERROR: "An unexpected error occurred. Please try again.",
+};
+
+/**
+ * Maps API error codes to user-friendly messages
+ */
+function getUserFriendlyError(error, provider) {
+    const errorMsg = (error.message || error || '').toLowerCase();
+    
+    if (errorMsg.includes('api_key') || errorMsg.includes('key') || errorMsg.includes('401') || errorMsg.includes('403')) {
+        return new EnhancementError(
+            ERROR_MESSAGES.API_KEY_INVALID,
+            'API_KEY_INVALID',
+            true,
+            ERROR_MESSAGES.API_KEY_INVALID
+        );
+    }
+    
+    if (errorMsg.includes('quota') || errorMsg.includes('limit') || errorMsg.includes('429')) {
+        return new EnhancementError(
+            ERROR_MESSAGES.QUOTA_EXCEEDED,
+            'QUOTA_EXCEEDED',
+            true,
+            ERROR_MESSAGES.QUOTA_EXCEEDED
+        );
+    }
+    
+    if (errorMsg.includes('safety') || errorMsg.includes('blocked') || errorMsg.includes('content policy')) {
+        return new EnhancementError(
+            ERROR_MESSAGES.CONTENT_BLOCKED,
+            'CONTENT_BLOCKED',
+            true,
+            ERROR_MESSAGES.CONTENT_BLOCKED
+        );
+    }
+    
+    if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('connection')) {
+        return new EnhancementError(
+            ERROR_MESSAGES.NETWORK_ERROR,
+            'NETWORK_ERROR',
+            true,
+            ERROR_MESSAGES.NETWORK_ERROR
+        );
+    }
+    
+    return new EnhancementError(
+        error.message || ERROR_MESSAGES.UNEXPECTED_ERROR,
+        'UNEXPECTED_ERROR',
+        false,
+        ERROR_MESSAGES.UNEXPECTED_ERROR
+    );
+}
+
+// ============================================================================
+// API REQUEST DEDUPLICATION & CACHING
+// ============================================================================
+
+/** Map to track pending requests - prevents duplicate API calls */
+const pendingRequests = new Map();
+
+/** Cache for identical prompts (1 hour TTL) */
+const promptCache = new Map();
+const CACHE_TTL = 3600000; // 1 hour in milliseconds
+
+/**
+ * Generates a cache key from prompt and enhancement type
+ */
+function getCacheKey(prompt, enhancementType, provider) {
+    // Normalize prompt (trim, lowercase for comparison)
+    const normalized = prompt.trim().toLowerCase();
+    return `${normalized}-${enhancementType}-${provider}`;
+}
+
+/**
+ * Gets cached enhancement result if available
+ */
+function getCachedEnhancement(prompt, enhancementType, provider) {
+    const key = getCacheKey(prompt, enhancementType, provider);
+    const cached = promptCache.get(key);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.result;
+    }
+    
+    // Remove expired cache entry
+    if (cached) {
+        promptCache.delete(key);
+    }
+    
+    return null;
+}
+
+/**
+ * Caches enhancement result
+ */
+function cacheEnhancement(prompt, enhancementType, provider, result) {
+    // Don't cache errors
+    if (result.startsWith('Error:')) {
+        return;
+    }
+    
+    const key = getCacheKey(prompt, enhancementType, provider);
+    promptCache.set(key, {
+        result,
+        timestamp: Date.now()
+    });
+    
+    // Limit cache size to 100 entries
+    if (promptCache.size > 100) {
+        const firstKey = promptCache.keys().next().value;
+        promptCache.delete(firstKey);
+    }
+}
+
+/**
+ * Saves enhancement to history
+ */
+async function saveToHistory(original, enhanced, enhancementType, provider) {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_PROMPT_HISTORY], (result) => {
+            const history = result[STORAGE_PROMPT_HISTORY] || [];
+            
+            // Add new entry at the beginning
+            history.unshift({
+                original: original.substring(0, 500), // Limit length
+                enhanced: enhanced.substring(0, 2000), // Limit length
+                mode: enhancementType,
+                provider: provider,
+                timestamp: Date.now(),
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+            });
+            
+            // Keep only last MAX_HISTORY_ITEMS
+            if (history.length > MAX_HISTORY_ITEMS) {
+                history.splice(MAX_HISTORY_ITEMS);
+            }
+            
+            chrome.storage.local.set({ [STORAGE_PROMPT_HISTORY]: history }, () => {
+                resolve();
+            });
+        });
+    });
+}
 
 // API configurations for different providers
 const API_CONFIGS = {
@@ -194,6 +368,7 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
 
 /**
  * Core function to call the appropriate API from the background worker.
+ * Now includes request deduplication and caching.
  * @param {string} enhancementType - The key from SYSTEM_INSTRUCTIONS.
  * @param {string} userText - The text selected by the user.
  * @param {string} provider - The API provider ('gemini', 'openai', 'anthropic').
@@ -201,81 +376,143 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
  */
 async function executeEnhancement(enhancementType, userText, provider = 'gemini') {
     const selectedProvider = provider || 'gemini';
-    const apiKey = await getApiKey(selectedProvider);
-    if (!apiKey) {
-        const providerName = selectedProvider === 'gemini' ? 'Google AI' : 
-                            selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic';
-        return `Error: ${providerName} API Key not found. Please set your key in the Setup tab.`;
+    
+    // Check cache first
+    const cached = getCachedEnhancement(userText, enhancementType, selectedProvider);
+    if (cached) {
+        console.log('[Prompt Architect] Returning cached result');
+        return cached;
     }
     
-    const systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
-    if (!systemInstruction) {
-        return `Error: Invalid enhancement type: ${enhancementType}.`;
+    // Check for duplicate pending request
+    const requestKey = `${userText}-${enhancementType}-${selectedProvider}`;
+    if (pendingRequests.has(requestKey)) {
+        console.log('[Prompt Architect] Duplicate request detected, returning existing promise');
+        return pendingRequests.get(requestKey);
     }
-
-    const config = API_CONFIGS[selectedProvider];
-    if (!config) {
-        return `Error: Unknown provider: ${selectedProvider}`;
-    }
-
-    const requestBody = getRequestBody(userText, systemInstruction, selectedProvider);
-    if (!requestBody) {
-        return `Error: Failed to create request body for ${selectedProvider}`;
-    }
-
-    // Build API URL and headers based on provider
-    let fullApiUrl;
-    let requestHeaders = { 'Content-Type': 'application/json' };
     
-    if (selectedProvider === 'gemini') {
-        fullApiUrl = `${config.baseUrl}${config.model}${config.action}?key=${apiKey}`;
-    } else if (selectedProvider === 'openai') {
-        fullApiUrl = `${config.baseUrl}${config.endpoint}`;
-        requestHeaders['Authorization'] = `Bearer ${apiKey}`;
-    } else if (selectedProvider === 'anthropic') {
-        fullApiUrl = `${config.baseUrl}${config.endpoint}`;
-        requestHeaders['x-api-key'] = apiKey;
-        requestHeaders['anthropic-version'] = '2023-06-01';
-    } else {
-        return `Error: Unsupported provider: ${selectedProvider}`;
-    }
-
-    // Validate URL was constructed
-    if (!fullApiUrl) {
-        return `Error: Failed to construct API URL for ${selectedProvider}`;
-    }
-
-    try {
-        const response = await fetch(fullApiUrl, {
-            method: 'POST',
-            headers: requestHeaders,
-            body: requestBody,
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            let errorMsg = `Connection failed (${response.status}).`;
-            if (errorData && errorData.error && errorData.error.message) {
-                const apiError = errorData.error.message;
-                if (apiError.includes('API_KEY') || apiError.includes('key')) {
-                    errorMsg = 'Invalid API key. Check your key in Setup tab.';
-                } else if (apiError.includes('quota') || apiError.includes('limit')) {
-                    errorMsg = 'API quota exceeded. Try again later.';
-                } else {
-                    errorMsg = apiError;
-                }
+    // Create the enhancement promise
+    const enhancementPromise = (async () => {
+        try {
+            const apiKey = await getApiKey(selectedProvider);
+            if (!apiKey) {
+                const providerName = selectedProvider === 'gemini' ? 'Google AI' : 
+                                    selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic';
+                throw new EnhancementError(
+                    ERROR_MESSAGES.API_KEY_MISSING,
+                    'API_KEY_MISSING',
+                    true,
+                    `${providerName} API Key not found. Please set your key in the Setup tab.`
+                );
             }
-            throw new Error(`Error: ${errorMsg}`);
+            
+            const systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+            if (!systemInstruction) {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.INVALID_ENHANCEMENT_TYPE,
+                    'INVALID_ENHANCEMENT_TYPE',
+                    false,
+                    `Invalid enhancement type: ${enhancementType}.`
+                );
+            }
+
+            const config = API_CONFIGS[selectedProvider];
+            if (!config) {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
+                    'UNKNOWN_PROVIDER',
+                    false,
+                    `Unknown provider: ${selectedProvider}`
+                );
+            }
+
+            const requestBody = getRequestBody(userText, systemInstruction, selectedProvider);
+            if (!requestBody) {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNEXPECTED_ERROR,
+                    'REQUEST_BODY_FAILED',
+                    false,
+                    `Failed to create request body for ${selectedProvider}`
+                );
+            }
+
+            // Build API URL and headers based on provider
+            let fullApiUrl;
+            let requestHeaders = { 'Content-Type': 'application/json' };
+            
+            if (selectedProvider === 'gemini') {
+                fullApiUrl = `${config.baseUrl}${config.model}${config.action}?key=${apiKey}`;
+            } else if (selectedProvider === 'openai') {
+                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
+                requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+            } else if (selectedProvider === 'anthropic') {
+                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
+                requestHeaders['x-api-key'] = apiKey;
+                requestHeaders['anthropic-version'] = '2023-06-01';
+            } else {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
+                    'UNSUPPORTED_PROVIDER',
+                    false,
+                    `Unsupported provider: ${selectedProvider}`
+                );
+            }
+
+            // Validate URL was constructed
+            if (!fullApiUrl) {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNEXPECTED_ERROR,
+                    'URL_CONSTRUCTION_FAILED',
+                    false,
+                    `Failed to construct API URL for ${selectedProvider}`
+                );
+            }
+
+            const response = await fetch(fullApiUrl, {
+                method: 'POST',
+                headers: requestHeaders,
+                body: requestBody,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const error = new Error(errorData?.error?.message || `Connection failed (${response.status}).`);
+                throw getUserFriendlyError(error, selectedProvider);
+            }
+
+            const data = await response.json();
+            const improvedPrompt = extractImprovedPrompt(data, selectedProvider);
+            
+            // Cache successful results
+            if (!improvedPrompt.startsWith('Error:')) {
+                cacheEnhancement(userText, enhancementType, selectedProvider, improvedPrompt);
+                
+                // Save to history
+                saveToHistory(userText, improvedPrompt, enhancementType, selectedProvider);
+            }
+            
+            return improvedPrompt;
+
+        } catch (error) {
+            console.error(`[${enhancementType}] API Call or Processing Error:`, error);
+            
+            // Return user-friendly error message
+            if (error instanceof EnhancementError) {
+                return `Error: ${error.userMessage}`;
+            }
+            
+            const friendlyError = getUserFriendlyError(error, selectedProvider);
+            return `Error: ${friendlyError.userMessage}`;
+        } finally {
+            // Remove from pending requests
+            pendingRequests.delete(requestKey);
         }
-
-        const data = await response.json();
-        const improvedPrompt = extractImprovedPrompt(data, selectedProvider);
-        return improvedPrompt;
-
-    } catch (error) {
-        console.error(`[${enhancementType}] API Call or Processing Error:`, error);
-        return error.message || "Error: An unexpected network error occurred.";
-    }
+    })();
+    
+    // Store pending request
+    pendingRequests.set(requestKey, enhancementPromise);
+    
+    return enhancementPromise;
 }
 
 // --- Message Listener (Communication from content.js) ---
@@ -348,5 +585,23 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
                 });
             });
         });
+    });
+    
+    // --- Keyboard Shortcut Handler ---
+    chrome.commands.onCommand.addListener((command) => {
+        if (command === 'enhance-prompt') {
+            // Get the active tab
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    // Send message to content script to trigger enhancement
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: 'enhance-prompt-shortcut'
+                    }).catch(err => {
+                        // Tab might not have content script loaded yet, or not on supported page
+                        console.log('[Prompt Architect] Keyboard shortcut: Tab not ready or unsupported page');
+                    });
+                }
+            });
+        }
     });
 }

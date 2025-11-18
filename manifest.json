@@ -35,5 +35,14 @@
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "commands": {
+    "enhance-prompt": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Improve current prompt"
+    }
   }
 }

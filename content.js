@@ -41,11 +41,62 @@ const PLATFORMS = {
 // Storage key for platform preferences
 const STORAGE_PLATFORMS = 'enabledPlatforms';
 
+// ============================================================================
+// PERFORMANCE CACHING
+// ============================================================================
+
+/** Cache for platform detection - only computed once per page load */
+let cachedPlatform = null;
+
+/** Cache for frequently accessed DOM elements */
+const elementCache = {
+    buttonsContainer: null,
+    enhanceButton: null,
+    statusArea: null,
+    statusMessage: null,
+    spinner: null,
+    currentInput: null,
+    sendButton: null,
+};
+
+/** Cache for platform design tokens */
+const designCache = new Map();
+
 /**
- * Detects the current platform based on hostname
+ * Gets cached element or queries and caches it
+ * @param {string} key - Cache key
+ * @param {Function} queryFn - Function to query if not cached
+ * @returns {HTMLElement|null}
+ */
+function getCachedElement(key, queryFn) {
+    if (elementCache[key] && document.body.contains(elementCache[key])) {
+        return elementCache[key];
+    }
+    const element = queryFn();
+    if (element) {
+        elementCache[key] = element;
+    }
+    return element;
+}
+
+/**
+ * Clears element cache (useful when DOM changes significantly)
+ */
+function clearElementCache() {
+    Object.keys(elementCache).forEach(key => {
+        elementCache[key] = null;
+    });
+}
+
+/**
+ * Detects the current platform based on hostname (cached)
  * @returns {string|null} Platform key or null if not detected
  */
 function detectPlatform() {
+    if (cachedPlatform !== null) {
+        return cachedPlatform;
+    }
+    
     const hostname = window.location.hostname;
     
     for (const [key, platform] of Object.entries(PLATFORMS)) {
@@ -53,12 +104,13 @@ function detectPlatform() {
         
         for (const domain of platform.domains) {
             if (hostname === domain || hostname.endsWith('.' + domain)) {
-                return key;
+                cachedPlatform = key;
+                return cachedPlatform;
             }
         }
     }
     
-    // Return null for unsupported sites
+    cachedPlatform = null;
     return null;
 }
 
@@ -147,6 +199,68 @@ const ENHANCEMENT_MODES = [
     { label: 'Image', value: 'IMAGE_ENHANCEMENT', icon: '🎨' },
     { label: 'Video', value: 'VIDEO_ENHANCEMENT', icon: '🎬' },
 ];
+
+// ============================================================================
+// SMART MODE DETECTION
+// ============================================================================
+
+/**
+ * Automatically detects the most appropriate enhancement mode based on prompt content
+ * @param {string} text - The prompt text to analyze
+ * @returns {string} The detected enhancement mode
+ */
+function detectPromptType(text) {
+    if (!text || typeof text !== 'string') {
+        return 'TEXT_ENHANCEMENT';
+    }
+    
+    const normalized = text.toLowerCase().trim();
+    
+    // Code detection patterns
+    const codePatterns = [
+        /\b(function|class|def |import |const |let |var |return |async |await |=>|\.js|\.py|\.ts|\.java|\.cpp|\.html|\.css|\.json|\.sql)\b/,
+        /\b(programming|code|script|algorithm|function|variable|array|object|method|api|endpoint|database|query)\b/,
+        /\b(create a|write a|build a|implement|code|program|script)\s+(function|class|component|module|app|application)\b/,
+    ];
+    
+    // Image detection patterns
+    const imagePatterns = [
+        /\b(image|photo|picture|visual|draw|paint|art|illustration|graphic|design|logo|icon|screenshot|diagram|chart|visualization)\b/,
+        /\b(create|generate|make|design|draw|paint)\s+(an|a)\s+(image|photo|picture|visual|art|illustration|graphic)\b/,
+        /\b(dalle|midjourney|stable diffusion|image generation|visual description)\b/,
+    ];
+    
+    // Video detection patterns
+    const videoPatterns = [
+        /\b(video|film|movie|cinematic|animation|motion|footage|clip|sequence|scene|shot|camera|frame|fps)\b/,
+        /\b(create|generate|make|produce|edit)\s+(a|an)\s+(video|film|movie|animation|clip)\b/,
+        /\b(runway|pika|luma|video generation|motion graphics)\b/,
+    ];
+    
+    // Check code patterns first (most specific)
+    for (const pattern of codePatterns) {
+        if (pattern.test(normalized)) {
+            return 'CODE_ENHANCEMENT';
+        }
+    }
+    
+    // Check video patterns (more specific than image)
+    for (const pattern of videoPatterns) {
+        if (pattern.test(normalized)) {
+            return 'VIDEO_ENHANCEMENT';
+        }
+    }
+    
+    // Check image patterns
+    for (const pattern of imagePatterns) {
+        if (pattern.test(normalized)) {
+            return 'IMAGE_ENHANCEMENT';
+        }
+    }
+    
+    // Default to text enhancement
+    return 'TEXT_ENHANCEMENT';
+}
 
 /**
  * Finds the send button relative to the input field.
@@ -503,9 +617,14 @@ function createModeSelector() {
 }
 
 /**
- * Gets platform-specific design tokens (colors, styling)
+ * Gets platform-specific design tokens (colors, styling) - cached
  */
 function getPlatformDesign(platform) {
+    // Check cache first
+    if (designCache.has(platform)) {
+        return designCache.get(platform);
+    }
+    
     const designs = {
         chatgpt: {
             primary: '#007AFF', // System blue - our own identity
@@ -549,7 +668,7 @@ function getPlatformDesign(platform) {
         }
     };
     
-    return designs[platform] || {
+    const design = designs[platform] || {
         primary: '#007AFF',
         primaryHover: '#0051D5',
         borderRadius: '8px',
@@ -557,6 +676,10 @@ function getPlatformDesign(platform) {
         fontSize: '13px',
         fontWeight: '600'
     };
+    
+    // Cache the design
+    designCache.set(platform, design);
+    return design;
 }
 
 /**
@@ -569,11 +692,11 @@ function createEnhanceButton(inputElement, enhancerDiv) {
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'main-enhance-button';
-    button.title = 'Enhance prompt with AI';
+    button.title = 'Improve prompt with AI';
     
     // Create button content
     const buttonText = document.createElement('span');
-    buttonText.textContent = 'Enhance';
+    buttonText.textContent = 'Improve';
     
     button.appendChild(buttonText);
     
@@ -1656,6 +1779,17 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
     // Update inputElement reference for later use
     inputElement = currentInputElement;
 
+    // Smart mode detection: If enhancementType is TEXT_ENHANCEMENT (default), try to detect better mode
+    let finalEnhancementType = enhancementType;
+    if (enhancementType === 'TEXT_ENHANCEMENT') {
+        const detectedType = detectPromptType(rawPrompt);
+        if (detectedType !== 'TEXT_ENHANCEMENT') {
+            finalEnhancementType = detectedType;
+            // Optionally show a brief indicator that mode was auto-detected
+            console.log(`[Prompt Architect] Auto-detected mode: ${detectedType}`);
+        }
+    }
+
     // 1. Disable controls and show loading with refined visual feedback
     enhanceButton.disabled = true;
     const platform = detectPlatform();
@@ -1680,7 +1814,7 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
         const response = await chrome.runtime.sendMessage({
             action: 'enhancePrompt',
             prompt: rawPrompt,
-            enhancementType: enhancementType,
+            enhancementType: finalEnhancementType,
         });
         
         const improvedPrompt = response?.enhancedPrompt || "Error: Failed to receive improved prompt.";
@@ -1788,7 +1922,7 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
     }
 }
 
-// --- Listener for Context Menu Results (Maintained for flexibility) ---
+// --- Listener for Context Menu Results and Keyboard Shortcuts ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'contextMenuResult') {
         const inputElement = document.querySelector(SELECTORS.PROMPT_INPUT);
@@ -1811,6 +1945,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 console.error('[Prompt Architect] Context menu error');
             }
         }
+        sendResponse({ success: true });
+        return true;
+    }
+    
+    // Handle keyboard shortcut
+    if (request.action === 'enhance-prompt-shortcut') {
+        const enhanceButton = getCachedElement('enhanceButton', () => 
+            document.getElementById('main-enhance-button')
+        );
+        
+        if (enhanceButton && !enhanceButton.disabled) {
+            // Get current input element
+            const inputElement = getCachedElement('currentInput', () => 
+                document.querySelector(SELECTORS.PROMPT_INPUT)
+            );
+            
+            if (inputElement) {
+                // Get saved enhancement mode
+                chrome.storage.local.get(['selectedEnhancementMode'], async (result) => {
+                    const selectedMode = result.selectedEnhancementMode || 'TEXT_ENHANCEMENT';
+                    const statusContainer = getCachedElement('buttonsContainer', () => 
+                        document.getElementById('prompt-architect-buttons-container')
+                    );
+                    
+                    if (statusContainer) {
+                        await handleButtonClick(inputElement, selectedMode, statusContainer);
+                    }
+                });
+            }
+        }
+        
         sendResponse({ success: true });
         return true;
     }

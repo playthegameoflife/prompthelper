@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Ensure enhance section is visible by default
   const enhanceTab = document.getElementById('enhance-section');
+  const recentTab = document.getElementById('recent-section');
   const setupTab = document.getElementById('setup-section');
   
   if (enhanceTab) {
@@ -45,6 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
     enhanceTab.style.display = 'flex';
     enhanceTab.style.flexDirection = 'column';
     enhanceTab.style.gap = '16px';
+  }
+  
+  if (recentTab) {
+    recentTab.classList.remove('active');
+    recentTab.style.display = 'none';
   }
   
   if (setupTab) {
@@ -69,11 +75,25 @@ document.addEventListener('DOMContentLoaded', () => {
         enhanceTab.style.display = 'flex';
         enhanceTab.style.flexDirection = 'column';
         enhanceTab.style.gap = '16px';
+        recentTab.classList.remove('active');
+        recentTab.style.display = 'none';
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
+      } else if (tab === 'recent') {
+        enhanceTab.classList.remove('active');
+        enhanceTab.style.display = 'none';
+        recentTab.classList.add('active');
+        recentTab.style.display = 'flex';
+        recentTab.style.flexDirection = 'column';
+        recentTab.style.gap = '16px';
+        setupTab.classList.remove('active');
+        setupTab.style.display = 'none';
+        loadHistory(); // Load history when tab is opened
       } else {
         enhanceTab.classList.remove('active');
         enhanceTab.style.display = 'none';
+        recentTab.classList.remove('active');
+        recentTab.style.display = 'none';
         setupTab.classList.add('active');
         setupTab.style.display = 'flex';
         setupTab.style.flexDirection = 'column';
@@ -382,6 +402,262 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('[Prompt Architect] Enhance button or prompt input not found');
   }
 
+  // ============================================================================
+  // PROMPT HISTORY
+  // ============================================================================
+  
+  const historyContainer = document.getElementById('history-container');
+  const historyEmpty = document.getElementById('history-empty');
+  
+  /**
+   * Formats timestamp to relative time (e.g., "2 hours ago")
+   */
+  function formatTimeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    return 'Just now';
+  }
+  
+  /**
+   * Gets mode label from mode value
+   */
+  function getModeLabel(mode) {
+    const modeMap = {
+      'TEXT_ENHANCEMENT': 'Text',
+      'CODE_ENHANCEMENT': 'Code',
+      'IMAGE_ENHANCEMENT': 'Image',
+      'VIDEO_ENHANCEMENT': 'Video'
+    };
+    return modeMap[mode] || 'Text';
+  }
+  
+  /**
+   * Creates a history item element
+   */
+  function createHistoryItem(entry) {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    
+    item.innerHTML = `
+      <div class="history-item-header">
+        <div class="history-item-meta">
+          <span class="history-item-mode">${getModeLabel(entry.mode)}</span>
+          <span class="history-item-time">${formatTimeAgo(entry.timestamp)}</span>
+        </div>
+      </div>
+      <div class="history-item-original" title="${entry.original}">
+        <strong>Original:</strong> ${entry.original.length > 100 ? entry.original.substring(0, 100) + '...' : entry.original}
+      </div>
+      <div class="history-item-enhanced" title="${entry.enhanced}">
+        ${entry.enhanced.length > 150 ? entry.enhanced.substring(0, 150) + '...' : entry.enhanced}
+      </div>
+      <div class="history-item-actions">
+        <button class="history-action-button" data-action="copy-enhanced" data-id="${entry.id}">Copy Enhanced</button>
+        <button class="history-action-button secondary" data-action="copy-original" data-id="${entry.id}">Copy Original</button>
+        <button class="history-action-button secondary" data-action="use-enhanced" data-id="${entry.id}">Use Enhanced</button>
+      </div>
+    `;
+    
+    // Add event listeners
+    const copyEnhancedBtn = item.querySelector('[data-action="copy-enhanced"]');
+    const copyOriginalBtn = item.querySelector('[data-action="copy-original"]');
+    const useEnhancedBtn = item.querySelector('[data-action="use-enhanced"]');
+    
+    copyEnhancedBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(entry.enhanced);
+        copyEnhancedBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyEnhancedBtn.textContent = 'Copy Enhanced';
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+        showStatus('Failed to copy to clipboard.', 'error');
+      }
+    });
+    
+    copyOriginalBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(entry.original);
+        copyOriginalBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyOriginalBtn.textContent = 'Copy Original';
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+        showStatus('Failed to copy to clipboard.', 'error');
+      }
+    });
+    
+    useEnhancedBtn.addEventListener('click', () => {
+      // Switch to enhance tab and populate the input
+      const enhanceTabButton = document.querySelector('[data-tab="enhance"]');
+      if (enhanceTabButton) {
+        enhanceTabButton.click();
+        const promptInput = document.getElementById('prompt-input');
+        if (promptInput) {
+          promptInput.value = entry.enhanced;
+          promptInput.focus();
+        }
+      }
+    });
+    
+    return item;
+  }
+  
+  /**
+   * Loads and displays prompt history
+   */
+  function loadHistory() {
+    chrome.storage.local.get(['promptHistory'], (result) => {
+      const history = result.promptHistory || [];
+      
+      if (historyContainer) {
+        historyContainer.innerHTML = '';
+      }
+      
+      if (history.length === 0) {
+        if (historyEmpty) {
+          historyEmpty.style.display = 'block';
+        }
+        if (historyContainer) {
+          historyContainer.style.display = 'none';
+        }
+        return;
+      }
+      
+      if (historyEmpty) {
+        historyEmpty.style.display = 'none';
+      }
+      if (historyContainer) {
+        historyContainer.style.display = 'flex';
+      }
+      
+      // Create history items
+      history.forEach(entry => {
+        const item = createHistoryItem(entry);
+        if (historyContainer) {
+          historyContainer.appendChild(item);
+        }
+      });
+    });
+  }
+
+  // ============================================================================
+  // ONBOARDING
+  // ============================================================================
+  
+  /**
+   * Shows onboarding welcome message for first-time users
+   */
+  function checkAndShowOnboarding() {
+    chrome.storage.local.get(['hasSeenOnboarding'], (result) => {
+      if (!result.hasSeenOnboarding) {
+        // Check if API key is set
+        chrome.storage.local.get(['userGeminiApiKey', 'userOpenAIApiKey', 'userAnthropicApiKey'], (keys) => {
+          const hasApiKey = keys.userGeminiApiKey || keys.userOpenAIApiKey || keys.userAnthropicApiKey;
+          
+          if (!hasApiKey) {
+            // Show onboarding - guide user to setup
+            showOnboarding();
+          } else {
+            // Mark onboarding as seen
+            chrome.storage.local.set({ hasSeenOnboarding: true });
+          }
+        });
+      }
+    });
+  }
+  
+  /**
+   * Shows onboarding welcome message
+   */
+  function showOnboarding() {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    `;
+    
+    // Create modal
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    `;
+    
+    modal.innerHTML = `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
+        <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; color: var(--text-primary);">Welcome to Prompt Architect!</h2>
+        <p style="margin: 0; font-size: 14px; color: var(--text-secondary); line-height: 1.5;">
+          Enhance your AI prompts with one click
+        </p>
+      </div>
+      
+      <div style="margin-bottom: 24px; padding: 16px; background: rgba(0, 122, 255, 0.05); border-radius: 8px; border-left: 3px solid var(--primary-blue);">
+        <p style="margin: 0 0 12px 0; font-size: 13px; font-weight: 600; color: var(--text-primary);">Quick Start:</p>
+        <ol style="margin: 0; padding-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
+          <li>Get an API key from your AI provider</li>
+          <li>Enter it in the Setup tab</li>
+          <li>Click "Improve" in any AI chat to enhance prompts!</li>
+        </ol>
+      </div>
+      
+      <button id="onboarding-got-it" class="premium-button" style="width: 100%;">
+        Get Started
+      </button>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Handle close
+    const gotItBtn = modal.querySelector('#onboarding-got-it');
+    gotItBtn.addEventListener('click', () => {
+      chrome.storage.local.set({ hasSeenOnboarding: true });
+      overlay.remove();
+      
+      // Switch to setup tab
+      const setupTabButton = document.querySelector('[data-tab="setup"]');
+      if (setupTabButton) {
+        setupTabButton.click();
+      }
+    });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        chrome.storage.local.set({ hasSeenOnboarding: true });
+        overlay.remove();
+      }
+    });
+  }
+
   // Initial load
   loadApiKey();
+  checkAndShowOnboarding();
 });

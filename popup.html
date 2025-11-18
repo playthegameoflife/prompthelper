@@ -421,6 +421,96 @@
             font-size: 48px;
             margin-bottom: 12px;
         }
+        
+        /* History Item Styles */
+        .history-item {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .history-item:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+        
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .history-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .history-item-mode {
+            padding: 2px 6px;
+            background: rgba(0, 122, 255, 0.1);
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--primary-blue);
+        }
+        
+        .history-item-time {
+            color: var(--text-tertiary);
+        }
+        
+        .history-item-original {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            line-height: 1.4;
+            max-height: 40px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .history-item-enhanced {
+            font-size: 13px;
+            color: var(--text-primary);
+            line-height: 1.5;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 8px;
+        }
+        
+        .history-item-actions {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .history-action-button {
+            padding: 6px 12px;
+            background: rgba(0, 122, 255, 0.1);
+            border: 0.5px solid rgba(0, 122, 255, 0.2);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--primary-blue);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .history-action-button:hover {
+            background: rgba(0, 122, 255, 0.15);
+            transform: scale(1.05);
+        }
+        
+        .history-action-button.secondary {
+            background: rgba(60, 60, 67, 0.05);
+            border-color: var(--border-subtle);
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
@@ -432,6 +522,7 @@
         <!-- Tab Navigation -->
         <div class="tabs">
             <button class="tab-button active" data-tab="enhance">Enhance</button>
+            <button class="tab-button" data-tab="recent">Recent</button>
             <button class="tab-button" data-tab="setup">Setup</button>
         </div>
 
@@ -480,6 +571,24 @@
                         <button class="copy-button" id="copy-button">Copy</button>
                     </div>
                     <div id="result-text" class="result-text"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Tab -->
+        <div id="recent-section" class="setup-section">
+            <div class="glass-card">
+                <h2 class="section-title">Recent Enhancements</h2>
+                <p class="section-subtitle">View and reuse your recently enhanced prompts</p>
+                
+                <div id="history-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto;">
+                    <!-- History items will be inserted here -->
+                </div>
+                
+                <div id="history-empty" style="text-align: center; padding: 40px 20px; color: var(--text-secondary); display: none;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📝</div>
+                    <p style="margin: 0; font-size: 14px;">No enhancements yet</p>
+                    <p style="margin: 8px 0 0 0; font-size: 12px;">Start enhancing prompts to see them here</p>
                 </div>
             </div>
         </div>
