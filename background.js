@@ -6,6 +6,23 @@
  */
 
 // --- Constants ---
+
+// Debug mode flag - set to false for production
+const DEBUG_MODE = false;
+
+// Debug logging utility
+const debug = {
+    log: (...args) => {
+        if (DEBUG_MODE) console.log('[Prompt Architect]', ...args);
+    },
+    warn: (...args) => {
+        if (DEBUG_MODE) console.warn('[Prompt Architect]', ...args);
+    },
+    error: (...args) => {
+        // Always log errors, even in production
+        console.error('[Prompt Architect]', ...args);
+    }
+};
 const STORAGE_KEYS = {
     gemini: 'userGeminiApiKey',
     openai: 'userOpenAIApiKey',
@@ -43,6 +60,7 @@ const ERROR_MESSAGES = {
     CONTENT_BLOCKED: "Content was blocked by the AI provider. Try rephrasing your prompt.",
     INVALID_ENHANCEMENT_TYPE: "Invalid enhancement type. Please try again.",
     UNKNOWN_PROVIDER: "Unknown AI provider. Please select a valid provider.",
+    TIMEOUT: "Request timed out. The API is taking too long to respond. Please try again.",
     UNEXPECTED_ERROR: "An unexpected error occurred. Please try again.",
 };
 
@@ -88,6 +106,15 @@ function getUserFriendlyError(error, provider) {
         );
     }
     
+    if (errorMsg.includes('timeout') || errorMsg.includes('aborted')) {
+        return new EnhancementError(
+            ERROR_MESSAGES.TIMEOUT,
+            'TIMEOUT',
+            true,
+            ERROR_MESSAGES.TIMEOUT
+        );
+    }
+    
     return new EnhancementError(
         error.message || ERROR_MESSAGES.UNEXPECTED_ERROR,
         'UNEXPECTED_ERROR',
@@ -106,6 +133,43 @@ const pendingRequests = new Map();
 /** Cache for identical prompts (1 hour TTL) */
 const promptCache = new Map();
 const CACHE_TTL = 3600000; // 1 hour in milliseconds
+
+// ============================================================================
+// RATE LIMITING
+// ============================================================================
+
+/** Rate limiter to prevent API abuse */
+class RateLimiter {
+    constructor(maxRequests, windowMs) {
+        this.maxRequests = maxRequests;
+        this.windowMs = windowMs;
+        this.requests = [];
+    }
+    
+    async waitIfNeeded() {
+        const now = Date.now();
+        // Remove requests outside the time window
+        this.requests = this.requests.filter(timestamp => now - timestamp < this.windowMs);
+        
+        // If we've hit the limit, wait until the oldest request expires
+        if (this.requests.length >= this.maxRequests) {
+            const oldestRequest = this.requests[0];
+            const waitTime = this.windowMs - (now - oldestRequest);
+            if (waitTime > 0) {
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                // Clean up again after waiting
+                const newNow = Date.now();
+                this.requests = this.requests.filter(timestamp => newNow - timestamp < this.windowMs);
+            }
+        }
+        
+        // Record this request
+        this.requests.push(Date.now());
+    }
+}
+
+// 10 requests per minute (60000ms)
+const apiRateLimiter = new RateLimiter(10, 60000);
 
 /**
  * Generates a cache key from prompt and enhancement type
@@ -259,14 +323,14 @@ const getApiKey = (provider = 'gemini') => {
     return new Promise((resolve) => {
         const config = API_CONFIGS[provider];
         if (!config) {
-            console.error(`Unknown provider: ${provider}`);
+            debug.error(`Unknown provider: ${provider}`);
             resolve(null);
             return;
         }
         
         chrome.storage.local.get([config.storageKey, STORAGE_PROVIDER], (result) => {
             if (chrome.runtime.lastError) {
-                console.error("Error retrieving API key in background:", chrome.runtime.lastError);
+                debug.error("Error retrieving API key in background:", chrome.runtime.lastError);
                 resolve(null);
             } else {
                 // Use provider from request, or fallback to stored provider, or default to gemini
@@ -315,10 +379,10 @@ const extractImprovedPrompt = (data, provider = 'gemini') => {
             }
         }
         
-        console.warn(`Unexpected ${provider} response structure:`, data);
+        debug.warn(`Unexpected ${provider} response structure:`, data);
         return "Error: No response generated. Please try again.";
     } catch (e) {
-        console.error(`Error processing ${provider} API response:`, e, data);
+        debug.error(`Error processing ${provider} API response:`, e, data);
         return "Error: Failed to process the API response structure.";
     }
 };
@@ -380,14 +444,14 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
     // Check cache first
     const cached = getCachedEnhancement(userText, enhancementType, selectedProvider);
     if (cached) {
-        console.log('[Prompt Architect] Returning cached result');
+        debug.log('Returning cached result');
         return cached;
     }
     
     // Check for duplicate pending request
     const requestKey = `${userText}-${enhancementType}-${selectedProvider}`;
     if (pendingRequests.has(requestKey)) {
-        console.log('[Prompt Architect] Duplicate request detected, returning existing promise');
+        debug.log('Duplicate request detected, returning existing promise');
         return pendingRequests.get(requestKey);
     }
     
@@ -468,11 +532,37 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 );
             }
 
-            const response = await fetch(fullApiUrl, {
-                method: 'POST',
-                headers: requestHeaders,
-                body: requestBody,
-            });
+            // Apply rate limiting
+            await apiRateLimiter.waitIfNeeded();
+            
+            // Set up timeout (30 seconds)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, 30000); // 30 second timeout
+            
+            let response;
+            try {
+                response = await fetch(fullApiUrl, {
+                    method: 'POST',
+                    headers: requestHeaders,
+                    body: requestBody,
+                    signal: controller.signal
+                });
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new EnhancementError(
+                        'Request timed out after 30 seconds. Please try again.',
+                        'TIMEOUT',
+                        true,
+                        'Request timed out. The API is taking too long to respond. Please try again.'
+                    );
+                }
+                throw error;
+            }
+            
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -494,7 +584,7 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             return improvedPrompt;
 
         } catch (error) {
-            console.error(`[${enhancementType}] API Call or Processing Error:`, error);
+            debug.error(`[${enhancementType}] API Call or Processing Error:`, error);
             
             // Return user-friendly error message
             if (error instanceof EnhancementError) {
@@ -527,7 +617,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
             promise.then(result => {
                 sendResponse({ enhancedPrompt: result });
             }).catch(error => {
-                console.error("Error during enhancement processing:", error);
+                debug.error("Error during enhancement processing:", error);
                 sendResponse({ enhancedPrompt: `Error: Processing failed in background. (${error.message || 'Unknown error'})` });
             });
 
@@ -577,7 +667,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
                     originalText: selectedText
                 });
             }).catch(error => {
-                console.error("Context Menu Enhancement Failed:", error);
+                debug.error("Context Menu Enhancement Failed:", error);
                 chrome.tabs.sendMessage(tab.id, { 
                     action: "contextMenuResult", 
                     resultText: `Error: Failed to process context menu request. ${error.message}`,
@@ -598,7 +688,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
                         action: 'enhance-prompt-shortcut'
                     }).catch(err => {
                         // Tab might not have content script loaded yet, or not on supported page
-                        console.log('[Prompt Architect] Keyboard shortcut: Tab not ready or unsupported page');
+                        debug.log('Keyboard shortcut: Tab not ready or unsupported page');
                     });
                 }
             });

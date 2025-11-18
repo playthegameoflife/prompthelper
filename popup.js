@@ -129,6 +129,68 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('[Prompt Architect] Critical elements missing in popup');
   }
 
+  // ============================================================================
+  // SMART MODE DETECTION
+  // ============================================================================
+
+  /**
+   * Automatically detects the most appropriate enhancement mode based on prompt content
+   * @param {string} text - The prompt text to analyze
+   * @returns {string} The detected enhancement mode
+   */
+  function detectPromptType(text) {
+    if (!text || typeof text !== 'string') {
+      return 'TEXT_ENHANCEMENT';
+    }
+    
+    const normalized = text.toLowerCase().trim();
+    
+    // Code detection patterns
+    const codePatterns = [
+      /\b(function|class|def |import |const |let |var |return |async |await |=>|\.js|\.py|\.ts|\.java|\.cpp|\.html|\.css|\.json|\.sql)\b/,
+      /\b(programming|code|script|algorithm|function|variable|array|object|method|api|endpoint|database|query)\b/,
+      /\b(create a|write a|build a|implement|code|program|script)\s+(function|class|component|module|app|application)\b/,
+    ];
+    
+    // Image detection patterns
+    const imagePatterns = [
+      /\b(image|photo|picture|visual|draw|paint|art|illustration|graphic|design|logo|icon|screenshot|diagram|chart|visualization)\b/,
+      /\b(create|generate|make|design|draw|paint)\s+(an|a)\s+(image|photo|picture|visual|art|illustration|graphic)\b/,
+      /\b(dalle|midjourney|stable diffusion|image generation|visual description)\b/,
+    ];
+    
+    // Video detection patterns
+    const videoPatterns = [
+      /\b(video|film|movie|cinematic|animation|motion|footage|clip|sequence|scene|shot|camera|frame|fps)\b/,
+      /\b(create|generate|make|produce|edit)\s+(a|an)\s+(video|film|movie|animation|clip)\b/,
+      /\b(runway|pika|luma|video generation|motion graphics)\b/,
+    ];
+    
+    // Check code patterns first (most specific)
+    for (const pattern of codePatterns) {
+      if (pattern.test(normalized)) {
+        return 'CODE_ENHANCEMENT';
+      }
+    }
+    
+    // Check video patterns (more specific than image)
+    for (const pattern of videoPatterns) {
+      if (pattern.test(normalized)) {
+        return 'VIDEO_ENHANCEMENT';
+      }
+    }
+    
+    // Check image patterns
+    for (const pattern of imagePatterns) {
+      if (pattern.test(normalized)) {
+        return 'IMAGE_ENHANCEMENT';
+      }
+    }
+    
+    // Default to text enhancement
+    return 'TEXT_ENHANCEMENT';
+  }
+
   /**
    * Display a status message.
    */
@@ -278,6 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
    * Mode Selection
    */
   let selectedMode = 'TEXT_ENHANCEMENT';
+  let userManuallySelectedMode = false; // Track if user manually selected a mode
+  let autoDetectionTimeout = null; // For debouncing auto-detection
   
   // Load saved mode on popup open
   chrome.storage.local.get([STORAGE_ENHANCEMENT_MODE], (result) => {
@@ -294,11 +358,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   
-  modeOptions.forEach(option => {
-    option.addEventListener('click', () => {
-      modeOptions.forEach(opt => opt.classList.remove('active'));
-      option.classList.add('active');
-      selectedMode = option.dataset.mode;
+  /**
+   * Updates the selected mode in UI and storage
+   * @param {string} mode - The mode to select
+   * @param {boolean} isAutoDetected - Whether this was auto-detected (true) or manual (false)
+   */
+  function updateSelectedMode(mode, isAutoDetected = false) {
+    modeOptions.forEach(opt => opt.classList.remove('active'));
+    const targetOption = Array.from(modeOptions).find(opt => opt.dataset.mode === mode);
+    if (targetOption) {
+      targetOption.classList.add('active');
+      selectedMode = mode;
       
       // Save to storage
       chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: selectedMode }, () => {
@@ -306,8 +376,64 @@ document.addEventListener('DOMContentLoaded', () => {
           console.error('Error saving enhancement mode:', chrome.runtime.lastError);
         }
       });
+      
+      if (isAutoDetected) {
+        // Briefly highlight the auto-detected mode
+        targetOption.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        targetOption.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+          targetOption.style.transform = 'scale(1)';
+        }, 300);
+      }
+    }
+  }
+  
+  modeOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      userManuallySelectedMode = true;
+      updateSelectedMode(option.dataset.mode, false);
+      
+      // Reset manual selection flag after a delay (so auto-detection can work again)
+      setTimeout(() => {
+        userManuallySelectedMode = false;
+      }, 5000); // 5 seconds
     });
   });
+  
+  /**
+   * Smart mode detection on textarea input
+   */
+  if (promptInput) {
+    promptInput.addEventListener('input', () => {
+      const text = promptInput.value.trim();
+      
+      // Clear existing timeout
+      if (autoDetectionTimeout) {
+        clearTimeout(autoDetectionTimeout);
+      }
+      
+      // Only auto-detect if:
+      // 1. There's text in the input
+      // 2. User hasn't manually selected a mode recently
+      // 3. Text is long enough to make a meaningful detection (at least 10 chars)
+      if (text.length >= 10 && !userManuallySelectedMode) {
+        autoDetectionTimeout = setTimeout(() => {
+          const detectedMode = detectPromptType(text);
+          
+          // Only update if detected mode is different from current
+          if (detectedMode !== selectedMode) {
+            updateSelectedMode(detectedMode, true);
+            console.log(`[Prompt Architect] Auto-detected mode: ${detectedMode}`);
+          }
+        }, 500); // Debounce: wait 500ms after user stops typing
+      } else if (text.length === 0) {
+        // Reset to Text mode when input is cleared
+        if (!userManuallySelectedMode) {
+          updateSelectedMode('TEXT_ENHANCEMENT', false);
+        }
+      }
+    });
+  }
 
   /**
    * Copy to Clipboard

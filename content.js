@@ -659,8 +659,8 @@ function getPlatformDesign(platform) {
             fontWeight: '600'
         },
         perplexity: {
-            primary: '#6366f1', // Perplexity indigo
-            primaryHover: '#4f46e5',
+            primary: '#1a73e8', // Google blue (matching Gemini)
+            primaryHover: '#1557b0',
             borderRadius: '8px',
             height: '36px',
             fontSize: '14px',
@@ -1388,7 +1388,45 @@ async function injectUI(inputElement) {
 function updateInputAndDispatch(newText, inputElement = null) {
     // Use provided element or fallback to querying
     let targetElement = inputElement;
+    const platform = detectPlatform();
     
+    // For Perplexity, try to find the input element using platform-specific selectors
+    if ((!targetElement || !document.body.contains(targetElement)) && platform === 'perplexity') {
+        // Try Perplexity-specific selectors first
+        const perplexitySelectors = [
+            'textarea[placeholder*="Ask" i]',
+            'textarea[placeholder*="Search" i]',
+            '[contenteditable="true"][placeholder*="Ask" i]',
+            '[contenteditable="true"][placeholder*="Search" i]',
+            '[contenteditable="true"][role="textbox"]',
+            'textarea[class*="input" i]',
+            '[contenteditable="true"][class*="input" i]',
+            'form textarea',
+            'form [contenteditable="true"]',
+        ];
+        
+        for (const selector of perplexitySelectors) {
+            try {
+                const elements = document.querySelectorAll(selector);
+                for (const elem of elements) {
+                    const rect = elem.getBoundingClientRect();
+                    const style = window.getComputedStyle(elem);
+                    if (rect.width > 30 && rect.height > 10 && 
+                        style.display !== 'none' && 
+                        style.visibility !== 'hidden' &&
+                        elem.offsetParent !== null) {
+                        targetElement = elem;
+                        break;
+                    }
+                }
+                if (targetElement) break;
+            } catch (e) {
+                continue;
+            }
+        }
+    }
+    
+    // Fallback to generic selector if still not found
     if (!targetElement || !document.body.contains(targetElement)) {
         targetElement = document.querySelector(SELECTORS.PROMPT_INPUT);
     }
@@ -1404,28 +1442,131 @@ function updateInputAndDispatch(newText, inputElement = null) {
         requestAnimationFrame(() => {
             let updateSuccess = false;
             
-            // Handle contenteditable divs (used by some platforms like Gemini)
+            // Handle contenteditable divs (used by some platforms like Gemini and Perplexity)
             if (targetElement.contentEditable === 'true' || targetElement.hasAttribute('contenteditable') || 
                 targetElement.getAttribute('contenteditable') === 'true') {
-                // Update both textContent and innerText for compatibility
-                targetElement.textContent = newText;
-                targetElement.innerText = newText;
                 
-                // Verify the update
-                const actualText = (targetElement.textContent || targetElement.innerText || '').trim();
-                if (actualText === newText.trim() || actualText.length > 0) {
-                    // Trigger input events for contenteditable (without keyboard events to avoid auto-send)
-                    const inputEvent = new InputEvent('input', { 
-                        bubbles: true, 
-                        cancelable: true,
-                        inputType: 'insertText',
-                        data: newText
-                    });
-                    targetElement.dispatchEvent(inputEvent);
-                    targetElement.dispatchEvent(new Event('change', { bubbles: true }));
-                    
-                    // Focus for better compatibility
+                // For Perplexity, completely clear all content first to ensure clean replacement
+                if (platform === 'perplexity') {
+                    // Focus first to ensure React is aware of the element
                     targetElement.focus();
+                    
+                    // Step 1: Select all content using Selection API
+                    try {
+                        const selection = window.getSelection();
+                        const range = document.createRange();
+                        range.selectNodeContents(targetElement);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    } catch (e) {
+                        // Selection API failed, continue with other methods
+                    }
+                    
+                    // Step 2: Dispatch beforeinput event with deleteContent type (React recognizes this)
+                    const deleteBeforeInput = new InputEvent('beforeinput', {
+                        bubbles: true,
+                        cancelable: true,
+                        inputType: 'deleteContent',
+                        data: null
+                    });
+                    targetElement.dispatchEvent(deleteBeforeInput);
+                    
+                    // Step 3: Clear all content using DOM methods
+                    targetElement.innerHTML = '';
+                    while (targetElement.firstChild) {
+                        targetElement.removeChild(targetElement.firstChild);
+                    }
+                    targetElement.textContent = '';
+                    targetElement.innerText = '';
+                    
+                    // Step 4: Dispatch input event with deleteContent type (tells React content was deleted)
+                    const deleteInput = new InputEvent('input', {
+                        bubbles: true,
+                        cancelable: true,
+                        inputType: 'deleteContent',
+                        data: null
+                    });
+                    targetElement.dispatchEvent(deleteInput);
+                    
+                    // Step 5: Small delay to let React process the deletion
+                    setTimeout(() => {
+                        // Verify it's actually empty
+                        const currentText = (targetElement.textContent || targetElement.innerText || '').trim();
+                        if (currentText) {
+                            // Still has content, clear again more aggressively
+                            targetElement.innerHTML = '';
+                            targetElement.textContent = '';
+                            targetElement.innerText = '';
+                        }
+                        
+                        // Step 6: Now set the new text with proper React events
+                        const insertBeforeInput = new InputEvent('beforeinput', {
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: 'insertText',
+                            data: newText
+                        });
+                        targetElement.dispatchEvent(insertBeforeInput);
+                        
+                        // Step 7: Set the actual text
+                        targetElement.textContent = newText;
+                        
+                        // Step 8: Dispatch input event with insertText type
+                        const insertInput = new InputEvent('input', {
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: 'insertText',
+                            data: newText
+                        });
+                        targetElement.dispatchEvent(insertInput);
+                        
+                        // Step 9: Dispatch change event
+                        targetElement.dispatchEvent(new Event('change', { bubbles: true }));
+                    }, 20);
+                    
+                    // Also set immediately (the setTimeout is for React timing)
+                    targetElement.textContent = newText;
+                } else {
+                    // For other platforms, use standard approach
+                    targetElement.textContent = newText;
+                    targetElement.innerText = newText;
+                }
+                
+                // For Perplexity, events are dispatched in the setTimeout above, so skip immediate dispatch
+                if (platform !== 'perplexity') {
+                    // Verify the update
+                    const actualText = (targetElement.textContent || targetElement.innerText || '').trim();
+                    const expectedText = newText.trim();
+                    
+                    if (actualText === expectedText || actualText.length > 0) {
+                        // Focus first (important for React-based UIs)
+                        targetElement.focus();
+                        
+                        // Trigger input events for contenteditable
+                        const inputEvent = new InputEvent('input', { 
+                            bubbles: true, 
+                            cancelable: true,
+                            inputType: 'insertText',
+                            data: newText
+                        });
+                        targetElement.dispatchEvent(inputEvent);
+                        
+                        // Also dispatch beforeInput for React
+                        const beforeInputEvent = new InputEvent('beforeinput', {
+                            bubbles: true,
+                            cancelable: true,
+                            inputType: 'insertText',
+                            data: newText
+                        });
+                        targetElement.dispatchEvent(beforeInputEvent);
+                        
+                        // Dispatch change event
+                        targetElement.dispatchEvent(new Event('change', { bubbles: true }));
+                        
+                        updateSuccess = true;
+                    }
+                } else {
+                    // For Perplexity, mark as success (events dispatched in setTimeout above)
                     updateSuccess = true;
                 }
             } else if (targetElement.tagName === 'TEXTAREA' || targetElement.tagName === 'INPUT') {
@@ -1433,11 +1574,19 @@ function updateInputAndDispatch(newText, inputElement = null) {
                 // Store original value for verification
                 const originalValue = targetElement.value;
                 
+                // For Perplexity textareas, clear first
+                if (platform === 'perplexity') {
+                    targetElement.value = '';
+                }
+                
                 // Set the value directly
                 targetElement.value = newText;
                 
                 // Verify the update was successful
                 if (targetElement.value === newText || targetElement.value.length === newText.length) {
+                    // Focus first
+                    targetElement.focus();
+                    
                     // Use InputEvent for better compatibility with modern frameworks
                     const inputEvent = new InputEvent('input', { 
                         bubbles: true, 
@@ -1450,15 +1599,13 @@ function updateInputAndDispatch(newText, inputElement = null) {
                     // Also dispatch change event
                     targetElement.dispatchEvent(new Event('change', { bubbles: true }));
                     
-                    // Focus for better compatibility (but don't trigger keyboard events that might auto-send)
-                    targetElement.focus();
-                    
                     updateSuccess = true;
                 } else {
                     // Try alternative method: clear and set
                     targetElement.value = '';
                     targetElement.value = newText;
                     if (targetElement.value === newText) {
+                        targetElement.focus();
                         targetElement.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: newText }));
                         targetElement.dispatchEvent(new Event('change', { bubbles: true }));
                         updateSuccess = true;
@@ -1466,14 +1613,66 @@ function updateInputAndDispatch(newText, inputElement = null) {
                 }
             } else {
                 // Fallback: try setting textContent for other element types
+                if (platform === 'perplexity') {
+                    // Clear first for Perplexity
+                    targetElement.innerHTML = '';
+                }
                 targetElement.textContent = newText;
                 const actualText = (targetElement.textContent || '').trim();
                 if (actualText === newText.trim() || actualText.length > 0) {
+                    targetElement.focus();
                     targetElement.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: newText }));
                     targetElement.dispatchEvent(new Event('change', { bubbles: true }));
-                    targetElement.focus();
                     updateSuccess = true;
                 }
+            }
+            
+            // Additional verification for Perplexity - check if text actually appears and fix duplication
+            if (platform === 'perplexity' && updateSuccess) {
+                setTimeout(() => {
+                    const verifyText = (targetElement.textContent || targetElement.innerText || targetElement.value || '').trim();
+                    const expectedText = newText.trim();
+                    
+                    // Check if duplication occurred (text is longer than expected or starts with old text)
+                    if (verifyText !== expectedText) {
+                        // Check if it looks like duplication (contains old text + new text)
+                        const isDuplicated = verifyText.length > expectedText.length * 1.2 || 
+                                           (verifyText.length > expectedText.length && !verifyText.startsWith(expectedText.substring(0, 20)));
+                        
+                        if (isDuplicated) {
+                            console.warn('[Prompt Architect] Perplexity duplication detected. Expected length:', expectedText.length, 'Got length:', verifyText.length);
+                            
+                            // More aggressive fix: simulate select all + delete + insert
+                            targetElement.focus();
+                            
+                            // Select all
+                            try {
+                                const selection = window.getSelection();
+                                const range = document.createRange();
+                                range.selectNodeContents(targetElement);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                            } catch (e) {}
+                            
+                            // Dispatch delete events
+                            targetElement.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, inputType: 'deleteContent', data: null }));
+                            targetElement.innerHTML = '';
+                            targetElement.textContent = '';
+                            targetElement.innerText = '';
+                            targetElement.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContent', data: null }));
+                            
+                            // Wait a bit, then insert new text
+                            setTimeout(() => {
+                                targetElement.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: newText }));
+                                targetElement.textContent = newText;
+                                targetElement.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: newText }));
+                                targetElement.dispatchEvent(new Event('change', { bubbles: true }));
+                            }, 30);
+                        } else if (verifyText !== expectedText) {
+                            console.warn('[Prompt Architect] Perplexity update verification failed. Expected:', expectedText.substring(0, 50), 'Got:', verifyText.substring(0, 50));
+                        }
+                    }
+                }, 200);
             }
             
             resolve(updateSuccess);
@@ -1872,13 +2071,35 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
                 }
             }, 2000);
             
-            // DO NOT replace user's text - keep original intact
+            // Error case - show error feedback
         } else {
-            // updateInputAndDispatch now returns a Promise
-            updateInputAndDispatch(improvedPrompt, currentInputElement).then(updateSuccess => {
+            // Replace user's text with improved prompt
+            // For Perplexity, ensure we have the correct input element
+            let elementToUpdate = currentInputElement;
+            if (platform === 'perplexity' && (!elementToUpdate || !document.body.contains(elementToUpdate))) {
+                // Re-find the Perplexity input element
+                const perplexityInput = findPlatformSpecificInput();
+                if (perplexityInput) {
+                    elementToUpdate = perplexityInput;
+                }
+            }
+            
+            // updateInputAndDispatch now returns a Promise - this REPLACES the original text
+            updateInputAndDispatch(improvedPrompt, elementToUpdate).then(updateSuccess => {
                 // Success - the improved prompt in the input field is the feedback
                 if (!updateSuccess) {
                     console.error('[Prompt Architect] Update failed');
+                    // For Perplexity, try one more time with a fresh element lookup
+                    if (platform === 'perplexity') {
+                        setTimeout(() => {
+                            const freshInput = findPlatformSpecificInput();
+                            if (freshInput) {
+                                updateInputAndDispatch(improvedPrompt, freshInput).catch(err => {
+                                    console.error('[Prompt Architect] Retry update also failed:', err);
+                                });
+                            }
+                        }, 200);
+                    }
                 }
             }).catch(error => {
                 console.error('[Prompt Architect] Error updating input:', error);
