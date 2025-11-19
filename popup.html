@@ -971,6 +971,14 @@
             <div class="glass-card">
                 <h2 class="section-title">Enhance Your Prompt</h2>
                 
+                <!-- Minimal API Key Notice (shown when no API key) - Apple Design -->
+                <div id="api-key-notice" style="display: none; margin-bottom: var(--spacing-lg); padding: 0;">
+                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; letter-spacing: -0.01em;">
+                        Set up your API key to start enhancing prompts. 
+                        <a href="#" id="api-key-notice-link" style="color: var(--primary-blue); text-decoration: none; font-weight: 500; transition: opacity 0.2s ease;">Go to Setup →</a>
+                    </p>
+                </div>
+                
                 <textarea 
                     id="prompt-input" 
                     class="premium-textarea" 

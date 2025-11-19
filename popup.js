@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_ASK_INPUT = 'savedAskInput';
   const STORAGE_ENHANCED_RESULT = 'savedEnhancedResult';
   const STORAGE_ASK_RESULT = 'savedAskResult';
+  const STORAGE_ENHANCE_QUESTION_TOGGLE = 'enhanceQuestionToggle';
   
   // Provider configuration
   const PROVIDERS = {
@@ -291,6 +292,51 @@ document.addEventListener('DOMContentLoaded', () => {
           savedView.style.display = 'none';
       document.querySelector('#setup-section .glass-card:first-child').style.display = 'block';
       }
+      // Update API key notice in Enhance tab
+      updateApiKeyNotice();
+  }
+  
+  /**
+   * Shows/hides minimal API key notice in Enhance tab
+   */
+  async function updateApiKeyNotice() {
+    const apiKeyNotice = document.getElementById('api-key-notice');
+    if (!apiKeyNotice) return;
+    
+    const hasKey = await new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], (result) => {
+        const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
+        const storageKey = STORAGE_KEYS[selectedProvider];
+        const apiKey = result[storageKey];
+        resolve(!!apiKey);
+      });
+    });
+    
+    if (hasKey) {
+      apiKeyNotice.style.display = 'none';
+    } else {
+      apiKeyNotice.style.display = 'block';
+    }
+  }
+  
+  // Handle API key notice link (Apple-style)
+  const apiKeyNoticeLink = document.getElementById('api-key-notice-link');
+  if (apiKeyNoticeLink) {
+    apiKeyNoticeLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const setupTabButton = document.querySelector('[data-tab="setup"]');
+      if (setupTabButton) {
+        setupTabButton.click();
+      }
+    });
+    
+    // Subtle hover effect (Apple-style)
+    apiKeyNoticeLink.addEventListener('mouseenter', () => {
+      apiKeyNoticeLink.style.opacity = '0.7';
+    });
+    apiKeyNoticeLink.addEventListener('mouseleave', () => {
+      apiKeyNoticeLink.style.opacity = '1';
+    });
   }
 
   /**
@@ -313,6 +359,20 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (apiKeyInput && key) {
         apiKeyInput.value = key;
+      }
+      
+      // Update API key notice
+      updateApiKeyNotice();
+    });
+  }
+  
+  // Handle enhance setup button
+  const enhanceSetupButton = document.getElementById('enhance-setup-button');
+  if (enhanceSetupButton) {
+    enhanceSetupButton.addEventListener('click', () => {
+      const setupTabButton = document.querySelector('[data-tab="setup"]');
+      if (setupTabButton) {
+        setupTabButton.click();
       }
     });
   }
@@ -373,6 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showStatus(`${providerName} key saved successfully!`, 'success');
               apiKeyInput.value = ''; 
               updateUIState(key);
+              updateApiKeyNotice();
           }
           saveButton.disabled = false;
         if (saveButton.querySelector('span:last-child')) {
@@ -536,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('Failed to copy to clipboard.', 'error');
     }
   });
+
 
   /**
    * Handles prompt enhancement.
@@ -783,7 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   /**
-   * Shows onboarding welcome message
+   * Shows onboarding welcome message with visual demonstration
    */
   function showOnboarding() {
     // Create overlay
@@ -806,29 +868,78 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.createElement('div');
     modal.style.cssText = `
       background: white;
-      border-radius: 16px;
+      border-radius: 20px;
       padding: 32px;
-      max-width: 400px;
+      max-width: 480px;
       width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     `;
     
     modal.innerHTML = `
-      <div style="text-align: center; margin-bottom: 24px;">
+      <div style="text-align: center; margin-bottom: 28px;">
         <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
-        <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; color: var(--text-primary);">Welcome to Prompt Architect!</h2>
-        <p style="margin: 0; font-size: 14px; color: var(--text-secondary); line-height: 1.5;">
-          Enhance your AI prompts with one click
+        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Prompt Architect</h2>
+        <p style="margin: 0; font-size: 15px; color: var(--text-secondary); line-height: 1.5;">
+          Transform your prompts into powerful AI instructions
         </p>
       </div>
       
+      <!-- Before/After Example -->
+      <div style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, rgba(0, 122, 255, 0.05) 0%, rgba(0, 122, 255, 0.02) 100%); border-radius: 12px; border: 1px solid rgba(0, 122, 255, 0.1);">
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Before</span>
+          </div>
+          <div style="padding: 12px; background: rgba(0, 0, 0, 0.03); border-radius: 8px; border-left: 3px solid rgba(0, 0, 0, 0.1);">
+            <p style="margin: 0; font-size: 13px; color: var(--text-secondary); font-style: italic;">"write a blog post"</p>
+          </div>
+        </div>
+        <div style="text-align: center; margin: 12px 0;">
+          <div style="font-size: 20px; color: var(--primary-blue);">↓</div>
+        </div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 11px; font-weight: 600; color: var(--primary-blue); text-transform: uppercase; letter-spacing: 0.05em;">After</span>
+          </div>
+          <div style="padding: 12px; background: rgba(0, 122, 255, 0.08); border-radius: 8px; border-left: 3px solid var(--primary-blue);">
+            <p style="margin: 0; font-size: 13px; color: var(--text-primary); font-weight: 500;">"Write a comprehensive, engaging blog post that explores [topic] with depth and clarity. Include an attention-grabbing introduction, well-structured body paragraphs with supporting evidence, and a compelling conclusion that leaves readers with actionable insights."</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Where to Find Improve Button -->
+      <div style="margin-bottom: 24px; padding: 20px; background: rgba(0, 122, 255, 0.05); border-radius: 12px; border-left: 3px solid var(--primary-blue);">
+        <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">📍 Where to Find the "Improve" Button</p>
+        <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+          Look for the <strong style="color: var(--primary-blue);">"Improve"</strong> button next to the Send button on:
+        </p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+          <span style="padding: 6px 12px; background: white; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">ChatGPT</span>
+          <span style="padding: 6px 12px; background: white; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">Gemini</span>
+          <span style="padding: 6px 12px; background: white; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">Claude</span>
+          <span style="padding: 6px 12px; background: white; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">Grok</span>
+          <span style="padding: 6px 12px; background: white; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">Perplexity</span>
+        </div>
+        <div style="padding: 12px; background: rgba(0, 122, 255, 0.1); border-radius: 8px; margin-top: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">💡</span>
+            <p style="margin: 0; font-size: 12px; color: var(--text-primary); line-height: 1.5;">
+              The button appears automatically when you visit these sites. Just type your prompt and click <strong>"Improve"</strong> before sending!
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Quick Start -->
       <div style="margin-bottom: 24px; padding: 16px; background: rgba(0, 122, 255, 0.05); border-radius: 8px; border-left: 3px solid var(--primary-blue);">
-        <p style="margin: 0 0 12px 0; font-size: 13px; font-weight: 600; color: var(--text-primary);">Quick Start:</p>
+        <p style="margin: 0 0 12px 0; font-size: 13px; font-weight: 600; color: var(--text-primary);">🚀 Quick Start:</p>
         <ol style="margin: 0; padding-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
-          <li>Get an API key from your AI provider</li>
+          <li>Get an API key from your AI provider (free options available)</li>
           <li>Enter it in the Setup tab</li>
-          <li>Click "Improve" in any AI chat to enhance prompts!</li>
+          <li>Visit ChatGPT, Gemini, or Claude and look for the "Improve" button!</li>
         </ol>
       </div>
       
@@ -1594,9 +1705,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Update button text when toggle changes
+  // Update button text when toggle changes and save/restore state
   if (enhanceQuestionToggle) {
-    enhanceQuestionToggle.addEventListener('change', updateAskButtonText);
+    // Load saved toggle state
+    chrome.storage.local.get([STORAGE_ENHANCE_QUESTION_TOGGLE], (result) => {
+      if (result[STORAGE_ENHANCE_QUESTION_TOGGLE] !== undefined) {
+        enhanceQuestionToggle.checked = result[STORAGE_ENHANCE_QUESTION_TOGGLE];
+        updateAskButtonText();
+      }
+    });
+    
+    // Save toggle state when changed
+    enhanceQuestionToggle.addEventListener('change', () => {
+      chrome.storage.local.set({ [STORAGE_ENHANCE_QUESTION_TOGGLE]: enhanceQuestionToggle.checked });
+      updateAskButtonText();
+    });
   }
 
   /**
@@ -1759,4 +1882,5 @@ document.addEventListener('DOMContentLoaded', () => {
   loadApiKey();
   checkAndShowOnboarding();
   restoreSavedContent();
+  updateApiKeyNotice();
 });
