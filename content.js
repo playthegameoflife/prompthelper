@@ -1065,9 +1065,58 @@ async function injectGemini(inputElement) {
  * Claude-specific injection
  */
 async function injectClaude(inputElement) {
-    // Claude uses form with submit button
+    // Claude uses form with submit button - try multiple strategies
+    let sendButton = null;
+    
+    // Strategy 1: Find in form
     const form = inputElement.closest('form');
-    const sendButton = form?.querySelector('button[type="submit"], button[aria-label*="Send" i]');
+    if (form) {
+        sendButton = form.querySelector('button[type="submit"]') ||
+                    form.querySelector('button[aria-label*="Send" i]') ||
+                    form.querySelector('button[aria-label*="send" i]') ||
+                    form.querySelector('button[data-testid*="send" i]');
+    }
+    
+    // Strategy 2: Search in parent hierarchy
+    if (!sendButton) {
+        let parent = inputElement.parentElement;
+        for (let i = 0; i < 15 && parent; i++) {
+            sendButton = parent.querySelector('button[type="submit"]') ||
+                        parent.querySelector('button[aria-label*="Send" i]') ||
+                        parent.querySelector('button[aria-label*="send" i]') ||
+                        parent.querySelector('button[data-testid*="send" i]');
+            if (sendButton && sendButton.offsetParent !== null) break;
+            parent = parent.parentElement;
+        }
+    }
+    
+    // Strategy 3: Find button near input by proximity
+    if (!sendButton) {
+        const inputRect = inputElement.getBoundingClientRect();
+        const allButtons = document.querySelectorAll('button');
+        let closestButton = null;
+        let closestDistance = Infinity;
+        
+        for (const btn of allButtons) {
+            if (btn.offsetParent === null) continue;
+            const btnRect = btn.getBoundingClientRect();
+            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+            
+            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+            const type = btn.type || '';
+            
+            if ((type === 'submit' || ariaLabel.includes('send') || ariaLabel.includes('submit')) && distance < 300) {
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestButton = btn;
+                }
+            }
+        }
+        
+        if (closestButton) {
+            sendButton = closestButton;
+        }
+    }
     
     if (!sendButton || !sendButton.parentElement) {
         throw new Error('Claude send button not found');
@@ -2100,6 +2149,21 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
                             }
                         }, 200);
                     }
+                } else {
+                    // Check if auto-send is enabled
+                    chrome.storage.local.get(['autoSendAfterEnhancement'], async (result) => {
+                        if (result.autoSendAfterEnhancement) {
+                            // Wait a moment for the input to settle
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            
+                            // Find and click the send button
+                            const sendButton = findSendButton(elementToUpdate || currentInputElement);
+                            if (sendButton && sendButton.offsetParent !== null) {
+                                // Trigger click on the send button
+                                sendButton.click();
+                            }
+                        }
+                    });
                 }
             }).catch(error => {
                 console.error('[Prompt Architect] Error updating input:', error);
@@ -2153,10 +2217,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (inputElement) {
             if (request.resultText && !request.resultText.startsWith("Error:")) {
                 // updateInputAndDispatch now returns a Promise
-                updateInputAndDispatch(request.resultText, inputElement).then(updateSuccess => {
+                updateInputAndDispatch(request.resultText, inputElement).then(async (updateSuccess) => {
                     // Success - the improved prompt in the input field is the feedback
                     if (!updateSuccess) {
                         console.error('[Prompt Architect] Context menu update failed');
+                    } else {
+                        // Check if auto-send is enabled for context menu results
+                        chrome.storage.local.get(['autoSendAfterEnhancement'], async (result) => {
+                            if (result.autoSendAfterEnhancement) {
+                                // Wait a moment for the input to settle
+                                await new Promise(resolve => setTimeout(resolve, 300));
+                                
+                                // Find and click the send button
+                                const sendButton = findSendButton(inputElement);
+                                if (sendButton && sendButton.offsetParent !== null) {
+                                    // Trigger click on the send button
+                                    sendButton.click();
+                                }
+                            }
+                        });
                     }
                 }).catch(error => {
                     console.error('[Prompt Architect] Error updating input from context menu:', error);
@@ -2315,6 +2394,115 @@ function findPlatformSpecificInput() {
                         break;
                     }
                 }
+            }
+        }
+        
+    } else if (platform === 'claude') {
+        // Claude uses contenteditable divs, try multiple strategies
+        const claudeSelectors = [
+            // Most specific - aria labels and placeholders
+            '[contenteditable="true"][aria-label*="Message" i]',
+            '[contenteditable="true"][aria-label*="prompt" i]',
+            '[contenteditable="true"][aria-label*="Type" i]',
+            '[contenteditable="true"][placeholder*="Message" i]',
+            '[contenteditable="true"][placeholder*="Ask" i]',
+            '[contenteditable="true"][data-placeholder*="Message" i]',
+            // Role-based
+            '[contenteditable="true"][role="textbox"]',
+            '[role="textbox"][contenteditable="true"]',
+            // Class-based (Claude-specific patterns)
+            '[contenteditable="true"][class*="input" i]',
+            '[contenteditable="true"][class*="text" i]',
+            '[contenteditable="true"][class*="editor" i]',
+            '[contenteditable="true"][class*="composer" i]',
+            '[contenteditable="true"][class*="message" i]',
+            '[contenteditable="true"][class*="prompt" i]',
+            // Search within form containers
+            'form [contenteditable="true"]',
+            '[class*="input-container"] [contenteditable="true"]',
+            '[class*="prompt-container"] [contenteditable="true"]',
+            '[class*="composer"] [contenteditable="true"]',
+            '[class*="editor"] [contenteditable="true"]',
+            // Main area search
+            'main [contenteditable="true"]',
+            '[role="main"] [contenteditable="true"]',
+            // Generic contenteditable fallback
+            'div[contenteditable="true"]:not([contenteditable="false"])',
+        ];
+        
+        for (const selector of claudeSelectors) {
+            try {
+                const elements = document.querySelectorAll(selector);
+                for (const elem of elements) {
+                    const rect = elem.getBoundingClientRect();
+                    const style = window.getComputedStyle(elem);
+                    // Relaxed visibility checks for Claude
+                    if (rect.width > 30 && rect.height > 10 && 
+                        style.display !== 'none' && 
+                        style.visibility !== 'hidden' &&
+                        elem.offsetParent !== null) {
+                        input = elem;
+                        break;
+                    }
+                }
+                if (input) break;
+            } catch (e) {
+                continue;
+            }
+        }
+        
+        // Fallback 1: find largest visible contenteditable in form
+        if (!input) {
+            const form = document.querySelector('form');
+            if (form) {
+                const contentEditables = form.querySelectorAll('[contenteditable="true"]:not([contenteditable="false"])');
+                let largestElement = null;
+                let largestArea = 0;
+                
+                for (const elem of contentEditables) {
+                    const rect = elem.getBoundingClientRect();
+                    const style = window.getComputedStyle(elem);
+                    if (rect.width > 30 && rect.height > 10 && 
+                        style.display !== 'none' && 
+                        style.visibility !== 'hidden' &&
+                        elem.offsetParent !== null) {
+                        const area = rect.width * rect.height;
+                        if (area > largestArea && rect.width > 100) {
+                            largestArea = area;
+                            largestElement = elem;
+                        }
+                    }
+                }
+                
+                if (largestElement) {
+                    input = largestElement;
+                }
+            }
+        }
+        
+        // Fallback 2: find largest visible contenteditable overall
+        if (!input) {
+            const allContentEditables = document.querySelectorAll('[contenteditable="true"]:not([contenteditable="false"])');
+            let largestElement = null;
+            let largestArea = 0;
+            
+            for (const elem of allContentEditables) {
+                const rect = elem.getBoundingClientRect();
+                const style = window.getComputedStyle(elem);
+                if (rect.width > 30 && rect.height > 10 && 
+                    style.display !== 'none' && 
+                    style.visibility !== 'hidden' &&
+                    elem.offsetParent !== null) {
+                    const area = rect.width * rect.height;
+                    if (area > largestArea && rect.width > 100) {
+                        largestArea = area;
+                        largestElement = elem;
+                    }
+                }
+            }
+            
+            if (largestElement) {
+                input = largestElement;
             }
         }
         

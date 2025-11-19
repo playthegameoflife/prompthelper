@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const enhanceTab = document.getElementById('enhance-section');
   const recentTab = document.getElementById('recent-section');
   const setupTab = document.getElementById('setup-section');
+  const advancedTab = document.getElementById('advanced-section');
   
   if (enhanceTab) {
     enhanceTab.classList.add('active');
@@ -56,6 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (setupTab) {
     setupTab.classList.remove('active');
     setupTab.style.display = 'none';
+  }
+  
+  if (advancedTab) {
+    advancedTab.classList.remove('active');
+    advancedTab.style.display = 'none';
   }
 
   // Tab Management
@@ -79,6 +85,10 @@ document.addEventListener('DOMContentLoaded', () => {
         recentTab.style.display = 'none';
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
+        if (advancedTab) {
+          advancedTab.classList.remove('active');
+          advancedTab.style.display = 'none';
+        }
       } else if (tab === 'recent') {
         enhanceTab.classList.remove('active');
         enhanceTab.style.display = 'none';
@@ -88,7 +98,25 @@ document.addEventListener('DOMContentLoaded', () => {
         recentTab.style.gap = '16px';
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
+        if (advancedTab) {
+          advancedTab.classList.remove('active');
+          advancedTab.style.display = 'none';
+        }
         loadHistory(); // Load history when tab is opened
+      } else if (tab === 'advanced') {
+        enhanceTab.classList.remove('active');
+        enhanceTab.style.display = 'none';
+        recentTab.classList.remove('active');
+        recentTab.style.display = 'none';
+        setupTab.classList.remove('active');
+        setupTab.style.display = 'none';
+        if (advancedTab) {
+          advancedTab.classList.add('active');
+          advancedTab.style.display = 'flex';
+          advancedTab.style.flexDirection = 'column';
+          advancedTab.style.gap = '16px';
+          loadAdvancedSettings(); // Load settings when tab is opened
+        }
       } else {
         enhanceTab.classList.remove('active');
         enhanceTab.style.display = 'none';
@@ -98,6 +126,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setupTab.style.display = 'flex';
         setupTab.style.flexDirection = 'column';
         setupTab.style.gap = '16px';
+        if (advancedTab) {
+          advancedTab.classList.remove('active');
+          advancedTab.style.display = 'none';
+        }
       }
     });
   });
@@ -780,6 +812,249 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.set({ hasSeenOnboarding: true });
         overlay.remove();
       }
+    });
+  }
+
+  // ============================================================================
+  // ADVANCED SETTINGS - Custom Instructions
+  // ============================================================================
+  
+  const instructionModeSelector = document.getElementById('instruction-mode-selector');
+  const instructionSourceSelector = document.getElementById('instruction-source-selector');
+  const templateSelectorContainer = document.getElementById('template-selector-container');
+  const templateSelector = document.getElementById('template-selector');
+  const customInstructionContainer = document.getElementById('custom-instruction-container');
+  const customInstructionInput = document.getElementById('custom-instruction-input');
+  const instructionPreview = document.getElementById('instruction-preview');
+  const instructionPreviewText = document.getElementById('instruction-preview-text');
+  const saveInstructionButton = document.getElementById('save-instruction-button');
+  const resetInstructionButton = document.getElementById('reset-instruction-button');
+  
+  let currentTemplates = {};
+  let currentMode = 'TEXT_ENHANCEMENT';
+  
+  // Load templates for current mode
+  async function loadTemplates(enhancementType) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getTemplates',
+        enhancementType: enhancementType
+      });
+      
+      if (response && response.success) {
+        currentTemplates = response.templates || {};
+        updateTemplateSelector();
+      }
+    } catch (error) {
+      console.error('[Prompt Architect] Error loading templates:', error);
+    }
+  }
+  
+  // Update template selector dropdown
+  function updateTemplateSelector() {
+    if (!templateSelector) return;
+    
+    templateSelector.innerHTML = '';
+    const templates = currentTemplates;
+    
+    for (const [key, value] of Object.entries(templates)) {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+      templateSelector.appendChild(option);
+    }
+  }
+  
+  // Load custom instruction for current mode
+  async function loadCustomInstruction(enhancementType) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getCustomInstruction',
+        enhancementType: enhancementType
+      });
+      
+      if (response && response.success && response.instruction) {
+        customInstructionInput.value = response.instruction;
+        resetInstructionButton.style.display = 'block';
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('[Prompt Architect] Error loading custom instruction:', error);
+      return false;
+    }
+  }
+  
+  // Update preview based on current selection
+  function updatePreview() {
+    const source = instructionSourceSelector.value;
+    let previewText = '';
+    
+    if (source === 'default') {
+      previewText = currentTemplates['default'] || 'Default instruction';
+    } else if (source === 'template') {
+      const selectedTemplate = templateSelector.value;
+      previewText = currentTemplates[selectedTemplate] || 'Select a template';
+    } else if (source === 'custom') {
+      previewText = customInstructionInput.value || 'Enter custom instruction';
+    }
+    
+    if (previewText && previewText !== 'Select a template' && previewText !== 'Enter custom instruction') {
+      instructionPreviewText.textContent = previewText;
+      instructionPreview.style.display = 'block';
+    } else {
+      instructionPreview.style.display = 'none';
+    }
+  }
+  
+  // Handle instruction source change
+  if (instructionSourceSelector) {
+    instructionSourceSelector.addEventListener('change', () => {
+      const source = instructionSourceSelector.value;
+      templateSelectorContainer.style.display = source === 'template' ? 'block' : 'none';
+      customInstructionContainer.style.display = source === 'custom' ? 'block' : 'none';
+      updatePreview();
+    });
+  }
+  
+  // Handle mode change
+  if (instructionModeSelector) {
+    instructionModeSelector.addEventListener('change', async () => {
+      currentMode = instructionModeSelector.value;
+      await loadTemplates(currentMode);
+      await loadCustomInstruction(currentMode);
+      updatePreview();
+    });
+  }
+  
+  // Handle template selection
+  if (templateSelector) {
+    templateSelector.addEventListener('change', () => {
+      updatePreview();
+    });
+  }
+  
+  // Handle custom instruction input
+  if (customInstructionInput) {
+    customInstructionInput.addEventListener('input', () => {
+      updatePreview();
+    });
+  }
+  
+  // Save instruction
+  if (saveInstructionButton) {
+    saveInstructionButton.addEventListener('click', async () => {
+      const source = instructionSourceSelector.value;
+      let instruction = '';
+      
+      if (source === 'default') {
+        // Delete custom instruction to use default
+        try {
+          await chrome.runtime.sendMessage({
+            action: 'deleteCustomInstruction',
+            enhancementType: currentMode
+          });
+          resetInstructionButton.style.display = 'none';
+          customInstructionInput.value = '';
+          alert('Reset to default instruction');
+          return;
+        } catch (error) {
+          console.error('[Prompt Architect] Error resetting instruction:', error);
+          alert('Error resetting instruction');
+          return;
+        }
+      } else if (source === 'template') {
+        const selectedTemplate = templateSelector.value;
+        instruction = currentTemplates[selectedTemplate];
+      } else if (source === 'custom') {
+        instruction = customInstructionInput.value.trim();
+        if (!instruction) {
+          alert('Please enter a custom instruction');
+          return;
+        }
+      }
+      
+      if (instruction) {
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: 'saveCustomInstruction',
+            enhancementType: currentMode,
+            instruction: instruction
+          });
+          
+          if (response && response.success) {
+            resetInstructionButton.style.display = 'block';
+            alert('Instruction saved successfully!');
+          } else {
+            alert('Error saving instruction: ' + (response.error || 'Unknown error'));
+          }
+        } catch (error) {
+          console.error('[Prompt Architect] Error saving instruction:', error);
+          alert('Error saving instruction');
+        }
+      }
+    });
+  }
+  
+  // Reset instruction
+  if (resetInstructionButton) {
+    resetInstructionButton.addEventListener('click', async () => {
+      if (confirm('Reset to default instruction for this mode?')) {
+        try {
+          await chrome.runtime.sendMessage({
+            action: 'deleteCustomInstruction',
+            enhancementType: currentMode
+          });
+          resetInstructionButton.style.display = 'none';
+          customInstructionInput.value = '';
+          instructionSourceSelector.value = 'default';
+          templateSelectorContainer.style.display = 'none';
+          customInstructionContainer.style.display = 'none';
+          updatePreview();
+          alert('Reset to default instruction');
+        } catch (error) {
+          console.error('[Prompt Architect] Error resetting instruction:', error);
+          alert('Error resetting instruction');
+        }
+      }
+    });
+  }
+  
+  // Load advanced settings when tab is opened
+  async function loadAdvancedSettings() {
+    if (!instructionModeSelector) return;
+    
+    currentMode = instructionModeSelector.value;
+    await loadTemplates(currentMode);
+    const hasCustom = await loadCustomInstruction(currentMode);
+    
+    if (hasCustom) {
+      instructionSourceSelector.value = 'custom';
+      customInstructionContainer.style.display = 'block';
+    } else {
+      instructionSourceSelector.value = 'default';
+      customInstructionContainer.style.display = 'none';
+    }
+    
+    templateSelectorContainer.style.display = 'none';
+    updatePreview();
+  }
+
+  // ============================================================================
+  // AUTO-SEND TOGGLE
+  // ============================================================================
+  
+  const autoSendToggle = document.getElementById('auto-send-toggle');
+  
+  // Load auto-send preference
+  if (autoSendToggle) {
+    chrome.storage.local.get(['autoSendAfterEnhancement'], (result) => {
+      autoSendToggle.checked = result.autoSendAfterEnhancement || false;
+    });
+    
+    // Save auto-send preference
+    autoSendToggle.addEventListener('change', (e) => {
+      chrome.storage.local.set({ autoSendAfterEnhancement: e.target.checked });
     });
   }
 

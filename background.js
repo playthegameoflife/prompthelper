@@ -314,6 +314,97 @@ Crucially, your output MUST contain ONLY the improved prompt text itself. Do not
     POLISH: `You are a professional copyeditor. Your task is to review the user's text for grammatical errors, misspellings, and unclear syntax. Rewrite the text to be concise, professional, and unambiguous, structuring sentences for maximum clarity and impact. Preserve the original meaning. Crucially, your output MUST contain ONLY the clean, polished text itself. Do not include any introduction, explanation, or conversational filler.`,
 };
 
+// Instruction Templates - Preset variations for each mode
+const INSTRUCTION_TEMPLATES = {
+    TEXT_ENHANCEMENT: {
+        'default': SYSTEM_INSTRUCTIONS.TEXT_ENHANCEMENT,
+        'concise': `You are an expert prompt engineer. Rewrite the user's text into a clear, concise, and effective prompt. Focus on brevity while maintaining clarity. Remove unnecessary words. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'detailed': `You are an expert prompt engineer specializing in comprehensive prompt design. Rewrite the user's text into a highly detailed, structured prompt with explicit instructions, examples, constraints, and output format specifications. Include role definition, tone, context, and expected structure. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'creative': `You are an expert prompt engineer specializing in creative writing prompts. Rewrite the user's text into an inspiring, imaginative prompt that encourages creative expression. Focus on evocative language, mood, and narrative elements. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'technical': `You are an expert prompt engineer specializing in technical documentation. Rewrite the user's text into a precise, structured technical prompt with clear specifications, parameters, and requirements. Focus on accuracy, completeness, and technical precision. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+    },
+    CODE_ENHANCEMENT: {
+        'default': SYSTEM_INSTRUCTIONS.CODE_ENHANCEMENT,
+        'minimal': `You are an expert prompt engineer for code generation. Rewrite the user's text into a concise code request. Focus on essential requirements only. Specify language and key functions. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'comprehensive': `You are an expert prompt engineer for code generation. Rewrite the user's text into a comprehensive code specification including: programming language, input/output types, error handling, edge cases, performance requirements, code style, and testing approach. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'production-ready': `You are an expert prompt engineer specializing in production-grade code. Rewrite the user's text into a detailed specification for production-ready code including: language, architecture, error handling, logging, security considerations, scalability, documentation requirements, and testing strategy. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+    },
+    IMAGE_ENHANCEMENT: {
+        'default': SYSTEM_INSTRUCTIONS.IMAGE_ENHANCEMENT,
+        'minimal': `You are an expert prompt engineer for image generation. Rewrite the user's text into a concise visual description focusing on key visual elements: subject, style, and mood. Use comma-separated descriptors. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'detailed': `You are an expert prompt engineer for image generation. Rewrite the user's text into a hyper-detailed visual brief including: artistic style, composition, perspective, lighting, color palette, mood, textures, fine details, and technical specifications. Use comma-separated descriptors. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'cinematic': `You are an expert prompt engineer specializing in cinematic image generation. Rewrite the user's text into a film-grade visual description with camera angles, lighting setup, depth of field, color grading, and atmospheric details. Focus on cinematic composition and mood. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+    },
+    VIDEO_ENHANCEMENT: {
+        'default': SYSTEM_INSTRUCTIONS.VIDEO_ENHANCEMENT,
+        'concise': `You are an expert prompt engineer for video generation. Rewrite the user's text into a clear video prompt specifying: subject, style, camera movement, and duration. Keep it focused and actionable. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'cinematic': `You are an expert prompt engineer specializing in cinematic video generation. Rewrite the user's text into a film-grade video specification with detailed camera work, lighting, color grading, motion, transitions, and narrative flow. Focus on cinematic quality and storytelling. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+    },
+};
+
+// Storage key for custom instructions
+const STORAGE_CUSTOM_INSTRUCTIONS = 'customInstructions';
+
+/**
+ * Retrieves custom instruction for a given enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @returns {Promise<string|null>} Custom instruction or null if not set
+ */
+async function getCustomInstruction(enhancementType) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_CUSTOM_INSTRUCTIONS);
+        const customInstructions = result[STORAGE_CUSTOM_INSTRUCTIONS] || {};
+        return customInstructions[enhancementType] || null;
+    } catch (error) {
+        console.error('[Prompt Architect] Error retrieving custom instruction:', error);
+        return null;
+    }
+}
+
+/**
+ * Gets available templates for an enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @returns {Object} Object with template names and instructions
+ */
+function getTemplatesForType(enhancementType) {
+    return INSTRUCTION_TEMPLATES[enhancementType] || {};
+}
+
+/**
+ * Saves a custom instruction for an enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @param {string} instruction - The custom instruction text
+ * @returns {Promise<void>}
+ */
+async function saveCustomInstruction(enhancementType, instruction) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_CUSTOM_INSTRUCTIONS);
+        const customInstructions = result[STORAGE_CUSTOM_INSTRUCTIONS] || {};
+        customInstructions[enhancementType] = instruction;
+        await chrome.storage.local.set({ [STORAGE_CUSTOM_INSTRUCTIONS]: customInstructions });
+    } catch (error) {
+        console.error('[Prompt Architect] Error saving custom instruction:', error);
+        throw error;
+    }
+}
+
+/**
+ * Deletes a custom instruction for an enhancement type (resets to default)
+ * @param {string} enhancementType - The enhancement type key
+ * @returns {Promise<void>}
+ */
+async function deleteCustomInstruction(enhancementType) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_CUSTOM_INSTRUCTIONS);
+        const customInstructions = result[STORAGE_CUSTOM_INSTRUCTIONS] || {};
+        delete customInstructions[enhancementType];
+        await chrome.storage.local.set({ [STORAGE_CUSTOM_INSTRUCTIONS]: customInstructions });
+    } catch (error) {
+        console.error('[Prompt Architect] Error deleting custom instruction:', error);
+        throw error;
+    }
+}
+
 // --- Helper Functions (Same as previous version, adapted for multiple modes) ---
 
 /**
@@ -470,7 +561,12 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 );
             }
             
-            const systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+            // Check for custom instruction first, then fall back to default
+            let systemInstruction = await getCustomInstruction(enhancementType);
+            if (!systemInstruction) {
+                systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+            }
+            
             if (!systemInstruction) {
                 throw new EnhancementError(
                     ERROR_MESSAGES.INVALID_ENHANCEMENT_TYPE,
@@ -607,6 +703,36 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
 
 // --- Message Listener (Communication from content.js) ---
 if (typeof chrome !== 'undefined' && chrome.runtime) {
+    // Handle template and custom instruction requests
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'getTemplates') {
+            const templates = getTemplatesForType(request.enhancementType);
+            sendResponse({ success: true, templates });
+            return true;
+        }
+        
+        if (request.action === 'saveCustomInstruction') {
+            saveCustomInstruction(request.enhancementType, request.instruction)
+                .then(() => sendResponse({ success: true }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+        
+        if (request.action === 'getCustomInstruction') {
+            getCustomInstruction(request.enhancementType)
+                .then(instruction => sendResponse({ success: true, instruction }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+        
+        if (request.action === 'deleteCustomInstruction') {
+            deleteCustomInstruction(request.enhancementType)
+                .then(() => sendResponse({ success: true }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+    });
+
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'enhancePrompt') {
             const enhancementType = request.enhancementType || 'TEXT_ENHANCEMENT';
