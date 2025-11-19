@@ -987,8 +987,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Show saving status
     if (styleStatus && styleStatusText) {
-      styleStatus.style.display = 'block';
-      styleStatus.className = 'style-status-saving';
+      styleStatus.style.display = 'flex';
+      styleStatus.className = 'status-indicator style-status-saving show';
       styleStatusText.textContent = 'Saving...';
     }
     
@@ -1006,7 +1006,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Show success
         if (styleStatus && styleStatusText) {
-          styleStatus.className = 'style-status-success';
+          styleStatus.className = 'status-indicator style-status-success show';
+          styleStatus.style.display = 'flex';
           styleStatusText.textContent = 'Using default style';
           setTimeout(() => {
             styleStatus.style.display = 'none';
@@ -1027,7 +1028,8 @@ document.addEventListener('DOMContentLoaded', () => {
           // Show success
           if (styleStatus && styleStatusText) {
             const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
-            styleStatus.className = 'style-status-success';
+            styleStatus.className = 'status-indicator style-status-success show';
+            styleStatus.style.display = 'flex';
             styleStatusText.textContent = `${templateName} style active`;
             setTimeout(() => {
               styleStatus.style.display = 'none';
@@ -1067,8 +1069,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Show saving status
       if (styleStatus && styleStatusText) {
-        styleStatus.style.display = 'block';
-        styleStatus.className = 'style-status-saving';
+        styleStatus.style.display = 'flex';
+        styleStatus.className = 'status-indicator style-status-saving show';
         styleStatusText.textContent = 'Saving...';
       }
       
@@ -1086,7 +1088,8 @@ document.addEventListener('DOMContentLoaded', () => {
           
           // Show success
           if (styleStatus && styleStatusText) {
-            styleStatus.className = 'style-status-success';
+            styleStatus.className = 'status-indicator style-status-success show';
+            styleStatus.style.display = 'flex';
             styleStatusText.textContent = 'Custom style saved';
             setTimeout(() => {
               styleStatus.style.display = 'none';
@@ -1175,8 +1178,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Show success feedback
         if (styleStatus && styleStatusText) {
-          styleStatus.style.display = 'block';
-          styleStatus.className = 'style-status-success';
+          styleStatus.style.display = 'flex';
+          styleStatus.className = 'status-indicator style-status-success show';
           styleStatusText.textContent = 'Reset to default';
           setTimeout(() => {
             styleStatus.style.display = 'none';
@@ -1219,18 +1222,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const source = instructionSourceSelector.value;
     
     if (source === 'default') {
-      styleStatus.style.display = 'block';
-      styleStatus.className = 'style-status-success';
+      styleStatus.style.display = 'flex';
+      styleStatus.className = 'status-indicator style-status-success show';
       styleStatusText.textContent = 'Default style active';
     } else if (source && source.startsWith('template:')) {
       const templateKey = source.replace('template:', '');
       const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
-      styleStatus.style.display = 'block';
-      styleStatus.className = 'style-status-success';
+      styleStatus.style.display = 'flex';
+      styleStatus.className = 'status-indicator style-status-success show';
       styleStatusText.textContent = `${templateName} style active`;
     } else if (source === 'custom' && customInstructionInput && customInstructionInput.value.trim()) {
-      styleStatus.style.display = 'block';
-      styleStatus.className = 'style-status-success';
+      styleStatus.style.display = 'flex';
+      styleStatus.className = 'status-indicator style-status-success show';
       styleStatusText.textContent = 'Custom style active';
     } else {
       styleStatus.style.display = 'none';
