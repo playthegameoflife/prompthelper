@@ -826,14 +826,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const instructionModeSelector = document.getElementById('instruction-mode-selector');
   const instructionSourceSelector = document.getElementById('instruction-source-selector');
-  const templateSelectorContainer = document.getElementById('template-selector-container');
-  const templateSelector = document.getElementById('template-selector');
   const customInstructionContainer = document.getElementById('custom-instruction-container');
   const customInstructionInput = document.getElementById('custom-instruction-input');
-  const instructionPreview = document.getElementById('instruction-preview');
-  const instructionPreviewText = document.getElementById('instruction-preview-text');
-  const saveInstructionButton = document.getElementById('save-instruction-button');
+  const styleStatus = document.getElementById('style-status');
+  const styleStatusText = document.getElementById('style-status-text');
+  const resetInstructionContainer = document.getElementById('reset-instruction-container');
   const resetInstructionButton = document.getElementById('reset-instruction-button');
+  
+  let saveTimeout = null;
+  let isSaving = false;
   
   let currentTemplates = {};
   let currentMode = 'TEXT_ENHANCEMENT';
@@ -848,26 +849,88 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (response && response.success) {
         currentTemplates = response.templates || {};
-        updateTemplateSelector();
+        updateInstructionSourceSelector();
+        // Update active style indicator after templates load
+        setTimeout(() => {
+          updateActiveStyleIndicator();
+        }, 100);
       }
     } catch (error) {
       console.error('[Prompt Architect] Error loading templates:', error);
     }
   }
   
-  // Update template selector dropdown
-  function updateTemplateSelector() {
-    if (!templateSelector) return;
+  // Update instruction source dropdown with templates
+  function updateInstructionSourceSelector() {
+    if (!instructionSourceSelector) return;
     
-    templateSelector.innerHTML = '';
-    const templates = currentTemplates;
+    // Get current selection to preserve it
+    const currentValue = instructionSourceSelector.value;
     
-    for (const [key, value] of Object.entries(templates)) {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-      templateSelector.appendChild(option);
+    // Clear all options except keep track of default and custom
+    const defaultOption = instructionSourceSelector.querySelector('option[value="default"]');
+    const customOption = instructionSourceSelector.querySelector('option[value="custom"]');
+    
+    // Clear all options
+    instructionSourceSelector.innerHTML = '';
+    
+    // Add default option
+    if (defaultOption) {
+      instructionSourceSelector.appendChild(defaultOption);
+    } else {
+      const opt = document.createElement('option');
+      opt.value = 'default';
+      opt.textContent = 'Default (Recommended)';
+      instructionSourceSelector.appendChild(opt);
     }
+    
+    // Add all templates
+    const templates = currentTemplates;
+    for (const [key, value] of Object.entries(templates)) {
+      // Skip 'default' template as it's already handled
+      if (key === 'default') continue;
+      
+      const option = document.createElement('option');
+      option.value = `template:${key}`;
+      option.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+      instructionSourceSelector.appendChild(option);
+    }
+    
+    // Add custom option
+    if (customOption) {
+      instructionSourceSelector.appendChild(customOption);
+    } else {
+      const opt = document.createElement('option');
+      opt.value = 'custom';
+      opt.textContent = 'Custom';
+      instructionSourceSelector.appendChild(opt);
+    }
+    
+    // Restore previous selection if it still exists
+    if (currentValue && instructionSourceSelector.querySelector(`option[value="${currentValue}"]`)) {
+      instructionSourceSelector.value = currentValue;
+    }
+  }
+  
+  // Check if a saved instruction matches a template
+  function findMatchingTemplate(savedInstruction) {
+    if (!savedInstruction || !currentTemplates) return null;
+    
+    // Compare the saved instruction with each template
+    for (const [key, templateInstruction] of Object.entries(currentTemplates)) {
+      // Skip default template
+      if (key === 'default') continue;
+      
+      // Normalize both strings for comparison (trim whitespace)
+      const normalizedSaved = savedInstruction.trim();
+      const normalizedTemplate = templateInstruction.trim();
+      
+      if (normalizedSaved === normalizedTemplate) {
+        return key;
+      }
+    }
+    
+    return null;
   }
   
   // Load custom instruction for current mode
@@ -879,9 +942,28 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       
       if (response && response.success && response.instruction) {
-        customInstructionInput.value = response.instruction;
-        resetInstructionButton.style.display = 'block';
-        return true;
+        // Check if this instruction matches a template
+        const matchingTemplate = findMatchingTemplate(response.instruction);
+        
+        if (matchingTemplate) {
+          // It's a template, not a custom instruction
+          customInstructionInput.value = '';
+          resetInstructionContainer.style.display = 'block';
+          if (instructionSourceSelector) {
+            instructionSourceSelector.value = `template:${matchingTemplate}`;
+          }
+          customInstructionContainer.style.display = 'none';
+          return true; // Return true to indicate something is saved
+        } else {
+          // It's a genuine custom instruction
+          customInstructionInput.value = response.instruction;
+          resetInstructionContainer.style.display = 'block';
+          if (instructionSourceSelector) {
+            instructionSourceSelector.value = 'custom';
+          }
+          customInstructionContainer.style.display = 'block';
+          return true;
+        }
       }
       return false;
     } catch (error) {
@@ -890,35 +972,156 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Update preview based on current selection
+  // Update preview based on current selection (preview removed - instructions hidden)
   function updatePreview() {
+    // Preview functionality removed - instructions are not shown to users
+    return;
+  }
+  
+  // Auto-save function with visual feedback
+  async function autoSaveInstruction() {
+    if (isSaving) return;
+    
     const source = instructionSourceSelector.value;
-    let previewText = '';
+    let instruction = '';
     
-    if (source === 'default') {
-      previewText = currentTemplates['default'] || 'Default instruction';
-    } else if (source === 'template') {
-      const selectedTemplate = templateSelector.value;
-      previewText = currentTemplates[selectedTemplate] || 'Select a template';
-    } else if (source === 'custom') {
-      previewText = customInstructionInput.value || 'Enter custom instruction';
+    // Show saving status
+    if (styleStatus && styleStatusText) {
+      styleStatus.style.display = 'block';
+      styleStatus.className = 'style-status-saving';
+      styleStatusText.textContent = 'Saving...';
     }
     
-    if (previewText && previewText !== 'Select a template' && previewText !== 'Enter custom instruction') {
-      instructionPreviewText.textContent = previewText;
-      instructionPreview.style.display = 'block';
-    } else {
-      instructionPreview.style.display = 'none';
+    isSaving = true;
+    
+    try {
+      if (source === 'default') {
+        // Delete custom instruction to use default
+        await chrome.runtime.sendMessage({
+          action: 'deleteCustomInstruction',
+          enhancementType: currentMode
+        });
+        resetInstructionContainer.style.display = 'none';
+        customInstructionInput.value = '';
+        
+        // Show success
+        if (styleStatus && styleStatusText) {
+          styleStatus.className = 'style-status-success';
+          styleStatusText.textContent = 'Using default style';
+          setTimeout(() => {
+            styleStatus.style.display = 'none';
+          }, 2000);
+        }
+      } else if (source && source.startsWith('template:')) {
+        // Template selected
+        const templateKey = source.replace('template:', '');
+        instruction = currentTemplates[templateKey];
+        if (instruction) {
+          await chrome.runtime.sendMessage({
+            action: 'saveCustomInstruction',
+            enhancementType: currentMode,
+            instruction: instruction
+          });
+          resetInstructionContainer.style.display = 'block';
+          
+          // Show success
+          if (styleStatus && styleStatusText) {
+            const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
+            styleStatus.className = 'style-status-success';
+            styleStatusText.textContent = `${templateName} style active`;
+            setTimeout(() => {
+              styleStatus.style.display = 'none';
+            }, 2000);
+          }
+        }
+      } else if (source === 'custom') {
+        // Custom instruction - wait for user to finish typing
+        // This will be handled by the debounced save on textarea input
+        if (styleStatus && styleStatusText) {
+          styleStatus.style.display = 'none';
+        }
+      }
+    } catch (error) {
+      console.error('[Prompt Architect] Error auto-saving instruction:', error);
+      if (styleStatus && styleStatusText) {
+        styleStatus.style.display = 'none';
+      }
+    } finally {
+      isSaving = false;
     }
+  }
+  
+  // Debounced save for custom instructions
+  function debouncedSaveCustom() {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    
+    saveTimeout = setTimeout(async () => {
+      const instruction = customInstructionInput.value.trim();
+      
+      if (!instruction) {
+        if (styleStatus) styleStatus.style.display = 'none';
+        return;
+      }
+      
+      // Show saving status
+      if (styleStatus && styleStatusText) {
+        styleStatus.style.display = 'block';
+        styleStatus.className = 'style-status-saving';
+        styleStatusText.textContent = 'Saving...';
+      }
+      
+      isSaving = true;
+      
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'saveCustomInstruction',
+          enhancementType: currentMode,
+          instruction: instruction
+        });
+        
+        if (response && response.success) {
+          resetInstructionContainer.style.display = 'block';
+          
+          // Show success
+          if (styleStatus && styleStatusText) {
+            styleStatus.className = 'style-status-success';
+            styleStatusText.textContent = 'Custom style saved';
+            setTimeout(() => {
+              styleStatus.style.display = 'none';
+            }, 2000);
+          }
+        }
+      } catch (error) {
+        console.error('[Prompt Architect] Error saving custom instruction:', error);
+        if (styleStatus && styleStatusText) {
+          styleStatus.style.display = 'none';
+        }
+      } finally {
+        isSaving = false;
+      }
+    }, 1000); // Wait 1 second after user stops typing
   }
   
   // Handle instruction source change
   if (instructionSourceSelector) {
     instructionSourceSelector.addEventListener('change', () => {
       const source = instructionSourceSelector.value;
-      templateSelectorContainer.style.display = source === 'template' ? 'block' : 'none';
+      // Show custom input only if custom is selected
       customInstructionContainer.style.display = source === 'custom' ? 'block' : 'none';
-      updatePreview();
+      
+      // Auto-save on selection (except custom, which saves on textarea input)
+      if (source !== 'custom') {
+        autoSaveInstruction();
+      } else {
+        // If switching to custom and there's existing text, save it
+        if (customInstructionInput.value.trim()) {
+          debouncedSaveCustom();
+        } else {
+          if (styleStatus) styleStatus.style.display = 'none';
+        }
+      }
     });
   }
   
@@ -928,99 +1131,59 @@ document.addEventListener('DOMContentLoaded', () => {
       currentMode = instructionModeSelector.value;
       await loadTemplates(currentMode);
       await loadCustomInstruction(currentMode);
-      updatePreview();
+      // Check if current selection is a template for this mode
+      const currentValue = instructionSourceSelector.value;
+      if (currentValue && currentValue.startsWith('template:')) {
+        // Keep template selection if it exists in new mode
+        const templateKey = currentValue.replace('template:', '');
+        if (currentTemplates[templateKey]) {
+          instructionSourceSelector.value = currentValue;
+        } else {
+          instructionSourceSelector.value = 'default';
+        }
+      }
+      // Update active style indicator after mode change
+      setTimeout(() => {
+        updateActiveStyleIndicator();
+      }, 100);
     });
   }
   
-  // Handle template selection
-  if (templateSelector) {
-    templateSelector.addEventListener('change', () => {
-      updatePreview();
-    });
-  }
-  
-  // Handle custom instruction input
+  // Handle custom instruction input with auto-save
   if (customInstructionInput) {
     customInstructionInput.addEventListener('input', () => {
-      updatePreview();
+      debouncedSaveCustom();
     });
   }
   
-  // Save instruction
-  if (saveInstructionButton) {
-    saveInstructionButton.addEventListener('click', async () => {
-      const source = instructionSourceSelector.value;
-      let instruction = '';
-      
-      if (source === 'default') {
-        // Delete custom instruction to use default
-        try {
-          await chrome.runtime.sendMessage({
-            action: 'deleteCustomInstruction',
-            enhancementType: currentMode
-          });
-          resetInstructionButton.style.display = 'none';
-          customInstructionInput.value = '';
-          alert('Reset to default instruction');
-          return;
-        } catch (error) {
-          console.error('[Prompt Architect] Error resetting instruction:', error);
-          alert('Error resetting instruction');
-          return;
-        }
-      } else if (source === 'template') {
-        const selectedTemplate = templateSelector.value;
-        instruction = currentTemplates[selectedTemplate];
-      } else if (source === 'custom') {
-        instruction = customInstructionInput.value.trim();
-        if (!instruction) {
-          alert('Please enter a custom instruction');
-          return;
-        }
-      }
-      
-      if (instruction) {
-        try {
-          const response = await chrome.runtime.sendMessage({
-            action: 'saveCustomInstruction',
-            enhancementType: currentMode,
-            instruction: instruction
-          });
-          
-          if (response && response.success) {
-            resetInstructionButton.style.display = 'block';
-            alert('Instruction saved successfully!');
-          } else {
-            alert('Error saving instruction: ' + (response.error || 'Unknown error'));
-          }
-        } catch (error) {
-          console.error('[Prompt Architect] Error saving instruction:', error);
-          alert('Error saving instruction');
-        }
-      }
-    });
-  }
+  // Save button removed - auto-save is now handled automatically
   
   // Reset instruction
   if (resetInstructionButton) {
     resetInstructionButton.addEventListener('click', async () => {
-      if (confirm('Reset to default instruction for this mode?')) {
-        try {
-          await chrome.runtime.sendMessage({
-            action: 'deleteCustomInstruction',
-            enhancementType: currentMode
-          });
-          resetInstructionButton.style.display = 'none';
-          customInstructionInput.value = '';
+      try {
+        await chrome.runtime.sendMessage({
+          action: 'deleteCustomInstruction',
+          enhancementType: currentMode
+        });
+        resetInstructionContainer.style.display = 'none';
+        customInstructionInput.value = '';
+        if (instructionSourceSelector) {
           instructionSourceSelector.value = 'default';
-          templateSelectorContainer.style.display = 'none';
-          customInstructionContainer.style.display = 'none';
-          updatePreview();
-          alert('Reset to default instruction');
-        } catch (error) {
-          console.error('[Prompt Architect] Error resetting instruction:', error);
-          alert('Error resetting instruction');
         }
+        customInstructionContainer.style.display = 'none';
+        
+        // Show success feedback
+        if (styleStatus && styleStatusText) {
+          styleStatus.style.display = 'block';
+          styleStatus.className = 'style-status-success';
+          styleStatusText.textContent = 'Reset to default';
+          setTimeout(() => {
+            styleStatus.style.display = 'none';
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('[Prompt Architect] Error resetting instruction:', error);
       }
     });
   }
@@ -1031,18 +1194,47 @@ document.addEventListener('DOMContentLoaded', () => {
     
     currentMode = instructionModeSelector.value;
     await loadTemplates(currentMode);
-    const hasCustom = await loadCustomInstruction(currentMode);
     
-    if (hasCustom) {
-      instructionSourceSelector.value = 'custom';
-      customInstructionContainer.style.display = 'block';
-    } else {
-      instructionSourceSelector.value = 'default';
+    // Load custom instruction (this will check if it matches a template)
+    const hasSavedInstruction = await loadCustomInstruction(currentMode);
+    
+    if (!hasSavedInstruction) {
+      // No saved instruction, use default
+      if (instructionSourceSelector) {
+        instructionSourceSelector.value = 'default';
+      }
       customInstructionContainer.style.display = 'none';
+      resetInstructionContainer.style.display = 'none';
     }
+    // If hasSavedInstruction is true, loadCustomInstruction already set the correct selector value
     
-    templateSelectorContainer.style.display = 'none';
-    updatePreview();
+    // Show current active style
+    updateActiveStyleIndicator();
+  }
+  
+  // Update active style indicator
+  function updateActiveStyleIndicator() {
+    if (!styleStatus || !styleStatusText || !instructionSourceSelector) return;
+    
+    const source = instructionSourceSelector.value;
+    
+    if (source === 'default') {
+      styleStatus.style.display = 'block';
+      styleStatus.className = 'style-status-success';
+      styleStatusText.textContent = 'Default style active';
+    } else if (source && source.startsWith('template:')) {
+      const templateKey = source.replace('template:', '');
+      const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
+      styleStatus.style.display = 'block';
+      styleStatus.className = 'style-status-success';
+      styleStatusText.textContent = `${templateName} style active`;
+    } else if (source === 'custom' && customInstructionInput && customInstructionInput.value.trim()) {
+      styleStatus.style.display = 'block';
+      styleStatus.className = 'style-status-success';
+      styleStatusText.textContent = 'Custom style active';
+    } else {
+      styleStatus.style.display = 'none';
+    }
   }
 
   // ============================================================================
