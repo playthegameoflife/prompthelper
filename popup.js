@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const STORAGE_PROVIDER = 'selectedProvider';
   const STORAGE_ENHANCEMENT_MODE = 'selectedEnhancementMode';
+  const STORAGE_PROMPT_INPUT = 'savedPromptInput';
+  const STORAGE_ASK_INPUT = 'savedAskInput';
+  const STORAGE_ENHANCED_RESULT = 'savedEnhancedResult';
+  const STORAGE_ASK_RESULT = 'savedAskResult';
   
   // Provider configuration
   const PROVIDERS = {
@@ -38,15 +42,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Ensure enhance section is visible by default
   const enhanceTab = document.getElementById('enhance-section');
+  const askTab = document.getElementById('ask-section');
   const recentTab = document.getElementById('recent-section');
   const setupTab = document.getElementById('setup-section');
-  const advancedTab = document.getElementById('advanced-section');
+  const advancedSection = document.getElementById('advanced-section');
   
   if (enhanceTab) {
     enhanceTab.classList.add('active');
     enhanceTab.style.display = 'flex';
     enhanceTab.style.flexDirection = 'column';
     enhanceTab.style.gap = '16px';
+  }
+  
+  if (askTab) {
+    askTab.classList.remove('active');
+    askTab.style.display = 'none';
   }
   
   if (recentTab) {
@@ -58,18 +68,22 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTab.classList.remove('active');
     setupTab.style.display = 'none';
   }
-  
-  if (advancedTab) {
-    advancedTab.classList.remove('active');
-    advancedTab.style.display = 'none';
-  }
 
   // Tab Management
   const tabButtons = document.querySelectorAll('.tab-button');
 
   tabButtons.forEach(button => {
-    button.addEventListener('click', () => {
+    if (!button) return;
+    
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const tab = button.dataset.tab;
+      
+      if (!tab) {
+        console.error('[Prompt Architect] Tab button missing data-tab attribute');
+        return;
+      }
       
       // Update active tab button
       tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -81,55 +95,63 @@ document.addEventListener('DOMContentLoaded', () => {
         enhanceTab.style.display = 'flex';
         enhanceTab.style.flexDirection = 'column';
         enhanceTab.style.gap = '16px';
+        if (askTab) {
+          askTab.classList.remove('active');
+          askTab.style.display = 'none';
+        }
         recentTab.classList.remove('active');
         recentTab.style.display = 'none';
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
-        if (advancedTab) {
-          advancedTab.classList.remove('active');
-          advancedTab.style.display = 'none';
+        // Load style for current mode when enhance tab opens
+        if (selectedMode) {
+          currentMode = selectedMode;
+          loadTemplates(selectedMode).then(() => {
+            loadStyleForEnhanceTab(selectedMode);
+          });
         }
+      } else if (tab === 'ask') {
+        enhanceTab.classList.remove('active');
+        enhanceTab.style.display = 'none';
+        if (askTab) {
+          askTab.classList.add('active');
+          askTab.style.display = 'flex';
+          askTab.style.flexDirection = 'column';
+          askTab.style.gap = '16px';
+        }
+        recentTab.classList.remove('active');
+        recentTab.style.display = 'none';
+        setupTab.classList.remove('active');
+        setupTab.style.display = 'none';
       } else if (tab === 'recent') {
         enhanceTab.classList.remove('active');
         enhanceTab.style.display = 'none';
+        if (askTab) {
+          askTab.classList.remove('active');
+          askTab.style.display = 'none';
+        }
         recentTab.classList.add('active');
         recentTab.style.display = 'flex';
         recentTab.style.flexDirection = 'column';
         recentTab.style.gap = '16px';
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
-        if (advancedTab) {
-          advancedTab.classList.remove('active');
-          advancedTab.style.display = 'none';
-        }
         loadHistory(); // Load history when tab is opened
-      } else if (tab === 'advanced') {
-        enhanceTab.classList.remove('active');
-        enhanceTab.style.display = 'none';
-        recentTab.classList.remove('active');
-        recentTab.style.display = 'none';
-        setupTab.classList.remove('active');
-        setupTab.style.display = 'none';
-        if (advancedTab) {
-          advancedTab.classList.add('active');
-          advancedTab.style.display = 'flex';
-          advancedTab.style.flexDirection = 'column';
-          advancedTab.style.gap = '16px';
-          loadAdvancedSettings(); // Load settings when tab is opened
-        }
       } else {
         enhanceTab.classList.remove('active');
         enhanceTab.style.display = 'none';
+        if (askTab) {
+          askTab.classList.remove('active');
+          askTab.style.display = 'none';
+        }
         recentTab.classList.remove('active');
         recentTab.style.display = 'none';
         setupTab.classList.add('active');
         setupTab.style.display = 'flex';
         setupTab.style.flexDirection = 'column';
         setupTab.style.gap = '16px';
-        if (advancedTab) {
-          advancedTab.classList.remove('active');
-          advancedTab.style.display = 'none';
-        }
+        // Load advanced settings when setup tab opens
+        loadAdvancedSettings();
       }
     });
   });
@@ -148,6 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enhance View Elements
   const promptInput = document.getElementById('prompt-input');
   const modeOptions = document.querySelectorAll('.mode-option');
+  
+  // Save prompt input to storage on change (debounced)
+  let promptInputSaveTimeout = null;
+  if (promptInput) {
+    promptInput.addEventListener('input', () => {
+      clearTimeout(promptInputSaveTimeout);
+      promptInputSaveTimeout = setTimeout(() => {
+        chrome.storage.local.set({ [STORAGE_PROMPT_INPUT]: promptInput.value });
+      }, 500);
+    });
+  }
   const enhanceButton = document.getElementById('enhance-button');
   const enhanceButtonText = document.getElementById('enhance-button-text');
   const enhanceSpinner = document.getElementById('enhance-spinner');
@@ -375,10 +408,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let userManuallySelectedMode = false; // Track if user manually selected a mode (persists until input cleared or new manual selection)
   let autoDetectionTimeout = null; // For debouncing auto-detection
   
-  // Load saved mode on popup open
-  chrome.storage.local.get([STORAGE_ENHANCEMENT_MODE], (result) => {
+  // Load saved mode and style on popup open
+  chrome.storage.local.get([STORAGE_ENHANCEMENT_MODE], async (result) => {
     const savedMode = result[STORAGE_ENHANCEMENT_MODE] || 'TEXT_ENHANCEMENT';
     selectedMode = savedMode;
+    currentMode = savedMode;
     
     // Update UI to reflect saved mode
     modeOptions.forEach(opt => {
@@ -388,6 +422,13 @@ document.addEventListener('DOMContentLoaded', () => {
         opt.classList.remove('active');
       }
     });
+    
+    // Load templates and style for the saved mode (only if enhance tab is visible)
+    const enhanceTab = document.getElementById('enhance-section');
+    if (enhanceTab && enhanceTab.classList.contains('active')) {
+      await loadTemplates(savedMode);
+      await loadStyleForEnhanceTab(savedMode);
+    }
   });
   
   /**
@@ -547,6 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             if (resultText) resultText.textContent = enhancedPrompt;
             if (resultContainer) resultContainer.classList.add('show');
+            saveEnhancedResult(enhancedPrompt);
             showStatus('Prompt enhanced successfully!', 'success');
           }
         } catch (error) {
@@ -824,14 +866,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // ADVANCED SETTINGS - Custom Instructions
   // ============================================================================
   
+  // Enhance tab style selector
+  const enhanceStyleSelector = document.getElementById('enhance-style-selector');
+  const enhanceStyleStatus = document.getElementById('enhance-style-status');
+  const enhanceStyleStatusText = document.getElementById('enhance-style-status-text');
+  const styleSettingsLink = document.getElementById('style-settings-link');
+  
+  // Advanced tab elements
   const instructionModeSelector = document.getElementById('instruction-mode-selector');
-  const instructionSourceSelector = document.getElementById('instruction-source-selector');
+  const customStyleNameInput = document.getElementById('custom-style-name-input');
   const customInstructionContainer = document.getElementById('custom-instruction-container');
   const customInstructionInput = document.getElementById('custom-instruction-input');
-  const styleStatus = document.getElementById('style-status');
-  const styleStatusText = document.getElementById('style-status-text');
-  const resetInstructionContainer = document.getElementById('reset-instruction-container');
+  const saveInstructionButton = document.getElementById('save-instruction-button');
   const resetInstructionButton = document.getElementById('reset-instruction-button');
+  const savedStylesList = document.getElementById('saved-styles-list');
+  const savedStylesEmpty = document.getElementById('saved-styles-empty');
   
   let saveTimeout = null;
   let isSaving = false;
@@ -849,66 +898,276 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (response && response.success) {
         currentTemplates = response.templates || {};
-        updateInstructionSourceSelector();
-        // Update active style indicator after templates load
-        setTimeout(() => {
-          updateActiveStyleIndicator();
-        }, 100);
+        // Update enhance tab style selector
+        if (enhanceStyleSelector) {
+          await updateStyleSelector(enhanceStyleSelector);
+        }
       }
     } catch (error) {
       console.error('[Prompt Architect] Error loading templates:', error);
     }
   }
   
-  // Update instruction source dropdown with templates
-  function updateInstructionSourceSelector() {
-    if (!instructionSourceSelector) return;
+  // Load and display saved custom styles for Advanced tab
+  async function loadSavedStyles(enhancementType) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getNamedCustomStyles',
+        enhancementType: enhancementType
+      });
+      
+      if (savedStylesList && savedStylesEmpty) {
+        savedStylesList.innerHTML = '';
+        
+        if (response && response.success && response.styles) {
+          const styles = response.styles;
+          const styleNames = Object.keys(styles).sort();
+          
+          if (styleNames.length === 0) {
+            savedStylesList.style.display = 'none';
+            savedStylesEmpty.style.display = 'block';
+          } else {
+            savedStylesList.style.display = 'flex';
+            savedStylesEmpty.style.display = 'none';
+            
+            // Create style items
+            styleNames.forEach(styleName => {
+              const styleItem = document.createElement('div');
+              styleItem.className = 'saved-style-item';
+              
+              styleItem.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="flex: 1;">
+                    <div class="saved-style-item-name">${styleName}</div>
+                    <div class="saved-style-item-preview">
+                      ${styles[styleName].substring(0, 80)}${styles[styleName].length > 80 ? '...' : ''}
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 6px; margin-left: 12px; flex-shrink: 0;">
+                    <button class="history-action-button" data-action="apply" data-name="${styleName}" style="font-size: 10px; padding: 4px 8px;">Apply</button>
+                    <button class="history-action-button secondary" data-action="delete" data-name="${styleName}" style="font-size: 10px; padding: 4px 8px;">Delete</button>
+                  </div>
+                </div>
+              `;
+              
+              // Add event listeners
+              const applyBtn = styleItem.querySelector('[data-action="apply"]');
+              const deleteBtn = styleItem.querySelector('[data-action="delete"]');
+              
+              // Click on item to edit
+              styleItem.addEventListener('click', (e) => {
+                if (e.target === applyBtn || e.target === deleteBtn || applyBtn.contains(e.target) || deleteBtn.contains(e.target)) {
+                  return; // Don't edit if clicking buttons
+                }
+                // Load style into inputs for editing
+                if (customStyleNameInput) customStyleNameInput.value = styleName;
+                customInstructionInput.value = styles[styleName];
+              });
+              
+              applyBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await applyNamedStyle(styleName);
+              });
+              
+              deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (confirm(`Delete "${styleName}" style?`)) {
+                  await deleteNamedStyle(styleName);
+                  await loadSavedStyles(enhancementType);
+                  if (enhanceStyleSelector) {
+                    await updateStyleSelector(enhanceStyleSelector);
+                    await loadStyleForEnhanceTab(enhancementType);
+                  }
+                }
+              });
+              
+              savedStylesList.appendChild(styleItem);
+            });
+          }
+        } else {
+          savedStylesList.style.display = 'none';
+          savedStylesEmpty.style.display = 'block';
+        }
+      }
+    } catch (error) {
+      console.error('[Prompt Architect] Error loading saved styles:', error);
+    }
+  }
+  
+  // Apply a named custom style
+  async function applyNamedStyle(styleName) {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'setActiveStyle',
+        enhancementType: currentMode,
+        styleKey: `custom:${styleName}`
+      });
+      
+      // Update enhance tab selector if it exists
+      if (enhanceStyleSelector) {
+        enhanceStyleSelector.value = `custom:${styleName}`;
+        updateEnhanceStyleIndicator();
+      }
+      
+      alert(`"${styleName}" style is now active`);
+    } catch (error) {
+      console.error('[Prompt Architect] Error applying named style:', error);
+      alert('Error applying style');
+    }
+  }
+  
+  // Delete a named custom style
+  async function deleteNamedStyle(styleName) {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'deleteNamedCustomStyle',
+        enhancementType: currentMode,
+        styleName: styleName
+      });
+    } catch (error) {
+      console.error('[Prompt Architect] Error deleting named style:', error);
+      throw error;
+    }
+  }
+  
+  // Load style for Enhance tab based on active style
+  async function loadStyleForEnhanceTab(enhancementType) {
+    try {
+      // Get active style
+      const activeResponse = await chrome.runtime.sendMessage({
+        action: 'getActiveStyle',
+        enhancementType: enhancementType
+      });
+      
+      if (activeResponse && activeResponse.success && activeResponse.styleKey && enhanceStyleSelector) {
+        enhanceStyleSelector.value = activeResponse.styleKey;
+      } else if (enhanceStyleSelector) {
+        // Fallback: check legacy custom instruction
+      const response = await chrome.runtime.sendMessage({
+        action: 'getCustomInstruction',
+        enhancementType: enhancementType
+      });
+      
+      if (response && response.success && response.instruction) {
+          // Check if this instruction matches a template
+          const matchingTemplate = findMatchingTemplate(response.instruction);
+          
+          if (matchingTemplate) {
+            enhanceStyleSelector.value = `template:${matchingTemplate}`;
+          } else {
+            // Check if it matches a named custom style
+            const stylesResponse = await chrome.runtime.sendMessage({
+              action: 'getNamedCustomStyles',
+              enhancementType: enhancementType
+            });
+            
+            if (stylesResponse && stylesResponse.success && stylesResponse.styles) {
+              const styles = stylesResponse.styles;
+              for (const [name, instruction] of Object.entries(styles)) {
+                if (instruction.trim() === response.instruction.trim()) {
+                  enhanceStyleSelector.value = `custom:${name}`;
+                  break;
+                }
+              }
+            }
+          }
+        } else {
+          enhanceStyleSelector.value = 'default';
+        }
+      }
+      
+      updateEnhanceStyleIndicator();
+    } catch (error) {
+      console.error('[Prompt Architect] Error loading style for enhance tab:', error);
+    }
+  }
+  
+  // Update enhance tab style indicator
+  function updateEnhanceStyleIndicator() {
+    if (!enhanceStyleStatus || !enhanceStyleStatusText || !enhanceStyleSelector) return;
+    
+    const source = enhanceStyleSelector.value;
+    
+    if (source === 'default') {
+      enhanceStyleStatus.style.display = 'none';
+    } else if (source && source.startsWith('template:')) {
+      const templateKey = source.replace('template:', '');
+      const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
+      enhanceStyleStatus.style.display = 'flex';
+      enhanceStyleStatus.className = 'status-indicator style-status-success show';
+      enhanceStyleStatusText.textContent = `${templateName} style`;
+    } else if (source && source.startsWith('custom:')) {
+      const styleName = source.replace('custom:', '');
+      enhanceStyleStatus.style.display = 'flex';
+      enhanceStyleStatus.className = 'status-indicator style-status-success show';
+      enhanceStyleStatusText.textContent = `${styleName} style`;
+    } else {
+      enhanceStyleStatus.style.display = 'none';
+    }
+  }
+  
+  // Update style selector dropdown with templates and named custom styles (for Enhance tab)
+  async function updateStyleSelector(selector) {
+    if (!selector) return;
     
     // Get current selection to preserve it
-    const currentValue = instructionSourceSelector.value;
-    
-    // Clear all options except keep track of default and custom
-    const defaultOption = instructionSourceSelector.querySelector('option[value="default"]');
-    const customOption = instructionSourceSelector.querySelector('option[value="custom"]');
+    const currentValue = selector.value;
     
     // Clear all options
-    instructionSourceSelector.innerHTML = '';
+    selector.innerHTML = '';
     
     // Add default option
-    if (defaultOption) {
-      instructionSourceSelector.appendChild(defaultOption);
-    } else {
-      const opt = document.createElement('option');
-      opt.value = 'default';
-      opt.textContent = 'Default (Recommended)';
-      instructionSourceSelector.appendChild(opt);
-    }
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = 'default';
+    defaultOpt.textContent = 'Default';
+    selector.appendChild(defaultOpt);
     
     // Add all templates
     const templates = currentTemplates;
     for (const [key, value] of Object.entries(templates)) {
-      // Skip 'default' template as it's already handled
-      if (key === 'default') continue;
+      // Skip 'default' template and custom styles (they have custom: prefix)
+      if (key === 'default' || key.startsWith('custom:')) continue;
       
       const option = document.createElement('option');
       option.value = `template:${key}`;
       option.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
-      instructionSourceSelector.appendChild(option);
+      selector.appendChild(option);
     }
     
-    // Add custom option
-    if (customOption) {
-      instructionSourceSelector.appendChild(customOption);
-    } else {
-      const opt = document.createElement('option');
-      opt.value = 'custom';
-      opt.textContent = 'Custom';
-      instructionSourceSelector.appendChild(opt);
+    // Add named custom styles
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getNamedCustomStyles',
+        enhancementType: selectedMode
+      });
+      
+      if (response && response.success && response.styles) {
+        const customStyles = response.styles;
+        const styleNames = Object.keys(customStyles).sort();
+        
+        if (styleNames.length > 0) {
+          // Add separator
+          const separator = document.createElement('option');
+          separator.disabled = true;
+          separator.textContent = '─── Your Styles ───';
+          selector.appendChild(separator);
+          
+          // Add custom styles
+          for (const styleName of styleNames) {
+            const option = document.createElement('option');
+            option.value = `custom:${styleName}`;
+            option.textContent = styleName;
+            selector.appendChild(option);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Prompt Architect] Error loading named custom styles:', error);
     }
     
     // Restore previous selection if it still exists
-    if (currentValue && instructionSourceSelector.querySelector(`option[value="${currentValue}"]`)) {
-      instructionSourceSelector.value = currentValue;
+    if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
+      selector.value = currentValue;
     }
   }
   
@@ -933,43 +1192,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
   
-  // Load custom instruction for current mode
+  // Load custom instruction for Advanced tab (clears inputs, shows saved styles list)
   async function loadCustomInstruction(enhancementType) {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'getCustomInstruction',
-        enhancementType: enhancementType
-      });
-      
-      if (response && response.success && response.instruction) {
-        // Check if this instruction matches a template
-        const matchingTemplate = findMatchingTemplate(response.instruction);
-        
-        if (matchingTemplate) {
-          // It's a template, not a custom instruction
-          customInstructionInput.value = '';
-          resetInstructionContainer.style.display = 'block';
-          if (instructionSourceSelector) {
-            instructionSourceSelector.value = `template:${matchingTemplate}`;
-          }
-          customInstructionContainer.style.display = 'none';
-          return true; // Return true to indicate something is saved
-        } else {
-          // It's a genuine custom instruction
-          customInstructionInput.value = response.instruction;
-          resetInstructionContainer.style.display = 'block';
-          if (instructionSourceSelector) {
-            instructionSourceSelector.value = 'custom';
-          }
-          customInstructionContainer.style.display = 'block';
-          return true;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error('[Prompt Architect] Error loading custom instruction:', error);
-      return false;
-    }
+    // Clear inputs - user creates new styles here
+    if (customStyleNameInput) customStyleNameInput.value = '';
+    if (customInstructionInput) customInstructionInput.value = '';
+    if (resetInstructionButton) resetInstructionButton.style.display = 'none';
+    return false;
   }
   
   // Update preview based on current selection (preview removed - instructions hidden)
@@ -978,215 +1207,297 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   
-  // Auto-save function with visual feedback
-  async function autoSaveInstruction() {
+  // Auto-save style for Enhance tab (handles default, templates, and named custom styles)
+  async function autoSaveStyleForEnhanceTab(source) {
     if (isSaving) return;
     
-    const source = instructionSourceSelector.value;
-    let instruction = '';
-    
-    // Show saving status
-    if (styleStatus && styleStatusText) {
-      styleStatus.style.display = 'flex';
-      styleStatus.className = 'status-indicator style-status-saving show';
-      styleStatusText.textContent = 'Saving...';
+    // Show saving status in enhance tab
+    if (enhanceStyleStatus && enhanceStyleStatusText) {
+      enhanceStyleStatus.style.display = 'flex';
+      enhanceStyleStatus.className = 'status-indicator style-status-saving show';
+      enhanceStyleStatusText.textContent = 'Saving...';
     }
     
     isSaving = true;
     
     try {
+      // Set active style
+      await chrome.runtime.sendMessage({
+        action: 'setActiveStyle',
+        enhancementType: selectedMode,
+        styleKey: source
+      });
+      
       if (source === 'default') {
-        // Delete custom instruction to use default
-        await chrome.runtime.sendMessage({
-          action: 'deleteCustomInstruction',
-          enhancementType: currentMode
-        });
-        resetInstructionContainer.style.display = 'none';
-        customInstructionInput.value = '';
-        
         // Show success
-        if (styleStatus && styleStatusText) {
-          styleStatus.className = 'status-indicator style-status-success show';
-          styleStatus.style.display = 'flex';
-          styleStatusText.textContent = 'Using default style';
+        if (enhanceStyleStatus && enhanceStyleStatusText) {
+          enhanceStyleStatus.className = 'status-indicator style-status-success show';
+          enhanceStyleStatus.style.display = 'flex';
+          enhanceStyleStatusText.textContent = 'Default style';
           setTimeout(() => {
-            styleStatus.style.display = 'none';
+            enhanceStyleStatus.style.display = 'none';
           }, 2000);
         }
       } else if (source && source.startsWith('template:')) {
         // Template selected
         const templateKey = source.replace('template:', '');
-        instruction = currentTemplates[templateKey];
-        if (instruction) {
-          await chrome.runtime.sendMessage({
-            action: 'saveCustomInstruction',
-            enhancementType: currentMode,
-            instruction: instruction
-          });
-          resetInstructionContainer.style.display = 'block';
-          
-          // Show success
-          if (styleStatus && styleStatusText) {
-            const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
-            styleStatus.className = 'status-indicator style-status-success show';
-            styleStatus.style.display = 'flex';
-            styleStatusText.textContent = `${templateName} style active`;
-            setTimeout(() => {
-              styleStatus.style.display = 'none';
-            }, 2000);
-          }
+        const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
+        
+        // Show success
+        if (enhanceStyleStatus && enhanceStyleStatusText) {
+          enhanceStyleStatus.className = 'status-indicator style-status-success show';
+          enhanceStyleStatus.style.display = 'flex';
+          enhanceStyleStatusText.textContent = `${templateName} style`;
+          setTimeout(() => {
+            enhanceStyleStatus.style.display = 'none';
+          }, 2000);
         }
-      } else if (source === 'custom') {
-        // Custom instruction - wait for user to finish typing
-        // This will be handled by the debounced save on textarea input
-        if (styleStatus && styleStatusText) {
-          styleStatus.style.display = 'none';
+      } else if (source && source.startsWith('custom:')) {
+        // Named custom style selected
+        const styleName = source.replace('custom:', '');
+        
+        // Show success
+        if (enhanceStyleStatus && enhanceStyleStatusText) {
+          enhanceStyleStatus.className = 'status-indicator style-status-success show';
+          enhanceStyleStatus.style.display = 'flex';
+          enhanceStyleStatusText.textContent = `${styleName} style`;
+          setTimeout(() => {
+            enhanceStyleStatus.style.display = 'none';
+          }, 2000);
         }
       }
     } catch (error) {
-      console.error('[Prompt Architect] Error auto-saving instruction:', error);
-      if (styleStatus && styleStatusText) {
-        styleStatus.style.display = 'none';
+      console.error('[Prompt Architect] Error auto-saving style:', error);
+      if (enhanceStyleStatus && enhanceStyleStatusText) {
+        enhanceStyleStatus.style.display = 'none';
       }
     } finally {
       isSaving = false;
     }
   }
   
-  // Debounced save for custom instructions
-  function debouncedSaveCustom() {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-    
-    saveTimeout = setTimeout(async () => {
-      const instruction = customInstructionInput.value.trim();
+  // Handle mode change in Enhance tab
+  modeOptions.forEach(option => {
+    option.addEventListener('click', async () => {
+      const newMode = option.dataset.mode;
+      selectedMode = newMode;
+      currentMode = newMode;
       
-      if (!instruction) {
-        if (styleStatus) styleStatus.style.display = 'none';
-        return;
-      }
+      // Save mode to storage
+      chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: newMode });
       
-      // Show saving status
-      if (styleStatus && styleStatusText) {
-        styleStatus.style.display = 'flex';
-        styleStatus.className = 'status-indicator style-status-saving show';
-        styleStatusText.textContent = 'Saving...';
-      }
-      
-      isSaving = true;
-      
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: 'saveCustomInstruction',
-          enhancementType: currentMode,
-          instruction: instruction
-        });
-        
-        if (response && response.success) {
-          resetInstructionContainer.style.display = 'block';
-          
-          // Show success
-          if (styleStatus && styleStatusText) {
-            styleStatus.className = 'status-indicator style-status-success show';
-            styleStatus.style.display = 'flex';
-            styleStatusText.textContent = 'Custom style saved';
-            setTimeout(() => {
-              styleStatus.style.display = 'none';
-            }, 2000);
-          }
-        }
-      } catch (error) {
-        console.error('[Prompt Architect] Error saving custom instruction:', error);
-        if (styleStatus && styleStatusText) {
-          styleStatus.style.display = 'none';
-        }
-      } finally {
-        isSaving = false;
-      }
-    }, 1000); // Wait 1 second after user stops typing
-  }
-  
-  // Handle instruction source change
-  if (instructionSourceSelector) {
-    instructionSourceSelector.addEventListener('change', () => {
-      const source = instructionSourceSelector.value;
-      // Show custom input only if custom is selected
-      customInstructionContainer.style.display = source === 'custom' ? 'block' : 'none';
-      
-      // Auto-save on selection (except custom, which saves on textarea input)
-      if (source !== 'custom') {
-        autoSaveInstruction();
-      } else {
-        // If switching to custom and there's existing text, save it
-        if (customInstructionInput.value.trim()) {
-          debouncedSaveCustom();
-        } else {
-          if (styleStatus) styleStatus.style.display = 'none';
-        }
-      }
+      // Load templates and style for the new mode
+      await loadTemplates(newMode);
+      await loadStyleForEnhanceTab(newMode);
     });
-  }
+  });
   
-  // Handle mode change
+  // Handle mode change in Advanced tab
   if (instructionModeSelector) {
     instructionModeSelector.addEventListener('change', async () => {
       currentMode = instructionModeSelector.value;
       await loadTemplates(currentMode);
       await loadCustomInstruction(currentMode);
-      // Check if current selection is a template for this mode
-      const currentValue = instructionSourceSelector.value;
-      if (currentValue && currentValue.startsWith('template:')) {
-        // Keep template selection if it exists in new mode
-        const templateKey = currentValue.replace('template:', '');
-        if (currentTemplates[templateKey]) {
-          instructionSourceSelector.value = currentValue;
-        } else {
-          instructionSourceSelector.value = 'default';
+      await loadSavedStyles(currentMode);
+    });
+  }
+  
+  // Handle style selection in Enhance tab
+  if (enhanceStyleSelector) {
+    enhanceStyleSelector.addEventListener('change', async () => {
+      const source = enhanceStyleSelector.value;
+      
+      // All selections (default, template, or named custom) auto-save
+      await autoSaveStyleForEnhanceTab(source);
+      updateEnhanceStyleIndicator();
+    });
+  }
+  
+  // Handle style settings link (scrolls to Advanced section in Setup tab)
+  if (styleSettingsLink) {
+    styleSettingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const setupTabButton = document.querySelector('[data-tab="setup"]');
+      if (setupTabButton) {
+        setupTabButton.click();
+        // Scroll to advanced section after a brief delay to allow tab to render
+        setTimeout(() => {
+          if (advancedSection) {
+            advancedSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Set the mode selector to match current mode
+            if (instructionModeSelector && selectedMode) {
+              instructionModeSelector.value = selectedMode;
+              currentMode = selectedMode;
+              loadTemplates(selectedMode).then(() => {
+                loadCustomInstruction(selectedMode);
+                loadSavedStyles(selectedMode);
+              });
+            }
+          }
+        }, 100);
+      }
+    });
+  }
+  
+  // Auto-save style for Enhance tab
+  async function autoSaveStyleForEnhanceTab(source) {
+    if (isSaving) return;
+    
+    isSaving = true;
+    
+    try {
+      if (source === 'default') {
+        // Delete custom instruction to use default
+          await chrome.runtime.sendMessage({
+            action: 'deleteCustomInstruction',
+          enhancementType: selectedMode
+        });
+      } else if (source && source.startsWith('template:')) {
+        // Template selected
+        const templateKey = source.replace('template:', '');
+        const instruction = currentTemplates[templateKey];
+        if (instruction) {
+          await chrome.runtime.sendMessage({
+            action: 'saveCustomInstruction',
+            enhancementType: selectedMode,
+            instruction: instruction
+          });
         }
       }
-      // Update active style indicator after mode change
-      setTimeout(() => {
-        updateActiveStyleIndicator();
-      }, 100);
+      // Custom is handled separately - user needs to go to Advanced tab
+        } catch (error) {
+      console.error('[Prompt Architect] Error auto-saving style:', error);
+    } finally {
+      isSaving = false;
+    }
+  }
+  
+  // Save named custom style in Advanced tab
+  if (saveInstructionButton) {
+    saveInstructionButton.addEventListener('click', async () => {
+      const styleName = customStyleNameInput ? customStyleNameInput.value.trim() : '';
+      const instruction = customInstructionInput.value.trim();
+      
+      if (!styleName) {
+        alert('Please enter a name for your custom style');
+        if (customStyleNameInput) customStyleNameInput.focus();
+          return;
+        }
+      
+        if (!instruction) {
+        alert('Please enter the custom instruction text');
+        if (customInstructionInput) customInstructionInput.focus();
+          return;
+      }
+      
+      try {
+        // Ensure we're using the correct mode (sync with instruction mode selector)
+        const modeToUse = instructionModeSelector ? instructionModeSelector.value : currentMode;
+        
+        if (!modeToUse) {
+          alert('Error: No enhancement mode selected');
+          return;
+        }
+        
+        // Validate inputs before sending
+        if (!styleName || styleName.trim().length === 0) {
+          alert('Please enter a name for your custom style');
+          if (customStyleNameInput) customStyleNameInput.focus();
+          return;
+        }
+        
+        if (!instruction || instruction.trim().length === 0) {
+          alert('Please enter the custom instruction text');
+          if (customInstructionInput) customInstructionInput.focus();
+          return;
+        }
+        
+        // Add timeout to detect if background script isn't responding
+        const messagePromise = chrome.runtime.sendMessage({
+          action: 'saveNamedCustomStyle',
+          enhancementType: modeToUse,
+          styleName: styleName.trim(),
+          instruction: instruction.trim()
+        });
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Request timed out. Please reload the extension and try again.')), 10000);
+        });
+        
+        const response = await Promise.race([messagePromise, timeoutPromise]);
+        
+        if (!response) {
+          throw new Error('No response from background script. Please reload the extension and try again.');
+        }
+          
+          if (response && response.success) {
+          // Update currentMode to match what we just saved
+          currentMode = modeToUse;
+          // Set as active style
+          const setActiveResponse = await chrome.runtime.sendMessage({
+            action: 'setActiveStyle',
+            enhancementType: currentMode,
+            styleKey: `custom:${styleName}`
+          });
+          
+          if (!setActiveResponse || !setActiveResponse.success) {
+            console.warn('[Prompt Architect] Failed to set active style, but style was saved');
+          }
+          
+          // Clear inputs
+          if (customStyleNameInput) customStyleNameInput.value = '';
+          customInstructionInput.value = '';
+          
+          // Reload saved styles list
+          await loadSavedStyles(currentMode);
+          
+          // Update enhance tab style selector
+          if (enhanceStyleSelector) {
+            await updateStyleSelector(enhanceStyleSelector);
+            enhanceStyleSelector.value = `custom:${styleName}`;
+            updateEnhanceStyleIndicator();
+          }
+          
+          // Show success message
+          const wasEdit = response.wasEdit || false;
+          alert(`"${styleName}" style ${wasEdit ? 'updated' : 'saved'} and applied!`);
+          } else {
+          const errorMsg = response?.error || 'Unknown error';
+          console.error('[Prompt Architect] Error saving style:', errorMsg);
+          alert('Error saving style: ' + errorMsg);
+          }
+        } catch (error) {
+        console.error('[Prompt Architect] Error saving named style:', error);
+        alert('Error saving style: ' + (error.message || 'Unknown error'));
+      }
     });
   }
   
-  // Handle custom instruction input with auto-save
-  if (customInstructionInput) {
-    customInstructionInput.addEventListener('input', () => {
-      debouncedSaveCustom();
-    });
-  }
-  
-  // Save button removed - auto-save is now handled automatically
-  
-  // Reset instruction
+  // Reset instruction (clear active style to default)
   if (resetInstructionButton) {
     resetInstructionButton.addEventListener('click', async () => {
-      try {
-        await chrome.runtime.sendMessage({
-          action: 'deleteCustomInstruction',
-          enhancementType: currentMode
-        });
-        resetInstructionContainer.style.display = 'none';
-        customInstructionInput.value = '';
-        if (instructionSourceSelector) {
-          instructionSourceSelector.value = 'default';
-        }
-        customInstructionContainer.style.display = 'none';
+        try {
+          await chrome.runtime.sendMessage({
+          action: 'setActiveStyle',
+          enhancementType: currentMode,
+          styleKey: 'default'
+          });
         
-        // Show success feedback
-        if (styleStatus && styleStatusText) {
-          styleStatus.style.display = 'flex';
-          styleStatus.className = 'status-indicator style-status-success show';
-          styleStatusText.textContent = 'Reset to default';
-          setTimeout(() => {
-            styleStatus.style.display = 'none';
-          }, 2000);
+        // Clear inputs
+        if (customStyleNameInput) customStyleNameInput.value = '';
+          customInstructionInput.value = '';
+        resetInstructionButton.style.display = 'none';
+        
+        // Update enhance tab style selector if it exists
+        if (enhanceStyleSelector) {
+          enhanceStyleSelector.value = 'default';
+          updateEnhanceStyleIndicator();
         }
-      } catch (error) {
-        console.error('[Prompt Architect] Error resetting instruction:', error);
+        
+        alert('Reset to default style');
+        } catch (error) {
+        console.error('[Prompt Architect] Error resetting style:', error);
+        alert('Error resetting style');
       }
     });
   }
@@ -1195,49 +1506,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadAdvancedSettings() {
     if (!instructionModeSelector) return;
     
-    currentMode = instructionModeSelector.value;
+    // Sync instruction mode selector with selectedMode
+    instructionModeSelector.value = selectedMode;
+    currentMode = selectedMode;
+    
     await loadTemplates(currentMode);
-    
-    // Load custom instruction (this will check if it matches a template)
-    const hasSavedInstruction = await loadCustomInstruction(currentMode);
-    
-    if (!hasSavedInstruction) {
-      // No saved instruction, use default
-      if (instructionSourceSelector) {
-        instructionSourceSelector.value = 'default';
-      }
-      customInstructionContainer.style.display = 'none';
-      resetInstructionContainer.style.display = 'none';
-    }
-    // If hasSavedInstruction is true, loadCustomInstruction already set the correct selector value
-    
-    // Show current active style
-    updateActiveStyleIndicator();
-  }
-  
-  // Update active style indicator
-  function updateActiveStyleIndicator() {
-    if (!styleStatus || !styleStatusText || !instructionSourceSelector) return;
-    
-    const source = instructionSourceSelector.value;
-    
-    if (source === 'default') {
-      styleStatus.style.display = 'flex';
-      styleStatus.className = 'status-indicator style-status-success show';
-      styleStatusText.textContent = 'Default style active';
-    } else if (source && source.startsWith('template:')) {
-      const templateKey = source.replace('template:', '');
-      const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
-      styleStatus.style.display = 'flex';
-      styleStatus.className = 'status-indicator style-status-success show';
-      styleStatusText.textContent = `${templateName} style active`;
-    } else if (source === 'custom' && customInstructionInput && customInstructionInput.value.trim()) {
-      styleStatus.style.display = 'flex';
-      styleStatus.className = 'status-indicator style-status-success show';
-      styleStatusText.textContent = 'Custom style active';
-    } else {
-      styleStatus.style.display = 'none';
-    }
+    await loadCustomInstruction(currentMode);
+    await loadSavedStyles(currentMode);
   }
 
   // ============================================================================
@@ -1258,7 +1533,230 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ============================================================================
+  // ASK TAB - Question Answering
+  // ============================================================================
+  
+  const askInput = document.getElementById('ask-input');
+  const askButton = document.getElementById('ask-button');
+  const askButtonText = document.getElementById('ask-button-text');
+  const askSpinner = document.getElementById('ask-spinner');
+  const askStatusMessage = document.getElementById('ask-status-message');
+  const askResultContainer = document.getElementById('ask-result-container');
+  const askResultText = document.getElementById('ask-result-text');
+  const askCopyButton = document.getElementById('ask-copy-button');
+  const enhanceQuestionToggle = document.getElementById('enhance-question-toggle');
+  
+  // Save ask input to storage on change (debounced)
+  let askInputSaveTimeout = null;
+  if (askInput) {
+    askInput.addEventListener('input', () => {
+      clearTimeout(askInputSaveTimeout);
+      askInputSaveTimeout = setTimeout(() => {
+        chrome.storage.local.set({ [STORAGE_ASK_INPUT]: askInput.value });
+      }, 500);
+    });
+  }
+  
+  // Save ask result to storage
+  function saveAskResult(result) {
+    if (result && !result.startsWith('Error:')) {
+      chrome.storage.local.set({ [STORAGE_ASK_RESULT]: result });
+    }
+  }
+  
+  /**
+   * Display status message for Ask tab
+   */
+  function showAskStatus(message, type, persist = false) {
+    if (askStatusMessage) {
+      askStatusMessage.textContent = message;
+      askStatusMessage.className = `status-message status-${type} show`;
+      // Don't auto-hide info/warning messages during processing, or if persist is true
+      if (!persist && type !== 'info' && type !== 'warning') {
+        setTimeout(() => {
+          askStatusMessage.classList.remove('show');
+        }, 4000);
+      }
+    }
+  }
+  
+  /**
+   * Update button text based on toggle state
+   */
+  function updateAskButtonText() {
+    if (enhanceQuestionToggle && askButtonText) {
+      if (enhanceQuestionToggle.checked) {
+        askButtonText.textContent = 'Enhance & Ask';
+      } else {
+        askButtonText.textContent = 'Ask Question';
+      }
+    }
+  }
+  
+  // Update button text when toggle changes
+  if (enhanceQuestionToggle) {
+    enhanceQuestionToggle.addEventListener('change', updateAskButtonText);
+  }
+
+  /**
+   * Handles question asking (with optional enhancement)
+   */
+  if (askButton && askInput) {
+    askButton.addEventListener('click', async () => {
+      let question = askInput.value.trim();
+      
+      if (!question) {
+        showAskStatus('Please enter a question.', 'error');
+        return;
+      }
+
+      // Check for API key
+      chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], async (result) => {
+        const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
+        const storageKey = STORAGE_KEYS[selectedProvider];
+        const apiKey = result[storageKey];
+        
+        if (!apiKey) {
+          showAskStatus('Please set your API key in the Setup tab first.', 'error');
+          // Switch to setup tab
+          const setupTabButton = document.querySelector('[data-tab="setup"]');
+          if (setupTabButton) {
+            setupTabButton.click();
+          }
+          return;
+        }
+
+        // Disable button and show loading
+        askButton.disabled = true;
+        if (askButtonText) askButtonText.style.display = 'none';
+        if (askSpinner) askSpinner.classList.add('show');
+        if (askResultContainer) askResultContainer.classList.remove('show');
+
+        try {
+          // If enhance toggle is enabled, enhance the question first
+          if (enhanceQuestionToggle && enhanceQuestionToggle.checked) {
+            showAskStatus('Enhancing question...', 'info', true);
+            
+            // Enhance the question using TEXT_ENHANCEMENT mode
+            const enhanceResponse = await chrome.runtime.sendMessage({
+              action: 'enhancePrompt',
+              prompt: question,
+              enhancementType: 'TEXT_ENHANCEMENT',
+              provider: selectedProvider
+            });
+
+            const enhancedQuestion = enhanceResponse?.enhancedPrompt || question;
+
+            if (enhancedQuestion.startsWith("Error:")) {
+              // If enhancement fails, use original question
+              showAskStatus('Enhancement failed, using original question...', 'warning', true);
+            } else {
+              // Update input with enhanced question
+              question = enhancedQuestion;
+              if (askInput) {
+                askInput.value = question;
+              }
+              showAskStatus('Question enhanced, asking now...', 'info', true);
+            }
+          }
+
+          // Now ask the question (enhanced or original)
+          const response = await chrome.runtime.sendMessage({
+            action: 'askQuestion',
+            question: question,
+            provider: selectedProvider
+          });
+
+          const answer = response?.answer || "Error: Failed to receive answer.";
+
+          if (answer.startsWith("Error:")) {
+            showAskStatus(answer.replace("Error: ", ""), 'error');
+            if (askResultContainer) askResultContainer.classList.remove('show');
+          } else {
+            if (askResultText) askResultText.textContent = answer;
+            if (askResultContainer) askResultContainer.classList.add('show');
+            saveAskResult(answer);
+            showAskStatus('Answer received!', 'success');
+          }
+        } catch (error) {
+          console.error('Ask question error:', error);
+          showAskStatus('Error: Communication issue. Please try again.', 'error');
+          if (askResultContainer) askResultContainer.classList.remove('show');
+        } finally {
+          // Re-enable button and hide loading
+          askButton.disabled = false;
+          if (askButtonText) askButtonText.style.display = 'inline';
+          if (askSpinner) askSpinner.classList.remove('show');
+        }
+      });
+    });
+  }
+  
+  // Initialize button text
+  updateAskButtonText();
+  
+  /**
+   * Copy answer to clipboard
+   */
+  if (askCopyButton && askResultText) {
+    askCopyButton.addEventListener('click', async () => {
+      const answer = askResultText.textContent;
+      
+      try {
+        await navigator.clipboard.writeText(answer);
+        showAskStatus('Answer copied to clipboard!', 'success');
+        
+        // Visual feedback
+        askCopyButton.textContent = 'Copied!';
+        setTimeout(() => {
+          askCopyButton.textContent = 'Copy';
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to copy:', error);
+        showAskStatus('Failed to copy to clipboard.', 'error');
+      }
+    });
+  }
+
+  // Restore saved inputs and results on popup open
+  function restoreSavedContent() {
+    chrome.storage.local.get([
+      STORAGE_PROMPT_INPUT,
+      STORAGE_ASK_INPUT,
+      STORAGE_ENHANCED_RESULT,
+      STORAGE_ASK_RESULT
+    ], (result) => {
+      // Restore prompt input
+      if (promptInput && result[STORAGE_PROMPT_INPUT]) {
+        promptInput.value = result[STORAGE_PROMPT_INPUT];
+      }
+      
+      // Restore enhanced result
+      if (resultText && result[STORAGE_ENHANCED_RESULT]) {
+        resultText.textContent = result[STORAGE_ENHANCED_RESULT];
+        if (resultContainer) {
+          resultContainer.classList.add('show');
+        }
+      }
+      
+      // Restore ask input
+      if (askInput && result[STORAGE_ASK_INPUT]) {
+        askInput.value = result[STORAGE_ASK_INPUT];
+      }
+      
+      // Restore ask result
+      if (askResultText && result[STORAGE_ASK_RESULT]) {
+        askResultText.textContent = result[STORAGE_ASK_RESULT];
+        if (askResultContainer) {
+          askResultContainer.classList.add('show');
+        }
+      }
+    });
+  }
+
   // Initial load
   loadApiKey();
   checkAndShowOnboarding();
+  restoreSavedContent();
 });

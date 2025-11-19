@@ -8,7 +8,7 @@
 // --- Constants ---
 
 // Debug mode flag - set to false for production
-const DEBUG_MODE = false;
+const DEBUG_MODE = true; // Temporarily enabled for debugging Ask tab issues
 
 // Debug logging utility
 const debug = {
@@ -172,19 +172,20 @@ class RateLimiter {
 const apiRateLimiter = new RateLimiter(10, 60000);
 
 /**
- * Generates a cache key from prompt and enhancement type
+ * Generates a cache key from prompt, enhancement type, provider, and active style
  */
-function getCacheKey(prompt, enhancementType, provider) {
+function getCacheKey(prompt, enhancementType, provider, styleKey = null) {
     // Normalize prompt (trim, lowercase for comparison)
     const normalized = prompt.trim().toLowerCase();
-    return `${normalized}-${enhancementType}-${provider}`;
+    const stylePart = styleKey ? `-${styleKey}` : '';
+    return `${normalized}-${enhancementType}-${provider}${stylePart}`;
 }
 
 /**
  * Gets cached enhancement result if available
  */
-function getCachedEnhancement(prompt, enhancementType, provider) {
-    const key = getCacheKey(prompt, enhancementType, provider);
+function getCachedEnhancement(prompt, enhancementType, provider, styleKey = null) {
+    const key = getCacheKey(prompt, enhancementType, provider, styleKey);
     const cached = promptCache.get(key);
     
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -202,13 +203,13 @@ function getCachedEnhancement(prompt, enhancementType, provider) {
 /**
  * Caches enhancement result
  */
-function cacheEnhancement(prompt, enhancementType, provider, result) {
+function cacheEnhancement(prompt, enhancementType, provider, result, styleKey = null) {
     // Don't cache errors
     if (result.startsWith('Error:')) {
         return;
     }
     
-    const key = getCacheKey(prompt, enhancementType, provider);
+    const key = getCacheKey(prompt, enhancementType, provider, styleKey);
     promptCache.set(key, {
         result,
         timestamp: Date.now()
@@ -312,6 +313,9 @@ Crucially, your output MUST contain ONLY the improved prompt text itself. Do not
     EXPAND: `You are an idea generator and detailer. Your task is to take the user's concise text and elaborate on it. Expand the idea into a robust, multi-part request, adding contextual background, relevant examples, and necessary complexity or constraints. Crucially, your output MUST contain ONLY the expanded text itself. Do not include any introduction, explanation, or conversational filler.`,
     
     POLISH: `You are a professional copyeditor. Your task is to review the user's text for grammatical errors, misspellings, and unclear syntax. Rewrite the text to be concise, professional, and unambiguous, structuring sentences for maximum clarity and impact. Preserve the original meaning. Crucially, your output MUST contain ONLY the clean, polished text itself. Do not include any introduction, explanation, or conversational filler.`,
+    
+    // Ask feature - direct question answering
+    ASK_QUESTION: `You are a helpful and knowledgeable assistant. Answer the user's question directly, clearly, and comprehensively. Provide accurate information and be concise yet thorough. If the question is unclear, ask for clarification. Your response should be the direct answer to their question, formatted clearly and naturally.`,
 };
 
 // Instruction Templates - Preset variations for each mode
@@ -342,8 +346,10 @@ const INSTRUCTION_TEMPLATES = {
     },
 };
 
-// Storage key for custom instructions
-const STORAGE_CUSTOM_INSTRUCTIONS = 'customInstructions';
+// Storage keys for custom instructions and named styles
+const STORAGE_CUSTOM_INSTRUCTIONS = 'customInstructions'; // Legacy - for backward compatibility
+const STORAGE_NAMED_CUSTOM_STYLES = 'namedCustomStyles'; // New: { mode: { "Style Name": "instruction" } }
+const STORAGE_ACTIVE_STYLE = 'activeStyle'; // { mode: "styleName" or "template:name" or "default" }
 
 /**
  * Retrieves custom instruction for a given enhancement type
@@ -367,7 +373,23 @@ async function getCustomInstruction(enhancementType) {
  * @returns {Object} Object with template names and instructions
  */
 function getTemplatesForType(enhancementType) {
-    return INSTRUCTION_TEMPLATES[enhancementType] || {};
+    const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
+    
+    // Add named custom styles for this mode
+    return new Promise((resolve) => {
+        chrome.storage.local.get(STORAGE_NAMED_CUSTOM_STYLES, (result) => {
+            const namedStyles = result[STORAGE_NAMED_CUSTOM_STYLES] || {};
+            const modeStyles = namedStyles[enhancementType] || {};
+            
+            // Merge templates with custom styles
+            const allTemplates = { ...templates };
+            for (const [name, instruction] of Object.entries(modeStyles)) {
+                allTemplates[`custom:${name}`] = instruction;
+            }
+            
+            resolve(allTemplates);
+        });
+    });
 }
 
 /**
@@ -399,9 +421,135 @@ async function deleteCustomInstruction(enhancementType) {
         const customInstructions = result[STORAGE_CUSTOM_INSTRUCTIONS] || {};
         delete customInstructions[enhancementType];
         await chrome.storage.local.set({ [STORAGE_CUSTOM_INSTRUCTIONS]: customInstructions });
+        
+        // Also clear active style
+        const activeResult = await chrome.storage.local.get(STORAGE_ACTIVE_STYLE);
+        const activeStyles = activeResult[STORAGE_ACTIVE_STYLE] || {};
+        delete activeStyles[enhancementType];
+        await chrome.storage.local.set({ [STORAGE_ACTIVE_STYLE]: activeStyles });
     } catch (error) {
         console.error('[Prompt Architect] Error deleting custom instruction:', error);
         throw error;
+    }
+}
+
+/**
+ * Saves a named custom style for an enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @param {string} styleName - The name of the custom style
+ * @param {string} instruction - The custom instruction text
+ * @returns {Promise<void>}
+ */
+async function saveNamedCustomStyle(enhancementType, styleName, instruction) {
+    // Validate inputs
+    if (!enhancementType || !styleName || !instruction) {
+        throw new Error('Missing required parameters: enhancementType, styleName, or instruction');
+    }
+    
+    if (typeof styleName !== 'string' || styleName.trim().length === 0) {
+        throw new Error('Style name must be a non-empty string');
+    }
+    
+    if (typeof instruction !== 'string' || instruction.trim().length === 0) {
+        throw new Error('Instruction must be a non-empty string');
+    }
+    
+    try {
+        const result = await chrome.storage.local.get(STORAGE_NAMED_CUSTOM_STYLES);
+        const namedStyles = result[STORAGE_NAMED_CUSTOM_STYLES] || {};
+        
+        if (!namedStyles[enhancementType]) {
+            namedStyles[enhancementType] = {};
+        }
+        
+        const wasEdit = !!namedStyles[enhancementType][styleName];
+        namedStyles[enhancementType][styleName] = instruction.trim();
+        
+        await chrome.storage.local.set({ [STORAGE_NAMED_CUSTOM_STYLES]: namedStyles });
+        
+        return { wasEdit };
+    } catch (error) {
+        console.error('[Prompt Architect] Error saving named custom style:', error);
+        throw error;
+    }
+}
+
+/**
+ * Gets all named custom styles for an enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @returns {Promise<Object>} Object with style names and instructions
+ */
+async function getNamedCustomStyles(enhancementType) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_NAMED_CUSTOM_STYLES);
+        const namedStyles = result[STORAGE_NAMED_CUSTOM_STYLES] || {};
+        return namedStyles[enhancementType] || {};
+    } catch (error) {
+        console.error('[Prompt Architect] Error retrieving named custom styles:', error);
+        return {};
+    }
+}
+
+/**
+ * Deletes a named custom style
+ * @param {string} enhancementType - The enhancement type key
+ * @param {string} styleName - The name of the style to delete
+ * @returns {Promise<void>}
+ */
+async function deleteNamedCustomStyle(enhancementType, styleName) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_NAMED_CUSTOM_STYLES);
+        const namedStyles = result[STORAGE_NAMED_CUSTOM_STYLES] || {};
+        
+        if (namedStyles[enhancementType]) {
+            delete namedStyles[enhancementType][styleName];
+            await chrome.storage.local.set({ [STORAGE_NAMED_CUSTOM_STYLES]: namedStyles });
+        }
+        
+        // If this was the active style, clear it
+        const activeResult = await chrome.storage.local.get(STORAGE_ACTIVE_STYLE);
+        const activeStyles = activeResult[STORAGE_ACTIVE_STYLE] || {};
+        if (activeStyles[enhancementType] === `custom:${styleName}`) {
+            delete activeStyles[enhancementType];
+            await chrome.storage.local.set({ [STORAGE_ACTIVE_STYLE]: activeStyles });
+        }
+    } catch (error) {
+        console.error('[Prompt Architect] Error deleting named custom style:', error);
+        throw error;
+    }
+}
+
+/**
+ * Sets the active style for an enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @param {string} styleKey - The style key (e.g., "default", "template:concise", "custom:My Style")
+ * @returns {Promise<void>}
+ */
+async function setActiveStyle(enhancementType, styleKey) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_ACTIVE_STYLE);
+        const activeStyles = result[STORAGE_ACTIVE_STYLE] || {};
+        activeStyles[enhancementType] = styleKey;
+        await chrome.storage.local.set({ [STORAGE_ACTIVE_STYLE]: activeStyles });
+    } catch (error) {
+        console.error('[Prompt Architect] Error setting active style:', error);
+        throw error;
+    }
+}
+
+/**
+ * Gets the active style for an enhancement type
+ * @param {string} enhancementType - The enhancement type key
+ * @returns {Promise<string|null>} The active style key or null
+ */
+async function getActiveStyle(enhancementType) {
+    try {
+        const result = await chrome.storage.local.get(STORAGE_ACTIVE_STYLE);
+        const activeStyles = result[STORAGE_ACTIVE_STYLE] || {};
+        return activeStyles[enhancementType] || null;
+    } catch (error) {
+        console.error('[Prompt Architect] Error getting active style:', error);
+        return null;
     }
 }
 
@@ -438,16 +586,18 @@ const getApiKey = (provider = 'gemini') => {
  */
 const extractImprovedPrompt = (data, provider = 'gemini') => {
     try {
+        // Check for error structure first
         if (data?.error) {
-            const errorMsg = data.error.message || 'Unknown error';
-            if (errorMsg.includes('API_KEY') || errorMsg.includes('key')) {
+            const errorMsg = (data.error.message || data.error || 'Unknown error').toString().toLowerCase();
+            debug.warn('API returned error:', errorMsg);
+            if (errorMsg.includes('api_key') || errorMsg.includes('key') || errorMsg.includes('authentication')) {
                 return "Error: Invalid API key. Check your key in the Setup tab.";
-            } else if (errorMsg.includes('quota') || errorMsg.includes('limit')) {
+            } else if (errorMsg.includes('quota') || errorMsg.includes('limit') || errorMsg.includes('429') || errorMsg.includes('rate')) {
                 return "Error: API quota exceeded. Try again later or check your API limits.";
-            } else if (errorMsg.includes('safety') || errorMsg.includes('blocked')) {
+            } else if (errorMsg.includes('safety') || errorMsg.includes('blocked') || errorMsg.includes('content policy')) {
                 return "Error: Content was blocked. Try rephrasing your prompt.";
             }
-            return `Error: ${errorMsg}`;
+            return `Error: ${data.error.message || data.error || 'Unknown error'}`;
         }
         
         if (provider === 'gemini') {
@@ -532,15 +682,19 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
 async function executeEnhancement(enhancementType, userText, provider = 'gemini') {
     const selectedProvider = provider || 'gemini';
     
-    // Check cache first
-    const cached = getCachedEnhancement(userText, enhancementType, selectedProvider);
+    // Get active style key first (needed for cache key)
+    const activeStyleKey = await getActiveStyle(enhancementType);
+    const styleKeyForCache = activeStyleKey || 'default';
+    
+    // Check cache first (now includes style in key)
+    const cached = getCachedEnhancement(userText, enhancementType, selectedProvider, styleKeyForCache);
     if (cached) {
         debug.log('Returning cached result');
         return cached;
     }
     
-    // Check for duplicate pending request
-    const requestKey = `${userText}-${enhancementType}-${selectedProvider}`;
+    // Check for duplicate pending request (now includes style in key)
+    const requestKey = `${userText}-${enhancementType}-${selectedProvider}-${styleKeyForCache}`;
     if (pendingRequests.has(requestKey)) {
         debug.log('Duplicate request detected, returning existing promise');
         return pendingRequests.get(requestKey);
@@ -561,8 +715,29 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 );
             }
             
-            // Check for custom instruction first, then fall back to default
-            let systemInstruction = await getCustomInstruction(enhancementType);
+            // Check for active style first, then fall back to legacy custom instruction, then default
+            let systemInstruction = null;
+            
+            if (activeStyleKey) {
+                if (activeStyleKey === 'default') {
+                    systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+                } else if (activeStyleKey.startsWith('template:')) {
+                    const templateKey = activeStyleKey.replace('template:', '');
+                    const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
+                    systemInstruction = templates[templateKey] || SYSTEM_INSTRUCTIONS[enhancementType];
+                } else if (activeStyleKey.startsWith('custom:')) {
+                    const styleName = activeStyleKey.replace('custom:', '');
+                    const namedStyles = await getNamedCustomStyles(enhancementType);
+                    systemInstruction = namedStyles[styleName] || null;
+                }
+            }
+            
+            // Fallback to legacy custom instruction
+            if (!systemInstruction) {
+                systemInstruction = await getCustomInstruction(enhancementType);
+            }
+            
+            // Final fallback to default
             if (!systemInstruction) {
                 systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
             }
@@ -669,9 +844,9 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             const data = await response.json();
             const improvedPrompt = extractImprovedPrompt(data, selectedProvider);
             
-            // Cache successful results
+            // Cache successful results (now includes style in key)
             if (!improvedPrompt.startsWith('Error:')) {
-                cacheEnhancement(userText, enhancementType, selectedProvider, improvedPrompt);
+                cacheEnhancement(userText, enhancementType, selectedProvider, improvedPrompt, styleKeyForCache);
                 
                 // Save to history
                 saveToHistory(userText, improvedPrompt, enhancementType, selectedProvider);
@@ -701,13 +876,291 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
     return enhancementPromise;
 }
 
+/**
+ * Executes a question-answering request (Ask feature)
+ * @param {string} question - The user's question
+ * @param {string} provider - The API provider ('gemini', 'openai', 'anthropic')
+ * @returns {Promise<string>} The answer text or an error message
+ */
+async function executeAskQuestion(question, provider = 'gemini') {
+    const selectedProvider = provider || 'gemini';
+    
+    // Check cache first (questions can be cached too)
+    const cached = getCachedEnhancement(question, 'ASK_QUESTION', selectedProvider);
+    if (cached) {
+        debug.log('Returning cached answer');
+        return cached;
+    }
+    
+    // Check for duplicate pending request
+    const requestKey = `${question}-ASK_QUESTION-${selectedProvider}`;
+    if (pendingRequests.has(requestKey)) {
+        debug.log('Duplicate question request detected, returning existing promise');
+        return pendingRequests.get(requestKey);
+    }
+    
+    // Create the question-answering promise
+    const questionPromise = (async () => {
+        try {
+            const apiKey = await getApiKey(selectedProvider);
+            if (!apiKey) {
+                const providerName = selectedProvider === 'gemini' ? 'Google AI' : 
+                                    selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic';
+                throw new EnhancementError(
+                    ERROR_MESSAGES.API_KEY_MISSING,
+                    'API_KEY_MISSING',
+                    true,
+                    `${providerName} API Key not found. Please set your key in the Setup tab.`
+                );
+            }
+            
+            // Use ASK_QUESTION system instruction
+            const systemInstruction = SYSTEM_INSTRUCTIONS.ASK_QUESTION;
+            
+            // Get provider configuration
+            const config = API_CONFIGS[selectedProvider];
+            if (!config) {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
+                    'UNKNOWN_PROVIDER',
+                    false,
+                    `Unsupported provider: ${selectedProvider}`
+                );
+            }
+            
+            // Build request body for Ask (different format than enhancement)
+            let requestBody;
+            if (selectedProvider === 'gemini') {
+                requestBody = JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `${systemInstruction}\n\nQuestion: ${question}\n\nAnswer:`
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 2000,
+                        topP: 0.9,
+                    }
+                });
+            } else if (selectedProvider === 'openai') {
+                requestBody = JSON.stringify({
+                    model: API_CONFIGS.openai.model,
+                    messages: [
+                        { role: 'system', content: systemInstruction },
+                        { role: 'user', content: question }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 2000
+                });
+            } else if (selectedProvider === 'anthropic') {
+                requestBody = JSON.stringify({
+                    model: API_CONFIGS.anthropic.model,
+                    max_tokens: 2000,
+                    system: systemInstruction,
+                    messages: [
+                        { role: 'user', content: question }
+                    ]
+                });
+            } else {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
+                    'UNSUPPORTED_PROVIDER',
+                    false,
+                    `Unsupported provider: ${selectedProvider}`
+                );
+            }
+            
+            // Build API URL and headers
+            let fullApiUrl;
+            let requestHeaders = { 'Content-Type': 'application/json' };
+            
+            if (selectedProvider === 'gemini') {
+                fullApiUrl = `${config.baseUrl}${config.model}${config.action}?key=${apiKey}`;
+            } else if (selectedProvider === 'openai') {
+                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
+                requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+            } else if (selectedProvider === 'anthropic') {
+                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
+                requestHeaders['x-api-key'] = apiKey;
+                requestHeaders['anthropic-version'] = '2023-06-01';
+            } else {
+                throw new EnhancementError(
+                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
+                    'UNSUPPORTED_PROVIDER',
+                    false,
+                    `Unsupported provider: ${selectedProvider}`
+                );
+            }
+            
+            // Apply rate limiting
+            await apiRateLimiter.waitIfNeeded();
+            
+            // Make API request
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            
+            try {
+                const response = await fetch(fullApiUrl, {
+                    method: 'POST',
+                    headers: requestHeaders,
+                    body: requestBody,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('[Prompt Architect] Ask API error response:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorData: errorData
+                    });
+                    const errorMessage = errorData?.error?.message || errorData?.message || `Connection failed (${response.status}).`;
+                    const error = new Error(errorMessage);
+                    throw getUserFriendlyError(error, selectedProvider);
+                }
+                
+                const data = await response.json();
+                console.log('[Prompt Architect] Ask API response data:', data);
+                const answer = extractImprovedPrompt(data, selectedProvider);
+                console.log('[Prompt Architect] Extracted answer (first 100 chars):', answer.substring(0, 100));
+                
+                // Cache successful results
+                if (!answer.startsWith('Error:')) {
+                    cacheEnhancement(question, 'ASK_QUESTION', selectedProvider, answer, 'ask');
+                    
+                    // Save to history (questions history)
+                    saveToHistory(question, answer, 'ASK_QUESTION', selectedProvider);
+                }
+                
+                return answer;
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                console.error('[Prompt Architect] Fetch error in executeAskQuestion:', fetchError);
+                if (fetchError.name === 'AbortError') {
+                    throw new EnhancementError(
+                        ERROR_MESSAGES.TIMEOUT,
+                        'TIMEOUT',
+                        true,
+                        ERROR_MESSAGES.TIMEOUT
+                    );
+                }
+                throw fetchError;
+            }
+        } catch (error) {
+            console.error("[Prompt Architect] Error in executeAskQuestion:", error);
+            
+            if (error instanceof EnhancementError) {
+                return error.userMessage;
+            }
+            
+            const friendlyError = getUserFriendlyError(error, selectedProvider);
+            return `Error: ${friendlyError.userMessage}`;
+        } finally {
+            // Remove from pending requests
+            pendingRequests.delete(requestKey);
+        }
+    })();
+    
+    // Store pending request
+    pendingRequests.set(requestKey, questionPromise);
+    
+    return questionPromise;
+}
+
 // --- Message Listener (Communication from content.js) ---
 if (typeof chrome !== 'undefined' && chrome.runtime) {
     // Handle template and custom instruction requests
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        // Log for debugging
+        debug.log('Received message:', request.action);
+        
         if (request.action === 'getTemplates') {
-            const templates = getTemplatesForType(request.enhancementType);
-            sendResponse({ success: true, templates });
+            getTemplatesForType(request.enhancementType)
+                .then(templates => {
+                    sendResponse({ success: true, templates });
+                })
+                .catch(error => {
+                    console.error('[Prompt Architect] Error in getTemplates:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+            return true; // Keep channel open for async response
+        }
+        
+        if (request.action === 'saveNamedCustomStyle') {
+            // Validate request
+            if (!request.enhancementType || !request.styleName || !request.instruction) {
+                const errorMsg = 'Missing required fields: enhancementType, styleName, or instruction';
+                console.error('[Prompt Architect]', errorMsg, request);
+                sendResponse({ 
+                    success: false, 
+                    error: errorMsg
+                });
+                return true;
+            }
+            
+            debug.log('Saving named custom style:', {
+                enhancementType: request.enhancementType,
+                styleName: request.styleName,
+                instructionLength: request.instruction.length
+            });
+            
+            saveNamedCustomStyle(request.enhancementType, request.styleName, request.instruction)
+                .then(result => {
+                    debug.log('Style saved successfully:', result);
+                    try {
+                        sendResponse({ success: true, ...(result || {}) });
+                    } catch (e) {
+                        console.error('[Prompt Architect] Error sending response:', e);
+                        // Try to send error response
+                        try {
+                            sendResponse({ success: false, error: 'Failed to send response' });
+                        } catch (e2) {
+                            console.error('[Prompt Architect] Failed to send error response:', e2);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('[Prompt Architect] Error saving named custom style:', error);
+                    try {
+                        sendResponse({ 
+                            success: false, 
+                            error: error?.message || 'Unknown error saving style' 
+                        });
+                    } catch (e) {
+                        console.error('[Prompt Architect] Error sending error response:', e);
+                    }
+                });
+            return true; // Keep channel open for async response
+        }
+        
+        if (request.action === 'getNamedCustomStyles') {
+            getNamedCustomStyles(request.enhancementType)
+                .then(styles => sendResponse({ success: true, styles }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+        
+        if (request.action === 'deleteNamedCustomStyle') {
+            deleteNamedCustomStyle(request.enhancementType, request.styleName)
+                .then(() => sendResponse({ success: true }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+        
+        if (request.action === 'setActiveStyle') {
+            setActiveStyle(request.enhancementType, request.styleKey)
+                .then(() => sendResponse({ success: true }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+        
+        if (request.action === 'getActiveStyle') {
+            getActiveStyle(request.enhancementType)
+                .then(styleKey => sendResponse({ success: true, styleKey }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
             return true;
         }
         
@@ -745,6 +1198,22 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
             }).catch(error => {
                 debug.error("Error during enhancement processing:", error);
                 sendResponse({ enhancedPrompt: `Error: Processing failed in background. (${error.message || 'Unknown error'})` });
+            });
+
+            // Return true to indicate that we will send an asynchronous response
+            return true;
+        }
+        
+        if (request.action === 'askQuestion') {
+            const provider = request.provider || 'gemini';
+            let promise = executeAskQuestion(request.question, provider);
+
+            // Handle the promise result and send back
+            promise.then(result => {
+                sendResponse({ answer: result });
+            }).catch(error => {
+                debug.error("Error during question processing:", error);
+                sendResponse({ answer: `Error: Processing failed in background. (${error.message || 'Unknown error'})` });
             });
 
             // Return true to indicate that we will send an asynchronous response

@@ -917,6 +917,39 @@
                 transform: translateY(0);
             }
         }
+        
+        /* Saved Style Item */
+        .saved-style-item {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        
+        .saved-style-item:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: var(--shadow-sm);
+            border-color: var(--primary-blue-light);
+        }
+        
+        .saved-style-item-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            letter-spacing: -0.01em;
+        }
+        
+        .saved-style-item-preview {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            max-height: 32px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     </style>
 </head>
 <body>
@@ -928,9 +961,9 @@
         <!-- Tab Navigation -->
         <div class="tabs">
             <button class="tab-button active" data-tab="enhance">Enhance</button>
+            <button class="tab-button" data-tab="ask">Ask</button>
             <button class="tab-button" data-tab="recent">Recent</button>
             <button class="tab-button" data-tab="setup">Setup</button>
-            <button class="tab-button" data-tab="advanced">Advanced</button>
         </div>
 
         <!-- Enhance Tab -->
@@ -959,6 +992,24 @@
                     </button>
                 </div>
 
+                <!-- Style Preset Selector (Compact) -->
+                <div style="margin-bottom: var(--spacing-lg);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); letter-spacing: -0.01em;">
+                            Style
+                        </label>
+                        <a href="#" id="style-settings-link" style="font-size: 10px; color: var(--text-tertiary); text-decoration: none; transition: color 0.2s;">Customize</a>
+                    </div>
+                    <select id="enhance-style-selector" class="premium-input" style="cursor: pointer; font-size: 13px; padding: 8px 12px;">
+                        <option value="default">Default</option>
+                        <option value="loading">Loading styles...</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <div id="enhance-style-status" class="status-indicator" style="display: none; margin-top: 4px;">
+                        <span id="enhance-style-status-text"></span>
+                    </div>
+                </div>
+
                 <button id="enhance-button" class="premium-button">
                     <span id="enhance-button-text">Enhance Prompt</span>
                     <div id="enhance-spinner" class="loading-spinner"></div>
@@ -972,6 +1023,47 @@
                         <button class="copy-button" id="copy-button">Copy</button>
                     </div>
                     <div id="result-text" class="result-text"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Ask Tab -->
+        <div id="ask-section" class="setup-section">
+            <div class="glass-card">
+                <h2 class="section-title">Ask a Question</h2>
+                <p class="section-subtitle">Get direct answers to your questions</p>
+                
+                <textarea 
+                    id="ask-input" 
+                    class="premium-textarea" 
+                    placeholder="What would you like to know?"
+                    rows="6"
+                ></textarea>
+
+                <!-- Enhance Question Toggle -->
+                <div class="toggle-card" style="margin-bottom: var(--spacing-lg);">
+                    <label>
+                        <input type="checkbox" id="enhance-question-toggle">
+                        <div class="toggle-card-content">
+                            <div class="toggle-card-title">Enhance question first</div>
+                            <div class="toggle-card-description">Improve your question before asking for a better answer</div>
+                        </div>
+                    </label>
+                </div>
+
+                <button id="ask-button" class="premium-button">
+                    <span id="ask-button-text">Ask Question</span>
+                    <div id="ask-spinner" class="loading-spinner"></div>
+                </button>
+
+                <div id="ask-status-message" class="status-message"></div>
+
+                <div id="ask-result-container" class="result-container">
+                    <div class="result-header">
+                        <h3 class="result-title">Answer</h3>
+                        <button class="copy-button" id="ask-copy-button">Copy</button>
+                    </div>
+                    <div id="ask-result-text" class="result-text"></div>
                 </div>
             </div>
         </div>
@@ -1055,10 +1147,9 @@
                     </button>
                 </div>
             </div>
-        </div>
-
-        <!-- Advanced Settings Section -->
-        <div id="advanced-section" class="setup-section">
+            
+            <!-- Advanced Settings Section (merged into Setup) -->
+            <div id="advanced-section" style="margin-top: var(--spacing-2xl); padding-top: var(--spacing-2xl); border-top: 1px solid var(--border-subtle);">
             <div class="glass-card">
                 <div class="section-header">
                     <div class="section-header-icon">⚙️</div>
@@ -1083,10 +1174,17 @@
                     <div class="section-header">
                         <div class="section-header-icon small">✏️</div>
                         <div class="section-header-content">
-                            <h3 class="section-title" style="font-size: 16px;">Enhancement Style</h3>
-                            <p class="section-subtitle">Choose how prompts are enhanced</p>
+                            <h3 class="section-title" style="font-size: 16px;">Custom Instructions</h3>
+                            <p class="section-subtitle">Write custom enhancement instructions for each mode</p>
                         </div>
                     </div>
+                </div>
+
+                <div class="info-box">
+                    <p>
+                        <strong>How it works:</strong><br>
+                        Custom instructions override the default style presets. Set different instructions for Text, Code, Image, and Video modes.
+                    </p>
                 </div>
 
                 <div class="form-group">
@@ -1100,32 +1198,55 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Style Preset</label>
-                    <select id="instruction-source-selector" class="premium-input" style="cursor: pointer;">
-                        <option value="default">Default (Recommended)</option>
-                        <option value="loading">Loading styles...</option>
-                        <option value="custom">Custom</option>
-                    </select>
-                    <div id="style-status" class="status-indicator" style="display: none;">
-                        <span id="style-status-text"></span>
+                    <label class="form-label">Style Name</label>
+                    <input 
+                        type="text" 
+                        id="custom-style-name-input" 
+                        class="premium-input" 
+                        placeholder="e.g., Academic Writing, Creative, Technical..."
+                        maxlength="50"
+                    />
+                    <div class="help-text" style="margin-top: 4px;">
+                        Give your custom style a memorable name
                     </div>
                 </div>
 
-                <div id="custom-instruction-container" class="form-group" style="display: none;">
-                    <label class="form-label">Write Your Style</label>
+                <div class="form-group">
+                    <label class="form-label">Custom Instruction</label>
                     <textarea 
                         id="custom-instruction-input" 
                         class="premium-textarea" 
-                        placeholder="Describe how you want prompts to be enhanced..."
+                        placeholder="Describe how you want prompts to be enhanced for this mode..."
                         rows="6"
                     ></textarea>
+                    <div class="help-text" style="margin-top: 8px;">
+                        Write your custom enhancement instruction. This will be saved as a reusable style.
+                    </div>
                 </div>
 
-                <div id="reset-instruction-container" style="display: none;">
-                    <button id="reset-instruction-button" class="copy-button" style="width: 100%; padding: 10px; font-size: 13px;">
-                        Reset to Default
+                <div style="display: flex; gap: var(--spacing-sm);">
+                    <button id="save-instruction-button" class="premium-button" style="flex: 1;">
+                        <span class="button-with-icon">
+                            <span>💾</span>
+                            <span>Save Style</span>
+                        </span>
+                    </button>
+                    <button id="reset-instruction-button" class="copy-button" style="flex: 1; padding: 10px; font-size: 13px; display: none;">
+                        Delete
                     </button>
                 </div>
+                
+                <!-- Saved Custom Styles List -->
+                <div id="saved-styles-container" class="form-group" style="margin-top: var(--spacing-xl); padding-top: var(--spacing-xl); border-top: 1px solid var(--border-subtle);">
+                    <label class="form-label">Your Saved Styles</label>
+                    <div id="saved-styles-list" style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
+                        <!-- Saved styles will be inserted here -->
+                    </div>
+                    <div id="saved-styles-empty" class="empty-state" style="padding: 20px; display: none;">
+                        <p class="empty-state-subtitle" style="margin: 0;">No custom styles saved yet</p>
+                    </div>
+                </div>
+            </div>
             </div>
         </div>
     </div>
