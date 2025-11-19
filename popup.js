@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Mode Selection
    */
   let selectedMode = 'TEXT_ENHANCEMENT';
-  let userManuallySelectedMode = false; // Track if user manually selected a mode
+  let userManuallySelectedMode = false; // Track if user manually selected a mode (persists until input cleared or new manual selection)
   let autoDetectionTimeout = null; // For debouncing auto-detection
   
   // Load saved mode on popup open
@@ -396,7 +396,11 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {boolean} isAutoDetected - Whether this was auto-detected (true) or manual (false)
    */
   function updateSelectedMode(mode, isAutoDetected = false) {
-    modeOptions.forEach(opt => opt.classList.remove('active'));
+    // Remove active and auto-detected classes from all options
+    modeOptions.forEach(opt => {
+      opt.classList.remove('active', 'auto-detected');
+    });
+    
     const targetOption = Array.from(modeOptions).find(opt => opt.dataset.mode === mode);
     if (targetOption) {
       targetOption.classList.add('active');
@@ -410,25 +414,27 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       
       if (isAutoDetected) {
-        // Briefly highlight the auto-detected mode
-        targetOption.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-        targetOption.style.transform = 'scale(1.05)';
+        // Add auto-detected class for visual "lighting up" effect
+        targetOption.classList.add('auto-detected');
+        
+        // Remove the auto-detected class after animation completes
         setTimeout(() => {
-          targetOption.style.transform = 'scale(1)';
-        }, 300);
+          targetOption.classList.remove('auto-detected');
+        }, 600);
       }
     }
   }
   
   modeOptions.forEach(option => {
     option.addEventListener('click', () => {
+      // User manually selected a mode - this is a permanent override until input is cleared
       userManuallySelectedMode = true;
+      // Remove any auto-detected styling when user manually selects
+      modeOptions.forEach(opt => opt.classList.remove('auto-detected'));
       updateSelectedMode(option.dataset.mode, false);
       
-      // Reset manual selection flag after a delay (so auto-detection can work again)
-      setTimeout(() => {
-        userManuallySelectedMode = false;
-      }, 5000); // 5 seconds
+      // Manual selection persists - no timeout reset
+      // Auto-detection will only resume when input is cleared
     });
   });
   
@@ -447,22 +453,21 @@ document.addEventListener('DOMContentLoaded', () => {
       // Only auto-detect if:
       // 1. There's text in the input
       // 2. User hasn't manually selected a mode recently
-      // 3. Text is long enough to make a meaningful detection (at least 10 chars)
-      if (text.length >= 10 && !userManuallySelectedMode) {
+      // 3. Text is long enough to make a meaningful detection (at least 5 chars for faster response)
+      if (text.length >= 5 && !userManuallySelectedMode) {
         autoDetectionTimeout = setTimeout(() => {
           const detectedMode = detectPromptType(text);
           
-          // Only update if detected mode is different from current
+          // Only update if detected mode is different from current (to show visual feedback)
           if (detectedMode !== selectedMode) {
             updateSelectedMode(detectedMode, true);
             console.log(`[Prompt Architect] Auto-detected mode: ${detectedMode}`);
           }
-        }, 500); // Debounce: wait 500ms after user stops typing
+        }, 300); // Reduced debounce: wait 300ms after user stops typing for faster response
       } else if (text.length === 0) {
-        // Reset to Text mode when input is cleared
-        if (!userManuallySelectedMode) {
-          updateSelectedMode('TEXT_ENHANCEMENT', false);
-        }
+        // Reset to Text mode and re-enable auto-detection when input is cleared
+        userManuallySelectedMode = false; // Clear manual override when input is cleared
+        updateSelectedMode('TEXT_ENHANCEMENT', false);
       }
     });
   }

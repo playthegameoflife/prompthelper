@@ -237,6 +237,36 @@
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
         }
 
+        .mode-option.auto-detected {
+            background: rgba(0, 122, 255, 0.15);
+            color: var(--primary-blue);
+            box-shadow: 
+                0 0 0 2px rgba(0, 122, 255, 0.2),
+                0 2px 8px rgba(0, 122, 255, 0.25);
+            animation: pulseGlow 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes pulseGlow {
+            0% {
+                box-shadow: 
+                    0 0 0 2px rgba(0, 122, 255, 0.2),
+                    0 2px 8px rgba(0, 122, 255, 0.15);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 
+                    0 0 0 3px rgba(0, 122, 255, 0.3),
+                    0 4px 16px rgba(0, 122, 255, 0.35);
+                transform: scale(1.02);
+            }
+            100% {
+                box-shadow: 
+                    0 0 0 2px rgba(0, 122, 255, 0.2),
+                    0 2px 8px rgba(0, 122, 255, 0.25);
+                transform: scale(1);
+            }
+        }
+
         /* Premium Button */
         .premium-button {
             width: 100%;
@@ -540,22 +570,22 @@
 
                 <div style="margin-top: 16px; margin-bottom: 12px;">
                     <p style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; font-weight: 500;">
-                        Intelligently detects as you type.
+                        Intelligently detects as you type. Click to change if needed. Also controls the "Improve" button in chatbots.
                     </p>
                 </div>
 
                 <div class="mode-selector">
                     <button class="mode-option active" data-mode="TEXT_ENHANCEMENT" title="Text generation and conversation">
-                        Text
+                        📝 Text
                     </button>
                     <button class="mode-option" data-mode="CODE_ENHANCEMENT" title="Code generation">
-                        Code
+                        💻 Code
                     </button>
                     <button class="mode-option" data-mode="IMAGE_ENHANCEMENT" title="Image generation (DALL-E, Midjourney)">
-                        Image
+                        🎨 Image
                     </button>
                     <button class="mode-option" data-mode="VIDEO_ENHANCEMENT" title="Video generation (Runway, Pika, Luma)">
-                        Video
+                        🎬 Video
                     </button>
                 </div>
 
