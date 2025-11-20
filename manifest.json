@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Prompt Architect",
-  "short_name": "PromptArch",
+  "name": "Prompt Helper",
+  "short_name": "PromptHelper",
   "version": "1.1",
   "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience.",
   "homepage_url": "https://github.com/yourusername/prompt-architect",

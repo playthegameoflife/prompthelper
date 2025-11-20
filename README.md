@@ -1,4 +1,4 @@
-# Prompt Architect
+# Prompt Helper
 
 Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience that works directly in your favorite AI chat interfaces.
 
@@ -48,7 +48,7 @@ Choose one of the supported providers:
 
 ### 2. Configure the Extension
 
-1. Click the Prompt Architect icon in your browser toolbar
+1. Click the Prompt Helper icon in your browser toolbar
 2. Navigate to the "Setup" tab
 3. Select your AI provider
 4. Enter your API key

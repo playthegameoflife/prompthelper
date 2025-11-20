@@ -898,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.innerHTML = `
       <div style="text-align: center; margin-bottom: 28px;">
         <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
-        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Prompt Architect</h2>
+        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Prompt Helper</h2>
         <p style="margin: 0; font-size: 15px; color: var(--text-secondary); line-height: 1.5;">
           Transform your prompts into powerful AI instructions
         </p>
@@ -1340,8 +1340,8 @@ document.addEventListener('DOMContentLoaded', () => {
         enhancementType: selectedMode,
         styleKey: source
       });
-      
-      if (source === 'default') {
+    
+    if (source === 'default') {
         // Show success
         if (enhanceStyleStatus && enhanceStyleStatusText) {
           enhanceStyleStatus.className = 'status-indicator style-status-success show';
