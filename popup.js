@@ -642,6 +642,22 @@ document.addEventListener('DOMContentLoaded', () => {
             provider: selectedProvider
           });
 
+          // Check for runtime errors
+          if (chrome.runtime.lastError) {
+            console.error('Runtime error:', chrome.runtime.lastError);
+            showStatus(`Error: ${chrome.runtime.lastError.message || 'Extension context invalidated. Please reload the extension.'}`, 'error');
+            if (resultContainer) resultContainer.classList.remove('show');
+            return;
+          }
+
+          // Check if response is null/undefined (background script didn't respond)
+          if (!response) {
+            console.error('No response from background script');
+            showStatus('Error: No response from background script. Please check if the extension is enabled and try again.', 'error');
+            if (resultContainer) resultContainer.classList.remove('show');
+            return;
+          }
+
           const enhancedPrompt = response?.enhancedPrompt || "Error: Failed to receive enhanced prompt.";
 
           if (enhancedPrompt.startsWith("Error:")) {
@@ -655,7 +671,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         } catch (error) {
           console.error('Enhancement error:', error);
-          showStatus('Error: Communication issue. Please try again.', 'error');
+          const errorMessage = error.message || 'Unknown error occurred';
+          showStatus(`Error: ${errorMessage}. Please check the console for details.`, 'error');
           if (resultContainer) resultContainer.classList.remove('show');
         } finally {
           // Re-enable button and hide loading
@@ -1193,28 +1210,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Update enhance tab style indicator
+  // Update enhance tab style indicator (only shows temporarily after selection)
   function updateEnhanceStyleIndicator() {
     if (!enhanceStyleStatus || !enhanceStyleStatusText || !enhanceStyleSelector) return;
     
-    const source = enhanceStyleSelector.value;
-    
-    if (source === 'default') {
-      enhanceStyleStatus.style.display = 'none';
-    } else if (source && source.startsWith('template:')) {
-      const templateKey = source.replace('template:', '');
-      const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
-      enhanceStyleStatus.style.display = 'flex';
-      enhanceStyleStatus.className = 'status-indicator style-status-success show';
-      enhanceStyleStatusText.textContent = `${templateName} style`;
-    } else if (source && source.startsWith('custom:')) {
-      const styleName = source.replace('custom:', '');
-      enhanceStyleStatus.style.display = 'flex';
-      enhanceStyleStatus.className = 'status-indicator style-status-success show';
-      enhanceStyleStatusText.textContent = `${styleName} style`;
-    } else {
-      enhanceStyleStatus.style.display = 'none';
-    }
+    // Don't show indicator permanently - it only appears temporarily when style is changed
+    // This function is kept for compatibility but doesn't show the indicator
+    enhanceStyleStatus.style.display = 'none';
   }
   
   // Update style selector dropdown with templates and named custom styles (for Enhance tab)
@@ -1354,26 +1356,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const templateKey = source.replace('template:', '');
         const templateName = templateKey.charAt(0).toUpperCase() + templateKey.slice(1).replace(/_/g, ' ');
         
-        // Show success
+        // Show success temporarily, then hide
         if (enhanceStyleStatus && enhanceStyleStatusText) {
           enhanceStyleStatus.className = 'status-indicator style-status-success show';
           enhanceStyleStatus.style.display = 'flex';
           enhanceStyleStatusText.textContent = `${templateName} style`;
           setTimeout(() => {
             enhanceStyleStatus.style.display = 'none';
+            // Don't call updateEnhanceStyleIndicator() to keep it hidden
           }, 2000);
         }
       } else if (source && source.startsWith('custom:')) {
         // Named custom style selected
         const styleName = source.replace('custom:', '');
         
-        // Show success
+        // Show success temporarily, then hide
         if (enhanceStyleStatus && enhanceStyleStatusText) {
           enhanceStyleStatus.className = 'status-indicator style-status-success show';
           enhanceStyleStatus.style.display = 'flex';
           enhanceStyleStatusText.textContent = `${styleName} style`;
           setTimeout(() => {
             enhanceStyleStatus.style.display = 'none';
+            // Don't call updateEnhanceStyleIndicator() to keep it hidden
           }, 2000);
         }
       }
@@ -1670,6 +1674,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Save ask result to storage
+  function saveEnhancedResult(result) {
+    if (result && !result.startsWith('Error:')) {
+      chrome.storage.local.set({ [STORAGE_ENHANCED_RESULT]: result });
+    }
+  }
+  
   function saveAskResult(result) {
     if (result && !result.startsWith('Error:')) {
       chrome.storage.local.set({ [STORAGE_ASK_RESULT]: result });
