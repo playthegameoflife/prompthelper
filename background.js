@@ -343,6 +343,24 @@ const INSTRUCTION_TEMPLATES = {
         'default': SYSTEM_INSTRUCTIONS.VIDEO_ENHANCEMENT,
         'concise': `You are an expert prompt engineer for video generation. Rewrite the user's text into a clear video prompt specifying: subject, style, camera movement, and duration. Keep it focused and actionable. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
         'cinematic': `You are an expert prompt engineer specializing in cinematic video generation. Rewrite the user's text into a film-grade video specification with detailed camera work, lighting, color grading, motion, transitions, and narrative flow. Focus on cinematic quality and storytelling. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'ad': `You are an expert prompt engineer specializing in commercial advertisement video generation. Rewrite the user's text into a structured, high-energy commercial video prompt following this format:
+
+Structure the output as a JSON object with these fields:
+- "title": A compelling, brand-focused title
+- "description": A cinematic, detailed scene description that captures the transformation and energy
+- "style": Comma-separated style descriptors (e.g., "cinematic, high-energy, futuristic, magical realism")
+- "camera": Camera movement and framing description (e.g., "starts ultra close, zooms out and orbits")
+- "lighting": Lighting transitions and color palette (e.g., "transitions from natural daylight to vibrant neon blues, reds, purples")
+- "environment": Setting description and how it evolves
+- "elements": Array of key visual elements in the scene
+- "motion": Description of continuous motion and transformations
+- "ending": Final frame composition
+- "text": "none" (unless text overlay is needed)
+- "keywords": Array of relevant keywords for the brand/product
+
+The prompt should be high-energy, visually stunning, and emphasize transformation, spectacle, and brand presence. Focus on creating a seamless, cinematic commercial experience with vibrant colors, dynamic motion, and futuristic elements.
+
+Crucially, your output MUST contain ONLY the improved prompt text itself (as a JSON object). Do not include any introduction, explanation, or conversational filler.`,
     },
 };
 
@@ -677,14 +695,16 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
  * @param {string} enhancementType - The key from SYSTEM_INSTRUCTIONS.
  * @param {string} userText - The text selected by the user.
  * @param {string} provider - The API provider ('gemini', 'openai', 'anthropic').
+ * @param {boolean} forceDefaultStyle - If true, always use default style (ignores activeStyle). Used by injected button.
  * @returns {Promise<string>} The enhanced prompt text or an error message.
  */
-async function executeEnhancement(enhancementType, userText, provider = 'gemini') {
+async function executeEnhancement(enhancementType, userText, provider = 'gemini', forceDefaultStyle = false) {
     const selectedProvider = provider || 'gemini';
     
     // Get active style key first (needed for cache key)
-    const activeStyleKey = await getActiveStyle(enhancementType);
-    const styleKeyForCache = activeStyleKey || 'default';
+    // If forceDefaultStyle is true, always use 'default' (injected button always uses default)
+    const activeStyleKey = forceDefaultStyle ? null : await getActiveStyle(enhancementType);
+    const styleKeyForCache = forceDefaultStyle ? 'default' : (activeStyleKey || 'default');
     
     // Check cache first (now includes style in key)
     const cached = getCachedEnhancement(userText, enhancementType, selectedProvider, styleKeyForCache);
@@ -716,28 +736,32 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             }
             
             // Check for active style first, then fall back to legacy custom instruction, then default
+            // If forceDefaultStyle is true, skip all style lookups and go straight to default
             let systemInstruction = null;
             
-            if (activeStyleKey) {
-                if (activeStyleKey === 'default') {
-                    systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
-                } else if (activeStyleKey.startsWith('template:')) {
-                    const templateKey = activeStyleKey.replace('template:', '');
-                    const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
-                    systemInstruction = templates[templateKey] || SYSTEM_INSTRUCTIONS[enhancementType];
-                } else if (activeStyleKey.startsWith('custom:')) {
-                    const styleName = activeStyleKey.replace('custom:', '');
-                    const namedStyles = await getNamedCustomStyles(enhancementType);
-                    systemInstruction = namedStyles[styleName] || null;
+            if (!forceDefaultStyle) {
+                // Popup mode: Use active style if set
+                if (activeStyleKey) {
+                    if (activeStyleKey === 'default') {
+                        systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+                    } else if (activeStyleKey.startsWith('template:')) {
+                        const templateKey = activeStyleKey.replace('template:', '');
+                        const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
+                        systemInstruction = templates[templateKey] || SYSTEM_INSTRUCTIONS[enhancementType];
+                    } else if (activeStyleKey.startsWith('custom:')) {
+                        const styleName = activeStyleKey.replace('custom:', '');
+                        const namedStyles = await getNamedCustomStyles(enhancementType);
+                        systemInstruction = namedStyles[styleName] || null;
+                    }
+                }
+                
+                // Fallback to legacy custom instruction
+                if (!systemInstruction) {
+                    systemInstruction = await getCustomInstruction(enhancementType);
                 }
             }
             
-            // Fallback to legacy custom instruction
-            if (!systemInstruction) {
-                systemInstruction = await getCustomInstruction(enhancementType);
-            }
-            
-            // Final fallback to default
+            // Final fallback to default (always used for injected button, or if no style found for popup)
             if (!systemInstruction) {
                 systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
             }
@@ -1190,7 +1214,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         if (request.action === 'enhancePrompt') {
             const enhancementType = request.enhancementType || 'TEXT_ENHANCEMENT';
             const provider = request.provider || 'gemini';
-            let promise = executeEnhancement(enhancementType, request.prompt, provider);
+            const forceDefaultStyle = request.forceDefaultStyle || false; // Injected button always uses default
+            let promise = executeEnhancement(enhancementType, request.prompt, provider, forceDefaultStyle);
 
             // Handle the promise result and send back to the content script
             promise.then(result => {

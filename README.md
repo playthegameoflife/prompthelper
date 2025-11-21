@@ -42,7 +42,7 @@ Intelligent prompt refinement for Text, Code, Image, and Video generation. A fri
 
 Choose one of the supported providers:
 
-- **Google Gemini**: Visit [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key) to get your free API key
+- **Google Gemini**: Visit [Google AI Studio](https://aistudio.google.com/api-keys) to get your free API key
 - **OpenAI**: Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
 - **Anthropic**: Get your API key from [Anthropic Console](https://console.anthropic.com/)
 

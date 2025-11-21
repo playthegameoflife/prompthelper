@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     anthropic: 'userAnthropicApiKey'
   };
   const STORAGE_PROVIDER = 'selectedProvider';
-  const STORAGE_ENHANCEMENT_MODE = 'selectedEnhancementMode';
+  const STORAGE_ENHANCEMENT_MODE = 'popupEnhancementMode'; // Separate from injected button mode
   const STORAGE_PROMPT_INPUT = 'savedPromptInput';
   const STORAGE_ASK_INPUT = 'savedAskInput';
   const STORAGE_ENHANCED_RESULT = 'savedEnhancedResult';
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gemini: {
       name: 'Google Gemini',
       placeholder: 'AIza... (paste your key here)',
-      helpUrl: 'https://ai.google.dev/gemini-api/docs/api-key',
+      helpUrl: 'https://aistudio.google.com/api-keys',
       keyPrefix: 'AIza'
     },
     openai: {
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyButton = document.getElementById('copy-button');
 
   // Verify all elements exist
-  if (!promptInput || !enhanceButton || !modeOptions.length) {
+  if (!promptInput || !enhanceButton) {
     console.error('[Prompt Architect] Critical elements missing in popup');
   }
 
@@ -524,16 +524,35 @@ document.addEventListener('DOMContentLoaded', () => {
           targetOption.classList.remove('auto-detected');
         }, 600);
       }
+    } else {
+      // Fallback if UI not found
+      selectedMode = mode;
+      chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: selectedMode }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error saving enhancement mode:', chrome.runtime.lastError);
+        }
+      });
     }
   }
   
+  // Handle manual mode selection
   modeOptions.forEach(option => {
-    option.addEventListener('click', () => {
+    option.addEventListener('click', async () => {
+      const newMode = option.dataset.mode;
+      
       // User manually selected a mode - this is a permanent override until input is cleared
       userManuallySelectedMode = true;
       // Remove any auto-detected styling when user manually selects
       modeOptions.forEach(opt => opt.classList.remove('auto-detected'));
-      updateSelectedMode(option.dataset.mode, false);
+      
+      // Update mode and save
+      updateSelectedMode(newMode, false);
+      selectedMode = newMode;
+      currentMode = newMode;
+      
+      // Load templates and style for the new mode
+      await loadTemplates(newMode);
+      await loadStyleForEnhanceTab(newMode);
       
       // Manual selection persists - no timeout reset
       // Auto-detection will only resume when input is cleared
@@ -560,10 +579,9 @@ document.addEventListener('DOMContentLoaded', () => {
         autoDetectionTimeout = setTimeout(() => {
           const detectedMode = detectPromptType(text);
           
-          // Only update if detected mode is different from current (to show visual feedback)
+          // Only update if detected mode is different from current
           if (detectedMode !== selectedMode) {
             updateSelectedMode(detectedMode, true);
-            console.log(`[Prompt Architect] Auto-detected mode: ${detectedMode}`);
           }
         }, 300); // Reduced debounce: wait 300ms after user stops typing for faster response
       } else if (text.length === 0) {
@@ -1390,22 +1408,6 @@ document.addEventListener('DOMContentLoaded', () => {
       isSaving = false;
     }
   }
-  
-  // Handle mode change in Enhance tab
-  modeOptions.forEach(option => {
-    option.addEventListener('click', async () => {
-      const newMode = option.dataset.mode;
-      selectedMode = newMode;
-      currentMode = newMode;
-      
-      // Save mode to storage
-      chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: newMode });
-      
-      // Load templates and style for the new mode
-      await loadTemplates(newMode);
-      await loadStyleForEnhanceTab(newMode);
-    });
-  });
   
   // Handle mode change in Advanced tab
   if (instructionModeSelector) {

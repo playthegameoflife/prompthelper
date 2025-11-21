@@ -788,21 +788,16 @@ function createEnhanceButton(inputElement, enhancerDiv) {
         parentForm.addEventListener('submit', preventFormSubmit, true);
     }
     
-    // Button click handler - use saved mode from storage
+    // Button click handler - always use auto-detection (independent from popup mode)
     button.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
         
-        // Get saved enhancement mode from storage
-        const result = await new Promise((resolve) => {
-            chrome.storage.local.get(['selectedEnhancementMode'], (result) => {
-                resolve(result);
-            });
-        });
-        
-        const selectedMode = result.selectedEnhancementMode || 'TEXT_ENHANCEMENT';
-        handleButtonClick(inputElement, selectedMode, enhancerDiv);
+        // Always start with TEXT_ENHANCEMENT - auto-detection will handle mode selection
+        // This keeps the injected button independent from popup mode selection
+        const defaultMode = 'TEXT_ENHANCEMENT';
+        handleButtonClick(inputElement, defaultMode, enhancerDiv);
         return false;
     };
     
@@ -2059,10 +2054,12 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
 
     try {
         // 2. Send message to the Service Worker (background.js)
+        // Injected button always uses default style (forceDefaultStyle: true)
         const response = await chrome.runtime.sendMessage({
             action: 'enhancePrompt',
             prompt: rawPrompt,
             enhancementType: finalEnhancementType,
+            forceDefaultStyle: true, // Injected button always uses default style
         });
         
         const improvedPrompt = response?.enhancedPrompt || "Error: Failed to receive improved prompt.";
@@ -2262,17 +2259,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             );
             
             if (inputElement) {
-                // Get saved enhancement mode
-                chrome.storage.local.get(['selectedEnhancementMode'], async (result) => {
-                    const selectedMode = result.selectedEnhancementMode || 'TEXT_ENHANCEMENT';
-                    const statusContainer = getCachedElement('buttonsContainer', () => 
-                        document.getElementById('prompt-architect-buttons-container')
-                    );
-                    
-                    if (statusContainer) {
-                        await handleButtonClick(inputElement, selectedMode, statusContainer);
-                    }
-                });
+                // Always use auto-detection (independent from popup mode)
+                const defaultMode = 'TEXT_ENHANCEMENT';
+                const statusContainer = getCachedElement('buttonsContainer', () => 
+                    document.getElementById('prompt-architect-buttons-container')
+                );
+                
+                if (statusContainer) {
+                    handleButtonClick(inputElement, defaultMode, statusContainer).catch(error => {
+                        console.error('[Prompt Architect] Error handling button click:', error);
+                    });
+                }
             }
         }
         

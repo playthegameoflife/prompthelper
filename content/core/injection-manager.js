@@ -241,23 +241,19 @@ export class InjectionManager {
             parentForm.addEventListener('submit', preventFormSubmit, true);
         }
         
-        // Button click handler
+        // Button click handler - always use auto-detection (independent from popup mode)
         button.onclick = async (event) => {
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
             
-            const result = await new Promise((resolve) => {
-                chrome.storage.local.get(['selectedEnhancementMode'], (result) => {
-                    resolve(result);
-                });
-            });
-            
-            const selectedMode = result.selectedEnhancementMode || 'TEXT_ENHANCEMENT';
+            // Always start with TEXT_ENHANCEMENT - auto-detection will handle mode selection
+            // This keeps the injected button independent from popup mode selection
+            const defaultMode = 'TEXT_ENHANCEMENT';
             
             // Import and call handleButtonClick
             const { handleButtonClick } = await import('../content.js');
-            handleButtonClick(inputElement, selectedMode, enhancerDiv);
+            handleButtonClick(inputElement, defaultMode, enhancerDiv);
             
             return false;
         };
