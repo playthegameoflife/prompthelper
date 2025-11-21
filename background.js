@@ -348,9 +348,9 @@ const INSTRUCTION_TEMPLATES = {
 Structure the output as a JSON object with these fields:
 - "title": A compelling, brand-focused title
 - "description": A cinematic, detailed scene description that captures the transformation and energy
-- "style": Comma-separated style descriptors (e.g., "cinematic, high-energy, futuristic, magical realism")
-- "camera": Camera movement and framing description (e.g., "starts ultra close, zooms out and orbits")
-- "lighting": Lighting transitions and color palette (e.g., "transitions from natural daylight to vibrant neon blues, reds, purples")
+- "style": Comma-separated style descriptors that match the user's intent and brand aesthetic
+- "camera": Camera movement and framing description
+- "lighting": Lighting transitions and color palette appropriate to the scene
 - "environment": Setting description and how it evolves
 - "elements": Array of key visual elements in the scene
 - "motion": Description of continuous motion and transformations
@@ -358,7 +358,7 @@ Structure the output as a JSON object with these fields:
 - "text": "none" (unless text overlay is needed)
 - "keywords": Array of relevant keywords for the brand/product
 
-The prompt should be high-energy, visually stunning, and emphasize transformation, spectacle, and brand presence. Focus on creating a seamless, cinematic commercial experience with vibrant colors, dynamic motion, and futuristic elements.
+The prompt should be high-energy, visually stunning, and emphasize transformation, spectacle, and brand presence. Focus on creating a seamless, cinematic commercial experience. Match the style, setting, and aesthetic to the user's input - do not impose specific themes like "futuristic" or "city" unless the user's prompt explicitly mentions them.
 
 Crucially, your output MUST contain ONLY the improved prompt text itself (as a JSON object). Do not include any introduction, explanation, or conversational filler.`,
     },
