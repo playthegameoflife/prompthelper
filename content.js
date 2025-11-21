@@ -1395,6 +1395,43 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
 }
 
 /**
+ * Checks if injected button is enabled by user preference
+ */
+async function isInjectButtonEnabled() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['injectButtonEnabled'], (result) => {
+            // Default to true for backward compatibility
+            resolve(result.injectButtonEnabled !== false);
+        });
+    });
+}
+
+/**
+ * Listen for storage changes to immediately update button visibility
+ */
+chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.injectButtonEnabled) {
+        const buttonEnabled = changes.injectButtonEnabled.newValue !== false;
+        const existingUI = document.getElementById('prompt-architect-buttons-container');
+        
+        if (!buttonEnabled) {
+            // Remove button if disabled
+            if (existingUI && document.body.contains(existingUI)) {
+                existingUI.remove();
+            }
+        } else {
+            // Re-inject button if enabled and input exists
+            const input = findPlatformSpecificInput();
+            if (input && (!existingUI || !document.body.contains(existingUI))) {
+                injectUI(input).catch(err => {
+                    // Silent injection failure
+                });
+            }
+        }
+    }
+});
+
+/**
  * Main injection function - routes to platform-specific handlers
  */
 async function injectUI(inputElement) {
@@ -1404,6 +1441,12 @@ async function injectUI(inputElement) {
     const enabled = await isPlatformEnabled();
     if (!enabled) {
         throw new Error('Platform not supported');
+    }
+    
+    // Check if user has enabled injected button
+    const buttonEnabled = await isInjectButtonEnabled();
+    if (!buttonEnabled) {
+        throw new Error('Injected button disabled by user');
     }
     
     // Route to platform-specific injection
@@ -2815,7 +2858,17 @@ function retryInjection() {
     }
 }
 
-function observeDOM() {
+async function observeDOM() {
+    // Check if button is enabled before attempting any injection
+    const buttonEnabled = await isInjectButtonEnabled();
+    if (!buttonEnabled) {
+        // Remove button if it exists
+        const existingUI = document.getElementById('prompt-architect-buttons-container');
+        if (existingUI && document.body.contains(existingUI)) {
+            existingUI.remove();
+        }
+        return; // Don't proceed with injection
+    }
     
     // Try immediate injection with platform-specific finder
     let input = findPlatformSpecificInput();
@@ -2840,9 +2893,21 @@ function observeDOM() {
         
         injectionDebounceTimer = setTimeout(() => {
             // Check if platform is enabled
-            isPlatformEnabled().then(enabled => {
+            isPlatformEnabled().then(async enabled => {
                 if (!enabled) {
                     // Remove UI if platform was disabled
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
+                    if (existingUI && document.body.contains(existingUI)) {
+                        existingUI.remove();
+                    }
+                    retryCount = 0;
+                    return;
+                }
+                
+                // Check if injected button is enabled by user preference
+                const buttonEnabled = await isInjectButtonEnabled();
+                if (!buttonEnabled) {
+                    // Remove UI if button was disabled
                     const existingUI = document.getElementById('prompt-architect-buttons-container');
                     if (existingUI && document.body.contains(existingUI)) {
                         existingUI.remove();
@@ -2906,7 +2971,18 @@ function observeDOM() {
             return;
         }
         
-        // Start the detection process immediately
+        // Check if button is enabled - remove existing button if disabled and don't initialize
+        (async () => {
+            const buttonEnabled = await isInjectButtonEnabled();
+            if (!buttonEnabled) {
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                if (existingUI && document.body.contains(existingUI)) {
+                    existingUI.remove();
+                }
+                return; // Don't initialize if button is disabled
+            }
+            
+            // Start the detection process immediately
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 try {
@@ -2925,7 +3001,18 @@ function observeDOM() {
         }
         
         // Also try after a short delay to catch late-loading pages
-        setTimeout(() => {
+        setTimeout(async () => {
+            // Check if button is enabled before attempting injection
+            const buttonEnabled = await isInjectButtonEnabled();
+            if (!buttonEnabled) {
+                // Remove button if it exists and preference is disabled
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                if (existingUI && document.body.contains(existingUI)) {
+                    existingUI.remove();
+                }
+                return;
+            }
+            
             const existingUI = document.getElementById('prompt-architect-buttons-container');
             if (!existingUI || !document.body.contains(existingUI)) {
                 const input = findPlatformSpecificInput();
@@ -2936,6 +3023,7 @@ function observeDOM() {
                 }
             }
         }, 2000);
+        })();
         
     } catch (error) {
         console.error('[Prompt Architect] Fatal error during initialization:', error);

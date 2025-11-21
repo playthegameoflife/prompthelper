@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_ENHANCED_RESULT = 'savedEnhancedResult';
   const STORAGE_ASK_RESULT = 'savedAskResult';
   const STORAGE_ENHANCE_QUESTION_TOGGLE = 'enhanceQuestionToggle';
+  const STORAGE_INJECT_BUTTON_ENABLED = 'injectButtonEnabled';
   
   // Provider configuration
   const PROVIDERS = {
@@ -297,11 +298,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   /**
-   * Shows/hides minimal API key notice in Enhance tab
+   * Shows/hides API key CTA and enhance button based on API key status
    */
   async function updateApiKeyNotice() {
-    const apiKeyNotice = document.getElementById('api-key-notice');
-    if (!apiKeyNotice) return;
+    const apiKeyCta = document.getElementById('api-key-cta');
+    const enhanceButton = document.getElementById('enhance-button');
+    if (!apiKeyCta || !enhanceButton) return;
     
     const hasKey = await new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], (result) => {
@@ -313,13 +315,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     if (hasKey) {
-      apiKeyNotice.style.display = 'none';
+      apiKeyCta.style.display = 'none';
     } else {
-      apiKeyNotice.style.display = 'block';
+      apiKeyCta.style.display = 'block';
     }
+    // Enhance button is always visible
+    enhanceButton.style.display = 'block';
   }
   
-  // Handle API key notice link (Apple-style)
+  // Handle setup CTA button click
+  const setupCtaButton = document.getElementById('setup-cta-button');
+  if (setupCtaButton) {
+    setupCtaButton.addEventListener('click', () => {
+      // Switch to setup tab
+      const setupTabButton = document.querySelector('[data-tab="setup"]');
+      if (setupTabButton) {
+        setupTabButton.click();
+      }
+    });
+  }
+  
+  // Handle API key notice link (legacy - may not exist)
   const apiKeyNoticeLink = document.getElementById('api-key-notice-link');
   if (apiKeyNoticeLink) {
     apiKeyNoticeLink.addEventListener('click', (e) => {
@@ -1636,7 +1652,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // AUTO-SEND TOGGLE
   // ============================================================================
   
+  const injectButtonToggle = document.getElementById('inject-button-toggle');
   const autoSendToggle = document.getElementById('auto-send-toggle');
+  
+  // Load inject button preference (default to true for backward compatibility)
+  if (injectButtonToggle) {
+    chrome.storage.local.get([STORAGE_INJECT_BUTTON_ENABLED], (result) => {
+      injectButtonToggle.checked = result[STORAGE_INJECT_BUTTON_ENABLED] !== false; // Default true
+    });
+    
+    // Save inject button preference
+    injectButtonToggle.addEventListener('change', (e) => {
+      chrome.storage.local.set({ [STORAGE_INJECT_BUTTON_ENABLED]: e.target.checked });
+    });
+  }
   
   // Load auto-send preference
   if (autoSendToggle) {
@@ -1896,3 +1925,4 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreSavedContent();
   updateApiKeyNotice();
 });
+
