@@ -692,7 +692,11 @@ function createEnhanceButton(inputElement, enhancerDiv) {
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'main-enhance-button';
-    button.title = 'Improve prompt with AI';
+    // Detect platform for keyboard shortcut hint
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    button.title = isMac 
+      ? 'Improve prompt with AI (Cmd+Shift+E)' 
+      : 'Improve prompt with AI (Ctrl+Shift+E)';
     
     // Create button content
     const buttonText = document.createElement('span');
@@ -721,23 +725,60 @@ function createEnhanceButton(inputElement, enhancerDiv) {
     button.style.setProperty('opacity', '1', 'important');
     button.style.setProperty('z-index', '1000000', 'important');
     button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
-    button.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    button.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
     button.style.borderRadius = design.borderRadius;
     
     // Store original colors for restoration
     button.dataset.originalColor = design.primary;
     button.dataset.originalHover = design.primaryHover;
     
-    // Hover effect
-    button.onmouseenter = () => {
-        button.style.background = design.primaryHover;
-        button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
-    };
-    
-    button.onmouseleave = () => {
-        button.style.background = design.primary;
-        button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
-    };
+    // Premium shadows and depth for ChatGPT
+    if (platform === 'chatgpt') {
+        // Multi-layer shadows for depth and premium feel
+        button.style.boxShadow = `
+            0 4px 14px rgba(0, 122, 255, 0.25),
+            0 2px 6px rgba(0, 122, 255, 0.15),
+            0 1px 2px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+        `;
+        
+        // Enhanced hover with even more depth
+        button.onmouseenter = () => {
+            button.style.transform = 'translateY(-1px)';
+            button.style.boxShadow = `
+                0 8px 24px rgba(0, 122, 255, 0.35),
+                0 4px 12px rgba(0, 122, 255, 0.2),
+                0 2px 4px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+            `;
+            button.style.background = design.primaryHover;
+        };
+        
+        button.onmouseleave = () => {
+            button.style.transform = 'translateY(0)';
+            button.style.boxShadow = `
+                0 4px 14px rgba(0, 122, 255, 0.25),
+                0 2px 6px rgba(0, 122, 255, 0.15),
+                0 1px 2px rgba(0, 0, 0, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+            `;
+            button.style.background = design.primary;
+        };
+    } else {
+        // Keep original hover for other platforms
+        button.onmouseenter = () => {
+            button.style.background = design.primaryHover;
+            button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
+        };
+        
+        button.onmouseleave = () => {
+            button.style.background = design.primary;
+            button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+        };
+    }
     
     // First-time discovery animation
     const hasSeenButton = sessionStorage.getItem('prompt-architect-seen');
@@ -2304,14 +2345,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (inputElement) {
                 // Always use auto-detection (independent from popup mode)
                 const defaultMode = 'TEXT_ENHANCEMENT';
-                const statusContainer = getCachedElement('buttonsContainer', () => 
-                    document.getElementById('prompt-architect-buttons-container')
-                );
-                
-                if (statusContainer) {
+                    const statusContainer = getCachedElement('buttonsContainer', () => 
+                        document.getElementById('prompt-architect-buttons-container')
+                    );
+                    
+                    if (statusContainer) {
                     handleButtonClick(inputElement, defaultMode, statusContainer).catch(error => {
                         console.error('[Prompt Architect] Error handling button click:', error);
-                    });
+                });
                 }
             }
         }
@@ -2980,9 +3021,9 @@ async function observeDOM() {
                     existingUI.remove();
                 }
                 return; // Don't initialize if button is disabled
-            }
-            
-            // Start the detection process immediately
+        }
+        
+        // Start the detection process immediately
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 try {
