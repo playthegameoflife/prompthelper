@@ -659,8 +659,8 @@ function getPlatformDesign(platform) {
             fontWeight: '600'
         },
         perplexity: {
-            primary: '#1a73e8', // Google blue (matching Gemini)
-            primaryHover: '#1557b0',
+            primary: '#32B9C6', // Teal/cyan - matching Perplexity brand
+            primaryHover: '#2AA5B0',
             borderRadius: '8px',
             height: '36px',
             fontSize: '14px',
@@ -1453,21 +1453,65 @@ async function isInjectButtonEnabled() {
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.injectButtonEnabled) {
         const buttonEnabled = changes.injectButtonEnabled.newValue !== false;
-        const existingUI = document.getElementById('prompt-architect-buttons-container');
         
         if (!buttonEnabled) {
-            // Remove button if disabled
-            if (existingUI && document.body.contains(existingUI)) {
-                existingUI.remove();
-            }
-        } else {
-            // Re-inject button if enabled and input exists
-            const input = findPlatformSpecificInput();
-            if (input && (!existingUI || !document.body.contains(existingUI))) {
-                injectUI(input).catch(err => {
-                    // Silent injection failure
+            // Aggressively remove all button-related UI
+            // Use requestAnimationFrame to ensure DOM is ready
+            requestAnimationFrame(() => {
+                // Remove container (this should remove everything inside)
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                if (existingUI) {
+                    existingUI.remove();
+                }
+                
+                // Also remove button directly if it exists separately
+                const button = document.getElementById('main-enhance-button');
+                if (button) {
+                    // Remove the button's parent container if it's a direct child
+                    const container = button.closest('#prompt-architect-buttons-container');
+                    if (container) {
+                        container.remove();
+                    } else if (button.parentElement) {
+                        // If no container, remove the button itself
+                        button.remove();
+                    }
+                }
+                
+                // Remove status area
+                const statusArea = document.getElementById('prompt-architect-status-area');
+                if (statusArea) {
+                    statusArea.remove();
+                }
+                
+                // Also search for any buttons with "Improve" text that might be ours
+                const allButtons = document.querySelectorAll('button');
+                allButtons.forEach(btn => {
+                    if (btn.id === 'main-enhance-button') {
+                        const parent = btn.parentElement;
+                        if (parent && parent.id === 'prompt-architect-buttons-container') {
+                            parent.remove();
+                        } else {
+                            btn.remove();
+                        }
+                    }
                 });
-            }
+            });
+        } else {
+            // Re-inject button if enabled, platform is enabled, and input exists
+            (async () => {
+                const platformEnabled = await isPlatformEnabled();
+                if (!platformEnabled) {
+                    return; // Don't inject if platform is disabled
+                }
+                
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                const input = findPlatformSpecificInput();
+                if (input && (!existingUI || !document.body.contains(existingUI))) {
+                    injectUI(input).catch(err => {
+                        // Silent injection failure
+                    });
+                }
+            })();
         }
     }
 });
@@ -2112,8 +2156,7 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
         const detectedType = detectPromptType(rawPrompt);
         if (detectedType !== 'TEXT_ENHANCEMENT') {
             finalEnhancementType = detectedType;
-            // Optionally show a brief indicator that mode was auto-detected
-            console.log(`[Prompt Architect] Auto-detected mode: ${detectedType}`);
+            // Mode auto-detected (logging removed for production)
         }
     }
 
@@ -2812,13 +2855,20 @@ function retryInjection() {
     
     
     const timeoutId = setTimeout(() => {
-        isPlatformEnabled().then(enabled => {
-            if (!enabled) {
+        Promise.all([isPlatformEnabled(), isInjectButtonEnabled()]).then(([platformEnabled, buttonEnabled]) => {
+            if (!platformEnabled || !buttonEnabled) {
                 if (retryMutationObserver) {
                     retryMutationObserver.disconnect();
                     retryMutationObserver = null;
                 }
                 retryCount = 0;
+                // Remove button if it exists but is disabled
+                if (!buttonEnabled) {
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
+                    if (existingUI && document.body.contains(existingUI)) {
+                        existingUI.remove();
+                    }
+                }
                 return;
             }
             
@@ -3021,49 +3071,49 @@ async function observeDOM() {
                     existingUI.remove();
                 }
                 return; // Don't initialize if button is disabled
-        }
-        
-        // Start the detection process immediately
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
+            }
+            
+            // Start the detection process immediately
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    try {
+                        observeDOM();
+                    } catch (error) {
+                        console.error('[Prompt Architect] Error in observeDOM after DOMContentLoaded:', error);
+                    }
+                });
+            } else {
+                // DOM already loaded
                 try {
                     observeDOM();
                 } catch (error) {
-                    console.error('[Prompt Architect] Error in observeDOM after DOMContentLoaded:', error);
+                    console.error('[Prompt Architect] Error in observeDOM (immediate):', error);
                 }
-            });
-        } else {
-            // DOM already loaded
-            try {
-                observeDOM();
-            } catch (error) {
-                console.error('[Prompt Architect] Error in observeDOM (immediate):', error);
-            }
-        }
-        
-        // Also try after a short delay to catch late-loading pages
-        setTimeout(async () => {
-            // Check if button is enabled before attempting injection
-            const buttonEnabled = await isInjectButtonEnabled();
-            if (!buttonEnabled) {
-                // Remove button if it exists and preference is disabled
-                const existingUI = document.getElementById('prompt-architect-buttons-container');
-                if (existingUI && document.body.contains(existingUI)) {
-                    existingUI.remove();
-                }
-                return;
             }
             
-            const existingUI = document.getElementById('prompt-architect-buttons-container');
-            if (!existingUI || !document.body.contains(existingUI)) {
-                const input = findPlatformSpecificInput();
-                if (input) {
-                    injectUI(input).catch(err => {
-                        // Silent delayed injection failure
-                    });
+            // Also try after a short delay to catch late-loading pages
+            setTimeout(async () => {
+                // Check if button is enabled before attempting injection
+                const buttonEnabled = await isInjectButtonEnabled();
+                if (!buttonEnabled) {
+                    // Remove button if it exists and preference is disabled
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
+                    if (existingUI && document.body.contains(existingUI)) {
+                        existingUI.remove();
+                    }
+                    return;
                 }
-            }
-        }, 2000);
+                
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                if (!existingUI || !document.body.contains(existingUI)) {
+                    const input = findPlatformSpecificInput();
+                    if (input) {
+                        injectUI(input).catch(err => {
+                            // Silent delayed injection failure
+                        });
+                    }
+                }
+            }, 2000);
         })();
         
     } catch (error) {
