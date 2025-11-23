@@ -1314,9 +1314,50 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div style="padding: 12px; background: rgba(0, 122, 255, 0.1); border-radius: 8px; margin-top: 12px;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 18px;">💡</span>
+            <span style="font-size: 18px;">✨</span>
             <p style="margin: 0; font-size: 12px; color: var(--text-primary); line-height: 1.5;">
               The button appears automatically when you visit these sites. Just type your prompt and click <strong>"Improve"</strong> before sending!
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Mode Switcher Feature -->
+      <div style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, rgba(0, 122, 255, 0.08) 0%, rgba(0, 122, 255, 0.04) 100%); border-radius: 12px; border: 2px solid rgba(0, 122, 255, 0.15);">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+          <span style="font-size: 24px;">🎯</span>
+          <p style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Switch Modes Instantly</p>
+        </div>
+        <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+          The <strong style="color: var(--primary-blue);">"Improve"</strong> button has a small mode icon next to it. <strong>Click the icon</strong> to cycle through different enhancement modes:
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;">
+          <div style="padding: 10px; background: white; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.1);">
+            <div style="font-size: 20px; margin-bottom: 4px;">📝</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Text</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Conversations & writing</div>
+          </div>
+          <div style="padding: 10px; background: white; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.1);">
+            <div style="font-size: 20px; margin-bottom: 4px;">💻</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Code</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Programming & scripts</div>
+          </div>
+          <div style="padding: 10px; background: white; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.1);">
+            <div style="font-size: 20px; margin-bottom: 4px;">🎨</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Image</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">DALL-E, Midjourney</div>
+          </div>
+          <div style="padding: 10px; background: white; border-radius: 8px; border: 1px solid rgba(0, 122, 255, 0.1);">
+            <div style="font-size: 20px; margin-bottom: 4px;">🎬</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Video</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Runway, Pika, Luma</div>
+          </div>
+        </div>
+        <div style="padding: 12px; background: rgba(0, 122, 255, 0.1); border-radius: 8px; border-left: 3px solid var(--primary-blue);">
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span style="font-size: 18px; line-height: 1.2;">💡</span>
+            <p style="margin: 0; font-size: 12px; color: var(--text-primary); line-height: 1.5;">
+              <strong>Tip:</strong> Each click on the mode icon cycles to the next mode. The icon shows your current selection (📝 → 💻 → 🎨 → 🎬 → 📝).
             </p>
           </div>
         </div>
@@ -1329,6 +1370,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <li>Get an API key from your AI provider (free options available)</li>
           <li>Enter it in the Setup tab</li>
           <li>Visit ChatGPT, Gemini, or Claude and look for the "Improve" button!</li>
+          <li><strong>Click the mode icon</strong> (📝/💻/🎨/🎬) to select the right enhancement mode</li>
         </ol>
       </div>
       
