@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Prompt Helper v1.1</title>
-    <!-- Version 1.1 - Premium UI with Enhance Tab -->
+    <title>Prompt Helper v1.5</title>
+    <!-- Version 1.5 - Premium UI with Enhance Tab -->
     <style>
         /* Premium Jony Ive-Inspired Design System */
         :root {
@@ -46,8 +46,10 @@
             background: linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 100%);
             width: 420px;
             min-height: 500px;
+            max-height: 600px;
             color: var(--text-primary);
             overflow-x: hidden;
+            overflow-y: auto;
         }
 
         .container {
@@ -55,6 +57,9 @@
             display: flex;
             flex-direction: column;
             gap: var(--spacing-xl);
+            max-height: 600px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         /* Header */
@@ -222,6 +227,153 @@
 
         .premium-textarea::placeholder {
             color: var(--text-tertiary);
+        }
+
+        /* Premium Select */
+        .premium-select {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23606067' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+
+        .premium-select:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            background-color: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 0 4px var(--primary-blue-light);
+            transform: translateY(-0.5px);
+        }
+
+        .premium-button-secondary {
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+        }
+
+        .premium-button-secondary:hover {
+            background: rgba(255, 255, 255, 1);
+            border-color: var(--primary-blue);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: var(--spacing-xl);
+        }
+
+        .modal-content {
+            background: var(--background-elevated);
+            backdrop-filter: blur(30px) saturate(180%);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-2xl);
+            max-width: 500px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            border: 0.5px solid var(--border-light);
+        }
+
+        .modal-header {
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-sm);
+            letter-spacing: -0.03em;
+        }
+
+        .modal-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+        }
+
+        .modal-actions button {
+            flex: 1;
+        }
+
+        /* Custom Style Item */
+        .custom-style-item {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+
+        .custom-style-item:hover {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: var(--primary-blue);
+        }
+
+        .custom-style-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .custom-style-mode {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .custom-style-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .custom-style-actions button {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: var(--radius-sm);
         }
 
         /* Mode Selector */
@@ -418,18 +570,52 @@
             transform: translateY(0) scale(0.98);
         }
 
+        .clear-button {
+            padding: 6px 10px;
+            background: rgba(60, 60, 67, 0.08);
+            border: 0.5px solid rgba(60, 60, 67, 0.12);
+            border-radius: var(--radius-sm);
+            font-size: 18px;
+            font-weight: 300;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            line-height: 1;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .clear-button:hover {
+            background: rgba(60, 60, 67, 0.12);
+            color: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .clear-button:active {
+            transform: scale(0.95);
+        }
+
         .result-text {
             background: rgba(255, 255, 255, 0.9);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-md);
             padding: 16px;
             font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            overflow-x: hidden;
             font-weight: 400;
             letter-spacing: -0.01em;
             line-height: 1.6;
             color: var(--text-primary);
             white-space: pre-wrap;
             word-wrap: break-word;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+            overscroll-behavior: contain;
             max-height: 300px;
             overflow-y: auto;
         }
@@ -1030,21 +1216,18 @@
                     </button>
                 </div>
 
-                <!-- Style Preset Selector (Compact) -->
-                <div style="margin-bottom: var(--spacing-lg);">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                        <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); letter-spacing: -0.01em;">
-                            Style
-                        </label>
-                        <a href="#" id="style-settings-link" style="font-size: 10px; color: var(--text-tertiary); text-decoration: none; transition: color 0.2s;">Customize</a>
-                    </div>
-                    <select id="enhance-style-selector" class="premium-input" style="cursor: pointer; font-size: 13px; padding: 8px 12px;">
-                        <option value="default">Default</option>
-                        <option value="loading">Loading styles...</option>
-                        <option value="custom">Custom</option>
-                    </select>
-                    <div id="enhance-style-status" class="status-indicator" style="display: none; margin-top: 4px;">
-                        <span id="enhance-style-status-text"></span>
+                <!-- Style Selector (hidden by default) -->
+                <div id="style-selector-container" class="form-group" style="margin-top: var(--spacing-lg); display: none;">
+                    <label class="form-label">Style</label>
+                    <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+                        <select id="style-selector" class="premium-select" style="flex: 1;">
+                            <option value="default">Default</option>
+                        </select>
+                        <button id="customize-style-button" class="premium-button-secondary" style="
+                            padding: 8px 16px;
+                            font-size: 13px;
+                            white-space: nowrap;
+                        ">Customize</button>
                     </div>
                 </div>
 
@@ -1218,83 +1401,66 @@
                         </div>
                     </label>
                 </div>
-                
-                <div class="section-divider">
-                    <div class="section-header">
-                        <div class="section-header-icon small">✏️</div>
-                        <div class="section-header-content">
-                            <h3 class="section-title" style="font-size: 16px;">Custom Instructions</h3>
-                            <p class="section-subtitle">Write custom enhancement instructions for each mode</p>
+
+                <!-- Show Style Selector Toggle -->
+                <div class="toggle-card">
+                    <label>
+                        <input type="checkbox" id="show-style-selector-toggle">
+                        <div class="toggle-card-content">
+                            <div class="toggle-card-title">Show style selector</div>
+                            <div class="toggle-card-description">Display style selector and custom style options in the Enhance tab</div>
                         </div>
+                    </label>
+                </div>
+
+                <!-- Zoom Controls -->
+                <div class="section-divider"></div>
+                <div style="margin-top: var(--spacing-xl);">
+                    <h3 class="section-title" style="font-size: 16px; margin-bottom: var(--spacing-md);">Zoom</h3>
+                    <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                        <button id="zoom-out-button" class="premium-button-secondary" style="
+                            padding: 10px 16px;
+                            font-size: 16px;
+                            min-width: 44px;
+                        ">−</button>
+                        <div id="zoom-level" style="
+                            flex: 1;
+                            text-align: center;
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: var(--text-primary);
+                            min-width: 60px;
+                        ">100%</div>
+                        <button id="zoom-in-button" class="premium-button-secondary" style="
+                            padding: 10px 16px;
+                            font-size: 16px;
+                            min-width: 44px;
+                        ">+</button>
+                        <button id="zoom-reset-button" class="premium-button-secondary" style="
+                            padding: 10px 16px;
+                            font-size: 13px;
+                        ">Reset</button>
                     </div>
                 </div>
 
-                <div class="info-box">
-                    <p>
-                        <strong>How it works:</strong><br>
-                        Custom instructions override the default style presets. Set different instructions for Text, Code, Image, and Video modes.
-                    </p>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">For</label>
-                    <select id="instruction-mode-selector" class="premium-input" style="cursor: pointer;">
-                        <option value="TEXT_ENHANCEMENT">Text Enhancement</option>
-                        <option value="CODE_ENHANCEMENT">Code Enhancement</option>
-                        <option value="IMAGE_ENHANCEMENT">Image Enhancement</option>
-                        <option value="VIDEO_ENHANCEMENT">Video Enhancement</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Style Name</label>
-                    <input 
-                        type="text" 
-                        id="custom-style-name-input" 
-                        class="premium-input" 
-                        placeholder="e.g., Academic Writing, Creative, Technical..."
-                        maxlength="50"
-                    />
-                    <div class="help-text" style="margin-top: 4px;">
-                        Give your custom style a memorable name
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Custom Instruction</label>
-                    <textarea 
-                        id="custom-instruction-input" 
-                        class="premium-textarea" 
-                        placeholder="Describe how you want prompts to be enhanced for this mode..."
-                        rows="6"
-                    ></textarea>
-                    <div class="help-text" style="margin-top: 8px;">
-                        Write your custom enhancement instruction. This will be saved as a reusable style.
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: var(--spacing-sm);">
-                    <button id="save-instruction-button" class="premium-button" style="flex: 1;">
-                        <span class="button-with-icon">
-                            <span>💾</span>
-                            <span>Save Style</span>
-                        </span>
-                    </button>
-                    <button id="reset-instruction-button" class="copy-button" style="flex: 1; padding: 10px; font-size: 13px; display: none;">
-                        Delete
+                <!-- Custom Styles Section -->
+                <div class="section-divider"></div>
+                <div style="margin-top: var(--spacing-xl);">
+                    <h3 class="section-title" style="font-size: 16px; margin-bottom: var(--spacing-md);">Custom Styles</h3>
+                    <p class="section-subtitle" style="font-size: 12px; margin-bottom: var(--spacing-lg);">Create and manage custom enhancement styles for each mode</p>
+                    
+                    <div id="custom-styles-list"></div>
+                    
+                    <button id="add-custom-style-button" class="premium-button-secondary" style="
+                        width: 100%;
+                        margin-top: var(--spacing-md);
+                        padding: 12px;
+                        font-size: 13px;
+                    ">
+                        + Add Custom Style
                     </button>
                 </div>
-                
-                <!-- Saved Custom Styles List -->
-                <div id="saved-styles-container" class="form-group" style="margin-top: var(--spacing-xl); padding-top: var(--spacing-xl); border-top: 1px solid var(--border-subtle);">
-                    <label class="form-label">Your Saved Styles</label>
-                    <div id="saved-styles-list" style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
-                        <!-- Saved styles will be inserted here -->
-                    </div>
-                    <div id="saved-styles-empty" class="empty-state" style="padding: 20px; display: none;">
-                        <p class="empty-state-subtitle" style="margin: 0;">No custom styles saved yet</p>
-                    </div>
-                </div>
+
             </div>
             </div>
         </div>

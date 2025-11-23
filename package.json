@@ -1,0 +1,16 @@
+{
+  "name": "prompt-helper",
+  "version": "1.5.0",
+  "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation",
+  "scripts": {
+    "build": "node build.js",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.0",
+    "terser": "^5.26.0",
+    "fs-extra": "^11.2.0"
+  },
+  "private": true
+}
+

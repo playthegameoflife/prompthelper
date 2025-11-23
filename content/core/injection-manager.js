@@ -181,7 +181,11 @@ export class InjectionManager {
         const button = document.createElement('button');
         button.type = 'button';
         button.id = 'main-enhance-button';
-        button.title = 'Improve prompt with AI';
+        // Detect platform for keyboard shortcut hint
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        button.title = isMac 
+          ? 'Improve prompt with AI (Cmd+Shift+E)' 
+          : 'Improve prompt with AI (Ctrl+Shift+E)';
         
         const buttonText = document.createElement('span');
         buttonText.textContent = 'Improve';

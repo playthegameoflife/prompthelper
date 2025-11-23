@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_ASK_RESULT = 'savedAskResult';
   const STORAGE_ENHANCE_QUESTION_TOGGLE = 'enhanceQuestionToggle';
   const STORAGE_INJECT_BUTTON_ENABLED = 'injectButtonEnabled';
+  const STORAGE_ZOOM_LEVEL = 'popupZoomLevel';
+  const STORAGE_SHOW_STYLE_SELECTOR = 'showStyleSelector';
   
   // Provider configuration
   const PROVIDERS = {
@@ -105,9 +107,12 @@ document.addEventListener('DOMContentLoaded', () => {
         recentTab.style.display = 'none';
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
-        // Load style for current mode when enhance tab opens
+        // Load styles for current mode when enhance tab opens
         if (selectedMode) {
           currentMode = selectedMode;
+          if (typeof loadStylesForMode === 'function') {
+            loadStylesForMode(selectedMode);
+          }
         }
       } else if (tab === 'ask') {
         enhanceTab.classList.remove('active');
@@ -488,9 +493,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    // Load templates and style for the saved mode (only if enhance tab is visible)
-    const enhanceTab = document.getElementById('enhance-section');
-    if (enhanceTab && enhanceTab.classList.contains('active')) {
+    // Load styles for the saved mode
+    if (typeof loadStylesForMode === 'function') {
+      await loadStylesForMode(savedMode);
+    }
+    if (typeof loadCustomStylesList === 'function') {
+      await loadCustomStylesList();
     }
   });
   
@@ -552,12 +560,356 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedMode = newMode;
       currentMode = newMode;
       
-      // Load templates and style for the new mode
+      // Load styles for the new mode
+      loadStylesForMode(newMode);
       
       // Manual selection persists - no timeout reset
       // Auto-detection will only resume when input is cleared
     });
   });
+
+  // ============================================================================
+  // STYLE MANAGEMENT
+  // ============================================================================
+  
+  const styleSelector = document.getElementById('style-selector');
+  const customizeStyleButton = document.getElementById('customize-style-button');
+  const customStylesList = document.getElementById('custom-styles-list');
+  const addCustomStyleButton = document.getElementById('add-custom-style-button');
+
+  // Template options for each mode
+  const TEMPLATE_OPTIONS = {
+    TEXT_ENHANCEMENT: ['default', 'concise', 'detailed', 'creative', 'technical'],
+    CODE_ENHANCEMENT: ['default', 'minimal', 'comprehensive', 'production-ready'],
+    IMAGE_ENHANCEMENT: ['default', 'minimal', 'detailed', 'cinematic'],
+    VIDEO_ENHANCEMENT: ['default', 'concise', 'cinematic', 'ad']
+  };
+
+  /**
+   * Loads and populates styles for the current mode
+   */
+  async function loadStylesForMode(mode) {
+    if (!styleSelector) return;
+
+    // Clear existing options except default
+    styleSelector.innerHTML = '<option value="default">Default</option>';
+
+    try {
+      // Load templates
+      const templates = TEMPLATE_OPTIONS[mode] || ['default'];
+      templates.forEach(template => {
+        if (template !== 'default') {
+          const option = document.createElement('option');
+          option.value = `template:${template}`;
+          option.textContent = template.charAt(0).toUpperCase() + template.slice(1);
+          styleSelector.appendChild(option);
+        }
+      });
+
+      // Load custom styles
+      const response = await chrome.runtime.sendMessage({
+        action: 'getNamedCustomStyles',
+        enhancementType: mode
+      });
+
+      if (response.success && response.styles) {
+        Object.keys(response.styles).forEach(styleName => {
+          const option = document.createElement('option');
+          option.value = `custom:${styleName}`;
+          option.textContent = `★ ${styleName}`;
+          styleSelector.appendChild(option);
+        });
+      }
+
+      // Load active style
+      const activeResponse = await chrome.runtime.sendMessage({
+        action: 'getActiveStyle',
+        enhancementType: mode
+      });
+
+      if (activeResponse && activeResponse.success && activeResponse.styleKey) {
+        const styleKey = activeResponse.styleKey;
+        
+        // If it's a custom style, verify it still exists
+        if (styleKey.startsWith('custom:')) {
+          const styleName = styleKey.replace('custom:', '');
+          const stylesResponse = await chrome.runtime.sendMessage({
+            action: 'getNamedCustomStyles',
+            enhancementType: mode
+          });
+          
+          if (stylesResponse && stylesResponse.success && stylesResponse.styles && stylesResponse.styles[styleName]) {
+            styleSelector.value = styleKey;
+            console.log(`Loaded active custom style "${styleName}" for ${mode}`);
+          } else {
+            // Custom style no longer exists, reset to default
+            console.warn(`Custom style "${styleName}" not found, resetting to default`);
+            styleSelector.value = 'default';
+            // Update storage to reflect default
+            await chrome.runtime.sendMessage({
+              action: 'setActiveStyle',
+              enhancementType: mode,
+              styleKey: 'default'
+            });
+          }
+        } else {
+          // Template or default style
+          styleSelector.value = styleKey;
+          console.log(`Loaded active style "${styleKey}" for ${mode}`);
+        }
+      } else {
+        styleSelector.value = 'default';
+        console.log(`No active style found for ${mode}, using default`);
+      }
+    } catch (error) {
+      console.error('Error loading styles:', error);
+    }
+  }
+
+  /**
+   * Handles style selection change
+   */
+  if (styleSelector) {
+    styleSelector.addEventListener('change', async (e) => {
+      const styleKey = e.target.value;
+      const currentMode = selectedMode; // Capture current mode
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'setActiveStyle',
+          enhancementType: currentMode,
+          styleKey: styleKey
+        });
+        
+        if (response && response.success) {
+          // Show subtle feedback
+          styleSelector.style.borderColor = 'var(--primary-blue)';
+          setTimeout(() => {
+            styleSelector.style.borderColor = '';
+          }, 300);
+          
+          // Verify it was saved by reading it back
+          const verifyResponse = await chrome.runtime.sendMessage({
+            action: 'getActiveStyle',
+            enhancementType: currentMode
+          });
+          
+          if (verifyResponse && verifyResponse.success && verifyResponse.styleKey === styleKey) {
+            console.log(`Style "${styleKey}" successfully saved and verified for ${currentMode}`);
+          } else {
+            console.warn('Style may not have been saved correctly');
+          }
+        } else {
+          console.error('Failed to save style:', response?.error);
+        }
+      } catch (error) {
+        console.error('Error setting active style:', error);
+      }
+    });
+  }
+
+  /**
+   * Shows modal for adding/editing custom style
+   */
+  function showCustomStyleModal(mode, styleName = null, instruction = '') {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">${styleName ? 'Edit' : 'Add'} Custom Style</h3>
+          <p class="modal-subtitle">Create a custom enhancement style for ${mode.replace('_ENHANCEMENT', '').toLowerCase()} mode</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Style Name</label>
+          <input type="text" id="style-name-input" class="premium-input" value="${styleName || ''}" placeholder="e.g., Marketing Copy, Technical Docs">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custom Instruction</label>
+          <textarea id="style-instruction-input" class="premium-textarea" rows="8" placeholder="Enter your custom enhancement instruction...">${instruction}</textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="cancel-style-button" class="premium-button-secondary">Cancel</button>
+          <button id="save-style-button" class="premium-button">${styleName ? 'Update' : 'Save'} Style</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const saveButton = modal.querySelector('#save-style-button');
+    const cancelButton = modal.querySelector('#cancel-style-button');
+    const nameInput = modal.querySelector('#style-name-input');
+    const instructionInput = modal.querySelector('#style-instruction-input');
+
+    cancelButton.addEventListener('click', () => {
+      modal.remove();
+    });
+
+    saveButton.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      const instruction = instructionInput.value.trim();
+
+      if (!name || !instruction) {
+        alert('Please fill in both style name and instruction.');
+        return;
+      }
+
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'saveNamedCustomStyle',
+          enhancementType: mode,
+          styleName: name,
+          instruction: instruction
+        });
+
+        if (response.success) {
+          modal.remove();
+          loadStylesForMode(mode);
+          loadCustomStylesList();
+          
+          // Show subtle feedback
+          saveButton.style.background = 'var(--primary-blue)';
+          setTimeout(() => {
+            saveButton.style.background = '';
+          }, 300);
+        } else {
+          alert('Error saving style: ' + (response.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error saving style:', error);
+        alert('Error saving style. Please try again.');
+      }
+    });
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+  }
+
+  /**
+   * Loads and displays custom styles list
+   */
+  async function loadCustomStylesList() {
+    if (!customStylesList) return;
+
+    customStylesList.innerHTML = '';
+
+    const modes = ['TEXT_ENHANCEMENT', 'CODE_ENHANCEMENT', 'IMAGE_ENHANCEMENT', 'VIDEO_ENHANCEMENT'];
+    
+    for (const mode of modes) {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'getNamedCustomStyles',
+          enhancementType: mode
+        });
+
+        if (response.success && response.styles) {
+          Object.entries(response.styles).forEach(([styleName, instruction]) => {
+            const item = document.createElement('div');
+            item.className = 'custom-style-item';
+            item.innerHTML = `
+              <div>
+                <div class="custom-style-name">${styleName}</div>
+                <div class="custom-style-mode">${mode.replace('_ENHANCEMENT', '').replace('_', ' ')}</div>
+              </div>
+              <div class="custom-style-actions">
+                <button class="premium-button-secondary edit-style-btn" data-mode="${mode}" data-name="${styleName}">Edit</button>
+                <button class="premium-button-secondary delete-style-btn" data-mode="${mode}" data-name="${styleName}">Delete</button>
+              </div>
+            `;
+            customStylesList.appendChild(item);
+          });
+        }
+      } catch (error) {
+        console.error('Error loading custom styles:', error);
+      }
+    }
+
+    // Add event listeners for edit/delete buttons
+    customStylesList.querySelectorAll('.edit-style-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mode = btn.dataset.mode;
+        const styleName = btn.dataset.name;
+        
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: 'getNamedCustomStyles',
+            enhancementType: mode
+          });
+
+          if (response.success && response.styles && response.styles[styleName]) {
+            showCustomStyleModal(mode, styleName, response.styles[styleName]);
+          }
+        } catch (error) {
+          console.error('Error loading style for edit:', error);
+        }
+      });
+    });
+
+    customStylesList.querySelectorAll('.delete-style-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to delete this custom style?')) {
+          return;
+        }
+
+        const mode = btn.dataset.mode;
+        const styleName = btn.dataset.name;
+
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: 'deleteNamedCustomStyle',
+            enhancementType: mode,
+            styleName: styleName
+          });
+
+          if (response.success) {
+            loadStylesForMode(selectedMode);
+            loadCustomStylesList();
+            
+            // Show subtle feedback
+            btn.style.borderColor = 'var(--primary-blue)';
+            setTimeout(() => {
+              btn.style.borderColor = '';
+            }, 300);
+          } else {
+            alert('Error deleting style: ' + (response.error || 'Unknown error'));
+          }
+        } catch (error) {
+          console.error('Error deleting style:', error);
+          alert('Error deleting style. Please try again.');
+        }
+      });
+    });
+  }
+
+  // Handle customize button click
+  if (customizeStyleButton) {
+    customizeStyleButton.addEventListener('click', () => {
+      showCustomStyleModal(selectedMode);
+    });
+  }
+
+  // Handle add custom style button
+  if (addCustomStyleButton) {
+    addCustomStyleButton.addEventListener('click', () => {
+      showCustomStyleModal(selectedMode);
+    });
+  }
+
+  // Styles will be loaded after mode is loaded from storage (see storage callback above)
+  // This ensures the correct mode is set before loading styles
+  // Fallback: Load styles after a short delay to ensure storage callback has run
+  setTimeout(() => {
+    if (typeof loadStylesForMode === 'function' && selectedMode) {
+      loadStylesForMode(selectedMode);
+    }
+    if (typeof loadCustomStylesList === 'function') {
+      loadCustomStylesList();
+    }
+  }, 100);
   
   /**
    * Smart mode detection on textarea input
@@ -582,6 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
           // Only update if detected mode is different from current
           if (detectedMode !== selectedMode) {
             updateSelectedMode(detectedMode, true);
+            loadStylesForMode(detectedMode);
           }
         }, 300); // Reduced debounce: wait 300ms after user stops typing for faster response
       } else if (text.length === 0) {
@@ -1314,6 +1667,154 @@ document.addEventListener('DOMContentLoaded', () => {
       [STORAGE_ASK_RESULT]: ''
     });
   }
+
+  // ============================================================================
+  // ZOOM CONTROLS
+  // ============================================================================
+  
+  const zoomOutButton = document.getElementById('zoom-out-button');
+  const zoomInButton = document.getElementById('zoom-in-button');
+  const zoomResetButton = document.getElementById('zoom-reset-button');
+  const zoomLevelDisplay = document.getElementById('zoom-level');
+  
+  let currentZoom = 1.0; // Default zoom level (100%)
+  const MIN_ZOOM = 0.5; // 50%
+  const MAX_ZOOM = 2.0; // 200%
+  const ZOOM_STEP = 0.1; // 10% increments
+  
+  /**
+   * Applies zoom to the popup
+   */
+  function applyZoom(zoomLevel) {
+    const container = document.querySelector('.container') || document.body;
+    if (container) {
+      // Use CSS zoom property (better for popups)
+      container.style.zoom = zoomLevel;
+      // Fallback for browsers that don't support zoom
+      if (!container.style.zoom) {
+        container.style.transform = `scale(${zoomLevel})`;
+        container.style.transformOrigin = 'top left';
+      }
+    }
+    if (zoomLevelDisplay) {
+      zoomLevelDisplay.textContent = `${Math.round(zoomLevel * 100)}%`;
+    }
+  }
+  
+  /**
+   * Loads saved zoom level
+   */
+  function loadZoomLevel() {
+    chrome.storage.local.get([STORAGE_ZOOM_LEVEL], (result) => {
+      const savedZoom = result[STORAGE_ZOOM_LEVEL];
+      if (savedZoom && savedZoom >= MIN_ZOOM && savedZoom <= MAX_ZOOM) {
+        currentZoom = savedZoom;
+        applyZoom(currentZoom);
+      }
+    });
+  }
+  
+  /**
+   * Saves zoom level
+   */
+  function saveZoomLevel(zoomLevel) {
+    chrome.storage.local.set({ [STORAGE_ZOOM_LEVEL]: zoomLevel });
+  }
+  
+  /**
+   * Zooms in
+   */
+  function zoomIn() {
+    if (currentZoom < MAX_ZOOM) {
+      currentZoom = Math.min(currentZoom + ZOOM_STEP, MAX_ZOOM);
+      applyZoom(currentZoom);
+      saveZoomLevel(currentZoom);
+    }
+  }
+  
+  /**
+   * Zooms out
+   */
+  function zoomOut() {
+    if (currentZoom > MIN_ZOOM) {
+      currentZoom = Math.max(currentZoom - ZOOM_STEP, MIN_ZOOM);
+      applyZoom(currentZoom);
+      saveZoomLevel(currentZoom);
+    }
+  }
+  
+  /**
+   * Resets zoom to 100%
+   */
+  function resetZoom() {
+    currentZoom = 1.0;
+    applyZoom(currentZoom);
+    saveZoomLevel(currentZoom);
+  }
+  
+  // Add event listeners
+  if (zoomInButton) {
+    zoomInButton.addEventListener('click', zoomIn);
+  }
+  
+  if (zoomOutButton) {
+    zoomOutButton.addEventListener('click', zoomOut);
+  }
+  
+  if (zoomResetButton) {
+    zoomResetButton.addEventListener('click', resetZoom);
+  }
+  
+  // Load saved zoom level on popup open
+  loadZoomLevel();
+
+  // ============================================================================
+  // STYLE SELECTOR VISIBILITY TOGGLE
+  // ============================================================================
+  
+  const showStyleSelectorToggle = document.getElementById('show-style-selector-toggle');
+  const styleSelectorContainer = document.getElementById('style-selector-container');
+  
+  /**
+   * Updates style selector visibility based on toggle state
+   */
+  function updateStyleSelectorVisibility(show) {
+    if (styleSelectorContainer) {
+      styleSelectorContainer.style.display = show ? 'block' : 'none';
+    }
+  }
+  
+  /**
+   * Loads saved style selector visibility preference
+   */
+  function loadStyleSelectorVisibility() {
+    chrome.storage.local.get([STORAGE_SHOW_STYLE_SELECTOR], (result) => {
+      const show = result[STORAGE_SHOW_STYLE_SELECTOR] === true;
+      if (showStyleSelectorToggle) {
+        showStyleSelectorToggle.checked = show;
+      }
+      updateStyleSelectorVisibility(show);
+    });
+  }
+  
+  /**
+   * Saves style selector visibility preference
+   */
+  function saveStyleSelectorVisibility(show) {
+    chrome.storage.local.set({ [STORAGE_SHOW_STYLE_SELECTOR]: show });
+  }
+  
+  // Handle toggle change
+  if (showStyleSelectorToggle) {
+    showStyleSelectorToggle.addEventListener('change', (e) => {
+      const show = e.target.checked;
+      updateStyleSelectorVisibility(show);
+      saveStyleSelectorVisibility(show);
+    });
+  }
+  
+  // Load style selector visibility on popup open
+  loadStyleSelectorVisibility();
 
   // Initial load - start fresh
   loadApiKey();

@@ -8,7 +8,7 @@
 // --- Constants ---
 
 // Debug mode flag - set to false for production
-const DEBUG_MODE = true; // Temporarily enabled for debugging Ask tab issues
+const DEBUG_MODE = false; // Set to true for debugging
 
 // Debug logging utility
 const debug = {
@@ -564,7 +564,11 @@ async function getActiveStyle(enhancementType) {
     try {
         const result = await chrome.storage.local.get(STORAGE_ACTIVE_STYLE);
         const activeStyles = result[STORAGE_ACTIVE_STYLE] || {};
-        return activeStyles[enhancementType] || null;
+        const styleKey = activeStyles[enhancementType] || null;
+        if (styleKey) {
+            debug.log(`Active style for ${enhancementType}: ${styleKey}`);
+        }
+        return styleKey;
     } catch (error) {
         console.error('[Prompt Architect] Error getting active style:', error);
         return null;
@@ -661,7 +665,7 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
             }],
             generationConfig: {
                 temperature: 0.6,
-                maxOutputTokens: 800,
+                maxOutputTokens: 8000,
                 topP: 0.9,
             }
         });
@@ -673,12 +677,12 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
                 { role: 'user', content: `User's raw text:\n"${prompt}"\n\nImproved Output:` }
             ],
             temperature: 0.6,
-            max_tokens: 800
+            max_tokens: 8000
         });
     } else if (provider === 'anthropic') {
         return JSON.stringify({
             model: API_CONFIGS.anthropic.model,
-            max_tokens: 800,
+            max_tokens: 8000,
             system: systemInstruction,
             messages: [
                 { role: 'user', content: `User's raw text:\n"${prompt}"\n\nImproved Output:` }
@@ -701,24 +705,26 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
 async function executeEnhancement(enhancementType, userText, provider = 'gemini', forceDefaultStyle = false) {
     const selectedProvider = provider || 'gemini';
     
-    // Get active style key first (needed for cache key)
+    // Get active style key first
     // If forceDefaultStyle is true, always use 'default' (injected button always uses default)
     const activeStyleKey = forceDefaultStyle ? null : await getActiveStyle(enhancementType);
     const styleKeyForCache = forceDefaultStyle ? 'default' : (activeStyleKey || 'default');
     
-    // Check cache first (now includes style in key)
-    const cached = getCachedEnhancement(userText, enhancementType, selectedProvider, styleKeyForCache);
-    if (cached) {
-        debug.log('Returning cached result');
-        return cached;
-    }
+    // Caching disabled - always make fresh API calls
+    // const cached = getCachedEnhancement(userText, enhancementType, selectedProvider, styleKeyForCache);
+    // if (cached) {
+    //     debug.log('Returning cached result');
+    //     return cached;
+    // }
     
-    // Check for duplicate pending request (now includes style in key)
-    const requestKey = `${userText}-${enhancementType}-${selectedProvider}-${styleKeyForCache}`;
-    if (pendingRequests.has(requestKey)) {
-        debug.log('Duplicate request detected, returning existing promise');
-        return pendingRequests.get(requestKey);
-    }
+    // Make each request unique by adding timestamp - ensures fresh API calls even for same prompt
+    const timestamp = Date.now();
+    const requestKey = `${userText}-${enhancementType}-${selectedProvider}-${styleKeyForCache}-${timestamp}`;
+    // Disabled duplicate request prevention to allow fresh responses for same prompts
+    // if (pendingRequests.has(requestKey)) {
+    //     debug.log('Duplicate request detected, returning existing promise');
+    //     return pendingRequests.get(requestKey);
+    // }
     
     // Create the enhancement promise
     const enhancementPromise = (async () => {
@@ -752,6 +758,11 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                         const styleName = activeStyleKey.replace('custom:', '');
                         const namedStyles = await getNamedCustomStyles(enhancementType);
                         systemInstruction = namedStyles[styleName] || null;
+                        if (!systemInstruction) {
+                            debug.warn(`Custom style "${styleName}" not found for ${enhancementType}, falling back to default`);
+                        } else {
+                            debug.log(`Using custom style "${styleName}" for ${enhancementType}`);
+                        }
                     }
                 }
                 
@@ -870,7 +881,8 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             
             // Cache successful results (now includes style in key)
             if (!improvedPrompt.startsWith('Error:')) {
-                cacheEnhancement(userText, enhancementType, selectedProvider, improvedPrompt, styleKeyForCache);
+                // Caching disabled - don't cache results
+                // cacheEnhancement(userText, enhancementType, selectedProvider, improvedPrompt, styleKeyForCache);
                 
                 // Save to history
                 saveToHistory(userText, improvedPrompt, enhancementType, selectedProvider);
@@ -909,19 +921,21 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
 async function executeAskQuestion(question, provider = 'gemini') {
     const selectedProvider = provider || 'gemini';
     
-    // Check cache first (questions can be cached too)
-    const cached = getCachedEnhancement(question, 'ASK_QUESTION', selectedProvider);
-    if (cached) {
-        debug.log('Returning cached answer');
-        return cached;
-    }
+    // Caching disabled - always make fresh API calls for unique responses
+    // const cached = getCachedEnhancement(question, 'ASK_QUESTION', selectedProvider);
+    // if (cached) {
+    //     debug.log('Returning cached answer');
+    //     return cached;
+    // }
     
-    // Check for duplicate pending request
-    const requestKey = `${question}-ASK_QUESTION-${selectedProvider}`;
-    if (pendingRequests.has(requestKey)) {
-        debug.log('Duplicate question request detected, returning existing promise');
-        return pendingRequests.get(requestKey);
-    }
+    // Make each request unique by adding timestamp - ensures fresh API calls even for same question
+    const timestamp = Date.now();
+    const requestKey = `${question}-ASK_QUESTION-${selectedProvider}-${timestamp}`;
+    // Disabled duplicate request prevention to allow fresh responses for same questions
+    // if (pendingRequests.has(requestKey)) {
+    //     debug.log('Duplicate question request detected, returning existing promise');
+    //     return pendingRequests.get(requestKey);
+    // }
     
     // Create the question-answering promise
     const questionPromise = (async () => {
@@ -963,7 +977,7 @@ async function executeAskQuestion(question, provider = 'gemini') {
                     }],
                     generationConfig: {
                         temperature: 0.7,
-                        maxOutputTokens: 2000,
+                        maxOutputTokens: 8000,
                         topP: 0.9,
                     }
                 });
@@ -975,12 +989,12 @@ async function executeAskQuestion(question, provider = 'gemini') {
                         { role: 'user', content: question }
                     ],
                     temperature: 0.7,
-                    max_tokens: 2000
+                    max_tokens: 8000
                 });
             } else if (selectedProvider === 'anthropic') {
                 requestBody = JSON.stringify({
                     model: API_CONFIGS.anthropic.model,
-                    max_tokens: 2000,
+                    max_tokens: 8000,
                     system: systemInstruction,
                     messages: [
                         { role: 'user', content: question }
@@ -1047,13 +1061,14 @@ async function executeAskQuestion(question, provider = 'gemini') {
                 }
                 
                 const data = await response.json();
-                console.log('[Prompt Architect] Ask API response data:', data);
+                debug.log('Ask API response data:', data);
                 const answer = extractImprovedPrompt(data, selectedProvider);
-                console.log('[Prompt Architect] Extracted answer (first 100 chars):', answer.substring(0, 100));
+                debug.log('Extracted answer (first 100 chars):', answer.substring(0, 100));
                 
                 // Cache successful results
                 if (!answer.startsWith('Error:')) {
-                    cacheEnhancement(question, 'ASK_QUESTION', selectedProvider, answer, 'ask');
+                    // Caching disabled - don't cache results
+                    // cacheEnhancement(question, 'ASK_QUESTION', selectedProvider, answer, 'ask');
                     
                     // Save to history (questions history)
                     saveToHistory(question, answer, 'ASK_QUESTION', selectedProvider);
@@ -1176,8 +1191,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         
         if (request.action === 'setActiveStyle') {
             setActiveStyle(request.enhancementType, request.styleKey)
-                .then(() => sendResponse({ success: true }))
-                .catch(error => sendResponse({ success: false, error: error.message }));
+                .then(() => {
+                    debug.log(`Active style set: ${request.enhancementType} -> ${request.styleKey}`);
+                    sendResponse({ success: true });
+                })
+                .catch(error => {
+                    debug.warn(`Error setting active style: ${error.message}`);
+                    sendResponse({ success: false, error: error.message });
+                });
             return true;
         }
         
