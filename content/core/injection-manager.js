@@ -330,9 +330,9 @@ export class InjectionManager {
             // Get stored button mode
             chrome.storage.local.get(['buttonEnhancementMode'], async (result) => {
                 const buttonMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-                
-                // Import and call handleButtonClick
-                const { handleButtonClick } = await import('../content.js');
+            
+            // Import and call handleButtonClick
+            const { handleButtonClick } = await import('../content.js');
                 handleButtonClick(inputElement, buttonMode, enhancerDiv);
             });
             

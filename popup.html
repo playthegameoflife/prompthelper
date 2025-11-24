@@ -60,6 +60,8 @@
             max-height: 600px;
             overflow-y: auto;
             overflow-x: hidden;
+            /* Ensure smooth scrolling */
+            overscroll-behavior: contain;
         }
 
         /* Header */
@@ -149,12 +151,16 @@
         /* Setup View */
         .setup-section {
             display: none !important;
+            /* Ensure proper scrolling */
+            overflow: visible;
         }
 
         .setup-section.active {
             display: flex !important;
             flex-direction: column;
             gap: var(--spacing-lg);
+            /* Allow content to scroll naturally */
+            overflow: visible;
         }
 
         .section-title {
@@ -377,6 +383,13 @@
         }
 
         /* Mode Selector */
+        .mode-selector-group {
+            margin-bottom: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
         .mode-selector {
             display: flex;
             gap: var(--spacing-sm);
@@ -387,7 +400,6 @@
             border-radius: var(--radius-md);
             padding: 6px;
             box-shadow: var(--shadow-sm);
-            margin-bottom: var(--spacing-lg);
         }
 
         .mode-option {
@@ -444,6 +456,159 @@
                 transform: scale(1.02);
                 box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
             }
+        }
+
+        /* Style Selector - Jobs & Ive Inspired */
+        .style-selector-integrated {
+            position: relative;
+            width: 100%;
+        }
+
+        .style-selector-button {
+            width: 100%;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 0.5px solid var(--border-light);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            box-shadow: var(--shadow-sm);
+            font-family: inherit;
+        }
+
+        .style-selector-button:hover {
+            background: rgba(255, 255, 255, 0.85);
+            border-color: var(--primary-blue);
+            transform: translateY(-0.5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .style-selector-button:active {
+            transform: translateY(0);
+        }
+
+        .style-selector-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .style-selector-value {
+            flex: 1;
+            text-align: left;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .style-selector-arrow {
+            width: 10px;
+            height: 6px;
+            color: var(--text-tertiary);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        }
+
+        .style-selector-button.active .style-selector-arrow {
+            transform: rotate(180deg);
+        }
+
+        .style-selector-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 0.5px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            /* Ensure dropdown doesn't interfere with scrolling when closed */
+            pointer-events: none;
+        }
+
+        .style-selector-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            /* Enable pointer events when dropdown is open */
+            pointer-events: auto;
+        }
+
+        .style-selector-options {
+            padding: 4px;
+        }
+
+        .style-selector-option {
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            letter-spacing: -0.01em;
+        }
+
+        .style-selector-option:hover {
+            background: rgba(0, 122, 255, 0.08);
+            color: var(--primary-blue);
+        }
+
+        .style-selector-option.active {
+            background: rgba(0, 122, 255, 0.12);
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+
+        .style-selector-option.customize {
+            border-top: 0.5px solid var(--border-light);
+            margin-top: 4px;
+            padding-top: 12px;
+            color: var(--text-secondary);
+        }
+
+        .style-selector-option.customize:hover {
+            background: rgba(0, 122, 255, 0.08);
+            color: var(--primary-blue);
+        }
+
+        .style-selector-option-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            opacity: 0.6;
+        }
+
+        .style-selector-option-check {
+            width: 14px;
+            height: 14px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .style-selector-option.active .style-selector-option-check {
+            opacity: 1;
         }
 
         /* Premium Button */
@@ -1201,33 +1366,36 @@
                     placeholder="Enter your prompt here..."
                 ></textarea>
 
-                <div class="mode-selector">
-                    <button class="mode-option active" data-mode="TEXT_ENHANCEMENT" title="Text generation and conversation">
-                        Text
-                    </button>
-                    <button class="mode-option" data-mode="CODE_ENHANCEMENT" title="Code generation">
-                        Code
-                    </button>
-                    <button class="mode-option" data-mode="IMAGE_ENHANCEMENT" title="Image generation (DALL-E, Midjourney)">
-                        Image
-                    </button>
-                    <button class="mode-option" data-mode="VIDEO_ENHANCEMENT" title="Video generation (Runway, Pika, Luma)">
-                        Video
-                    </button>
-                </div>
+                <div class="mode-selector-group">
+                    <div class="mode-selector">
+                        <button class="mode-option active" data-mode="TEXT_ENHANCEMENT" title="Text generation and conversation">
+                            Text
+                        </button>
+                        <button class="mode-option" data-mode="CODE_ENHANCEMENT" title="Code generation">
+                            Code
+                        </button>
+                        <button class="mode-option" data-mode="IMAGE_ENHANCEMENT" title="Image generation (DALL-E, Midjourney)">
+                            Image
+                        </button>
+                        <button class="mode-option" data-mode="VIDEO_ENHANCEMENT" title="Video generation (Runway, Pika, Luma)">
+                            Video
+                        </button>
+                    </div>
 
-                <!-- Style Selector (hidden by default) -->
-                <div id="style-selector-container" class="form-group" style="margin-top: var(--spacing-lg); display: none;">
-                    <label class="form-label">Style</label>
-                    <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
-                        <select id="style-selector" class="premium-select" style="flex: 1;">
-                            <option value="default">Default</option>
-                        </select>
-                        <button id="customize-style-button" class="premium-button-secondary" style="
-                            padding: 8px 16px;
-                            font-size: 13px;
-                            white-space: nowrap;
-                        ">Customize</button>
+                    <!-- Style Selector (hidden by default) -->
+                    <div id="style-selector-container" class="style-selector-integrated" style="display: none;">
+                        <button id="style-selector-button" class="style-selector-button">
+                            <span class="style-selector-label">Style</span>
+                            <span class="style-selector-value" id="style-selector-value">Default</span>
+                            <svg class="style-selector-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M0 0L5 6L10 0H0Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <div id="style-selector-dropdown" class="style-selector-dropdown">
+                            <div id="style-selector-options" class="style-selector-options">
+                                <!-- Options will be populated dynamically -->
+                            </div>
+                        </div>
                     </div>
                 </div>
 

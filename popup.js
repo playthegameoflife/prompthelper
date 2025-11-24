@@ -190,66 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================================================================
-  // SMART MODE DETECTION
+  // SMART MODE DETECTION - REMOVED
+  // Users now manually select their desired mode by clicking the mode buttons
   // ============================================================================
-
-  /**
-   * Automatically detects the most appropriate enhancement mode based on prompt content
-   * @param {string} text - The prompt text to analyze
-   * @returns {string} The detected enhancement mode
-   */
-  function detectPromptType(text) {
-    if (!text || typeof text !== 'string') {
-      return 'TEXT_ENHANCEMENT';
-    }
-    
-    const normalized = text.toLowerCase().trim();
-    
-    // Code detection patterns
-    const codePatterns = [
-      /\b(function|class|def |import |const |let |var |return |async |await |=>|\.js|\.py|\.ts|\.java|\.cpp|\.html|\.css|\.json|\.sql)\b/,
-      /\b(programming|code|script|algorithm|function|variable|array|object|method|api|endpoint|database|query)\b/,
-      /\b(create a|write a|build a|implement|code|program|script)\s+(function|class|component|module|app|application)\b/,
-    ];
-    
-    // Image detection patterns
-    const imagePatterns = [
-      /\b(image|photo|picture|visual|draw|paint|art|illustration|graphic|design|logo|icon|screenshot|diagram|chart|visualization)\b/,
-      /\b(create|generate|make|design|draw|paint)\s+(an|a)\s+(image|photo|picture|visual|art|illustration|graphic)\b/,
-      /\b(dalle|midjourney|stable diffusion|image generation|visual description)\b/,
-    ];
-    
-    // Video detection patterns
-    const videoPatterns = [
-      /\b(video|film|movie|cinematic|animation|motion|footage|clip|sequence|scene|shot|camera|frame|fps)\b/,
-      /\b(create|generate|make|produce|edit)\s+(a|an)\s+(video|film|movie|animation|clip)\b/,
-      /\b(runway|pika|luma|video generation|motion graphics)\b/,
-    ];
-    
-    // Check code patterns first (most specific)
-    for (const pattern of codePatterns) {
-      if (pattern.test(normalized)) {
-        return 'CODE_ENHANCEMENT';
-      }
-    }
-    
-    // Check video patterns (more specific than image)
-    for (const pattern of videoPatterns) {
-      if (pattern.test(normalized)) {
-        return 'VIDEO_ENHANCEMENT';
-      }
-    }
-    
-    // Check image patterns
-    for (const pattern of imagePatterns) {
-      if (pattern.test(normalized)) {
-        return 'IMAGE_ENHANCEMENT';
-      }
-    }
-    
-    // Default to text enhancement
-    return 'TEXT_ENHANCEMENT';
-  }
 
   /**
    * Display a status message.
@@ -475,28 +418,13 @@ document.addEventListener('DOMContentLoaded', () => {
    * Mode Selection
    */
   let selectedMode = 'TEXT_ENHANCEMENT';
-  let userManuallySelectedMode = false; // Track if user manually selected a mode (persists until input cleared or new manual selection)
-  let autoDetectionTimeout = null; // For debouncing auto-detection
   
   // Load saved mode and style on popup open
   chrome.storage.local.get([STORAGE_ENHANCEMENT_MODE], async (result) => {
     const savedMode = result[STORAGE_ENHANCEMENT_MODE] || 'TEXT_ENHANCEMENT';
-    selectedMode = savedMode;
-    currentMode = savedMode;
+    updateSelectedMode(savedMode);
     
-    // Update UI to reflect saved mode
-    modeOptions.forEach(opt => {
-      if (opt.dataset.mode === savedMode) {
-        opt.classList.add('active');
-      } else {
-        opt.classList.remove('active');
-      }
-    });
-    
-    // Load styles for the saved mode
-    if (typeof loadStylesForMode === 'function') {
-      await loadStylesForMode(savedMode);
-    }
+    // Load custom styles list
     if (typeof loadCustomStylesList === 'function') {
       await loadCustomStylesList();
     }
@@ -505,18 +433,18 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Updates the selected mode in UI and storage
    * @param {string} mode - The mode to select
-   * @param {boolean} isAutoDetected - Whether this was auto-detected (true) or manual (false)
    */
-  function updateSelectedMode(mode, isAutoDetected = false) {
-    // Remove active and auto-detected classes from all options
+  function updateSelectedMode(mode) {
+    // Remove active class from all options
     modeOptions.forEach(opt => {
-      opt.classList.remove('active', 'auto-detected');
+      opt.classList.remove('active');
     });
     
     const targetOption = Array.from(modeOptions).find(opt => opt.dataset.mode === mode);
     if (targetOption) {
       targetOption.classList.add('active');
       selectedMode = mode;
+      currentMode = mode;
       
       // Save to storage
       chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: selectedMode }, () => {
@@ -525,18 +453,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       
-      if (isAutoDetected) {
-        // Add auto-detected class for visual "lighting up" effect
-        targetOption.classList.add('auto-detected');
-        
-        // Remove the auto-detected class after animation completes
-        setTimeout(() => {
-          targetOption.classList.remove('auto-detected');
-        }, 600);
-      }
+      // Load styles for the new mode
+      loadStylesForMode(mode);
     } else {
       // Fallback if UI not found
       selectedMode = mode;
+      currentMode = mode;
       chrome.storage.local.set({ [STORAGE_ENHANCEMENT_MODE]: selectedMode }, () => {
         if (chrome.runtime.lastError) {
           console.error('Error saving enhancement mode:', chrome.runtime.lastError);
@@ -545,26 +467,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Handle manual mode selection
+  // Handle mode selection
   modeOptions.forEach(option => {
-    option.addEventListener('click', async () => {
+    option.addEventListener('click', () => {
       const newMode = option.dataset.mode;
-      
-      // User manually selected a mode - this is a permanent override until input is cleared
-      userManuallySelectedMode = true;
-      // Remove any auto-detected styling when user manually selects
-      modeOptions.forEach(opt => opt.classList.remove('auto-detected'));
-      
-      // Update mode and save
-      updateSelectedMode(newMode, false);
-      selectedMode = newMode;
-      currentMode = newMode;
-      
-      // Load styles for the new mode
-      loadStylesForMode(newMode);
-      
-      // Manual selection persists - no timeout reset
-      // Auto-detection will only resume when input is cleared
+      updateSelectedMode(newMode);
     });
   });
 
@@ -572,15 +479,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // STYLE MANAGEMENT
   // ============================================================================
   
-  const styleSelector = document.getElementById('style-selector');
-  const customizeStyleButton = document.getElementById('customize-style-button');
+  const styleSelectorButton = document.getElementById('style-selector-button');
+  const styleSelectorValue = document.getElementById('style-selector-value');
+  const styleSelectorDropdown = document.getElementById('style-selector-dropdown');
+  const styleSelectorOptions = document.getElementById('style-selector-options');
   const customStylesList = document.getElementById('custom-styles-list');
   const addCustomStyleButton = document.getElementById('add-custom-style-button');
 
   // Template options for each mode
   const TEMPLATE_OPTIONS = {
     TEXT_ENHANCEMENT: ['default', 'concise', 'detailed', 'creative', 'technical'],
-    CODE_ENHANCEMENT: ['default', 'minimal', 'comprehensive', 'production-ready'],
+    CODE_ENHANCEMENT: ['default', 'minimal', 'comprehensive', 'production-ready', 'cursor'],
     IMAGE_ENHANCEMENT: ['default', 'minimal', 'detailed', 'cinematic'],
     VIDEO_ENHANCEMENT: ['default', 'concise', 'cinematic', 'ad']
   };
@@ -589,24 +498,34 @@ document.addEventListener('DOMContentLoaded', () => {
    * Loads and populates styles for the current mode
    */
   async function loadStylesForMode(mode) {
-    if (!styleSelector) return;
+    if (!styleSelectorOptions) return;
 
-    // Clear existing options except default
-    styleSelector.innerHTML = '<option value="default">Default</option>';
+    // Ensure we're loading styles for a valid mode
+    if (!TEMPLATE_OPTIONS[mode]) {
+      console.warn(`No templates defined for mode: ${mode}`);
+      return;
+    }
+
+    // Clear existing options
+    styleSelectorOptions.innerHTML = '';
 
     try {
-      // Load templates
+      // Load templates for THIS specific mode only
       const templates = TEMPLATE_OPTIONS[mode] || ['default'];
       templates.forEach(template => {
-        if (template !== 'default') {
-          const option = document.createElement('option');
-          option.value = `template:${template}`;
-          option.textContent = template.charAt(0).toUpperCase() + template.slice(1);
-          styleSelector.appendChild(option);
-        }
+        const option = document.createElement('div');
+        option.className = 'style-selector-option';
+        option.dataset.value = template === 'default' ? 'default' : `template:${template}`;
+        option.innerHTML = `
+          <span>${template === 'default' ? 'Default' : template.charAt(0).toUpperCase() + template.slice(1)}</span>
+          <svg class="style-selector-option-check" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M11.6667 3.5L5.25 9.91667L2.33334 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `;
+        styleSelectorOptions.appendChild(option);
       });
 
-      // Load custom styles
+      // Load custom styles for THIS specific mode only
       const response = await chrome.runtime.sendMessage({
         action: 'getNamedCustomStyles',
         enhancementType: mode
@@ -614,19 +533,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (response.success && response.styles) {
         Object.keys(response.styles).forEach(styleName => {
-          const option = document.createElement('option');
-          option.value = `custom:${styleName}`;
-          option.textContent = `★ ${styleName}`;
-          styleSelector.appendChild(option);
+          const option = document.createElement('div');
+          option.className = 'style-selector-option';
+          option.dataset.value = `custom:${styleName}`;
+          option.innerHTML = `
+            <span>★ ${styleName}</span>
+            <svg class="style-selector-option-check" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11.6667 3.5L5.25 9.91667L2.33334 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          `;
+          styleSelectorOptions.appendChild(option);
         });
       }
 
-      // Load active style
+      // Add Customize option
+      const customizeOption = document.createElement('div');
+      customizeOption.className = 'style-selector-option customize';
+      customizeOption.dataset.value = 'customize';
+      customizeOption.innerHTML = '<span>Customize...</span>';
+      styleSelectorOptions.appendChild(customizeOption);
+
+      // Load active style for THIS mode
       const activeResponse = await chrome.runtime.sendMessage({
         action: 'getActiveStyle',
         enhancementType: mode
       });
 
+      let activeStyleKey = 'default';
       if (activeResponse && activeResponse.success && activeResponse.styleKey) {
         const styleKey = activeResponse.styleKey;
         
@@ -639,12 +572,12 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           
           if (stylesResponse && stylesResponse.success && stylesResponse.styles && stylesResponse.styles[styleName]) {
-            styleSelector.value = styleKey;
+            activeStyleKey = styleKey;
             console.log(`Loaded active custom style "${styleName}" for ${mode}`);
           } else {
             // Custom style no longer exists, reset to default
             console.warn(`Custom style "${styleName}" not found, resetting to default`);
-            styleSelector.value = 'default';
+            activeStyleKey = 'default';
             // Update storage to reflect default
             await chrome.runtime.sendMessage({
               action: 'setActiveStyle',
@@ -653,26 +586,125 @@ document.addEventListener('DOMContentLoaded', () => {
             });
           }
         } else {
-          // Template or default style
-          styleSelector.value = styleKey;
-          console.log(`Loaded active style "${styleKey}" for ${mode}`);
+          // Template or default style - verify it exists in templates for this mode
+          const templateName = styleKey.replace('template:', '');
+          if (templates.includes(templateName) || styleKey === 'default') {
+            activeStyleKey = styleKey;
+            console.log(`Loaded active style "${styleKey}" for ${mode}`);
+          } else {
+            // Template doesn't exist for this mode, reset to default
+            console.warn(`Template "${templateName}" not found for ${mode}, resetting to default`);
+            activeStyleKey = 'default';
+            await chrome.runtime.sendMessage({
+              action: 'setActiveStyle',
+              enhancementType: mode,
+              styleKey: 'default'
+            });
+          }
         }
       } else {
-        styleSelector.value = 'default';
         console.log(`No active style found for ${mode}, using default`);
       }
+
+      // Update UI to show active style
+      updateStyleSelectorValue(activeStyleKey);
+      setActiveStyleOption(activeStyleKey);
     } catch (error) {
       console.error('Error loading styles:', error);
     }
   }
 
   /**
-   * Handles style selection change
+   * Updates the style selector button value display
    */
-  if (styleSelector) {
-    styleSelector.addEventListener('change', async (e) => {
-      const styleKey = e.target.value;
+  function updateStyleSelectorValue(styleKey) {
+    if (!styleSelectorValue) return;
+    
+    let displayText = 'Default';
+    if (styleKey === 'default') {
+      displayText = 'Default';
+    } else if (styleKey.startsWith('template:')) {
+      const template = styleKey.replace('template:', '');
+      displayText = template.charAt(0).toUpperCase() + template.slice(1);
+    } else if (styleKey.startsWith('custom:')) {
+      const styleName = styleKey.replace('custom:', '');
+      displayText = `★ ${styleName}`;
+    }
+    
+    styleSelectorValue.textContent = displayText;
+  }
+
+  /**
+   * Sets the active style option in the dropdown
+   */
+  function setActiveStyleOption(styleKey) {
+    if (!styleSelectorOptions) return;
+    
+    const options = styleSelectorOptions.querySelectorAll('.style-selector-option');
+    options.forEach(option => {
+      if (option.dataset.value === styleKey) {
+        option.classList.add('active');
+      } else {
+        option.classList.remove('active');
+      }
+    });
+  }
+
+  /**
+   * Toggles the style selector dropdown
+   */
+  function toggleStyleDropdown() {
+    if (!styleSelectorDropdown || !styleSelectorButton) return;
+    
+    const isOpen = styleSelectorDropdown.classList.contains('show');
+    if (isOpen) {
+      styleSelectorDropdown.classList.remove('show');
+      styleSelectorButton.classList.remove('active');
+    } else {
+      styleSelectorDropdown.classList.add('show');
+      styleSelectorButton.classList.add('active');
+    }
+  }
+
+  /**
+   * Closes the style selector dropdown
+   */
+  function closeStyleDropdown() {
+    if (styleSelectorDropdown) {
+      styleSelectorDropdown.classList.remove('show');
+    }
+    if (styleSelectorButton) {
+      styleSelectorButton.classList.remove('active');
+    }
+  }
+
+  /**
+   * Handles style selection
+   */
+  if (styleSelectorButton && styleSelectorOptions) {
+    // Toggle dropdown on button click
+    styleSelectorButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleStyleDropdown();
+    });
+
+    // Handle option clicks
+    styleSelectorOptions.addEventListener('click', async (e) => {
+      const option = e.target.closest('.style-selector-option');
+      if (!option) return;
+
+      const styleKey = option.dataset.value;
+      
+      // Handle customize option
+      if (styleKey === 'customize') {
+        closeStyleDropdown();
+        // Open customize modal
+        showCustomStyleModal(selectedMode);
+        return;
+      }
+
       const currentMode = selectedMode; // Capture current mode
+      
       try {
         const response = await chrome.runtime.sendMessage({
           action: 'setActiveStyle',
@@ -681,11 +713,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (response && response.success) {
-          // Show subtle feedback
-          styleSelector.style.borderColor = 'var(--primary-blue)';
-          setTimeout(() => {
-            styleSelector.style.borderColor = '';
-          }, 300);
+          // Update UI
+          updateStyleSelectorValue(styleKey);
+          setActiveStyleOption(styleKey);
+          closeStyleDropdown();
           
           // Verify it was saved by reading it back
           const verifyResponse = await chrome.runtime.sendMessage({
@@ -705,7 +736,16 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error setting active style:', error);
       }
     });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (styleSelectorContainer && !styleSelectorContainer.contains(e.target)) {
+        closeStyleDropdown();
+      }
+    });
   }
+
+  // Dropdown stays open when scrolling - only closes on click outside or option selection
 
   /**
    * Shows modal for adding/editing custom style
@@ -764,6 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (response.success) {
           modal.remove();
+          closeStyleDropdown();
           loadStylesForMode(mode);
           loadCustomStylesList();
           
@@ -866,6 +907,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
 
           if (response.success) {
+            closeStyleDropdown();
             loadStylesForMode(selectedMode);
             loadCustomStylesList();
             
@@ -885,12 +927,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Handle customize button click
-  if (customizeStyleButton) {
-    customizeStyleButton.addEventListener('click', () => {
-      showCustomStyleModal(selectedMode);
-    });
-  }
+  // Customize button is now integrated into the dropdown menu
 
   // Handle add custom style button
   if (addCustomStyleButton) {
@@ -911,39 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 100);
   
-  /**
-   * Smart mode detection on textarea input
-   */
-  if (promptInput) {
-    promptInput.addEventListener('input', () => {
-      const text = promptInput.value.trim();
-      
-      // Clear existing timeout
-      if (autoDetectionTimeout) {
-        clearTimeout(autoDetectionTimeout);
-      }
-      
-      // Only auto-detect if:
-      // 1. There's text in the input
-      // 2. User hasn't manually selected a mode recently
-      // 3. Text is long enough to make a meaningful detection (at least 5 chars for faster response)
-      if (text.length >= 5 && !userManuallySelectedMode) {
-        autoDetectionTimeout = setTimeout(() => {
-          const detectedMode = detectPromptType(text);
-          
-          // Only update if detected mode is different from current
-          if (detectedMode !== selectedMode) {
-            updateSelectedMode(detectedMode, true);
-            loadStylesForMode(detectedMode);
-          }
-        }, 300); // Reduced debounce: wait 300ms after user stops typing for faster response
-      } else if (text.length === 0) {
-        // Reset to Text mode and re-enable auto-detection when input is cleared
-        userManuallySelectedMode = false; // Clear manual override when input is cleared
-        updateSelectedMode('TEXT_ENHANCEMENT', false);
-      }
-    });
-  }
+  // Smart mode detection has been removed - users manually select their mode
 
   /**
    * Copy to Clipboard
@@ -1818,11 +1823,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const styleSelectorContainer = document.getElementById('style-selector-container');
   
   /**
+   * Resets all enhancement modes to default style
+   */
+  async function resetAllModesToDefault() {
+    const modes = ['TEXT_ENHANCEMENT', 'CODE_ENHANCEMENT', 'IMAGE_ENHANCEMENT', 'VIDEO_ENHANCEMENT'];
+    for (const mode of modes) {
+      try {
+        await chrome.runtime.sendMessage({
+          action: 'setActiveStyle',
+          enhancementType: mode,
+          styleKey: 'default'
+        });
+      } catch (error) {
+        console.error(`Error resetting ${mode} to default:`, error);
+      }
+    }
+  }
+
+  /**
    * Updates style selector visibility based on toggle state
    */
   function updateStyleSelectorVisibility(show) {
     if (styleSelectorContainer) {
       styleSelectorContainer.style.display = show ? 'block' : 'none';
+    }
+    // When hiding the style selector, reset all modes to default
+    if (!show) {
+      resetAllModesToDefault();
     }
   }
   
@@ -1836,6 +1863,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showStyleSelectorToggle.checked = show;
       }
       updateStyleSelectorVisibility(show);
+      // If style selector is hidden on load, reset all modes to default
+      if (!show) {
+        resetAllModesToDefault();
+      }
     });
   }
   

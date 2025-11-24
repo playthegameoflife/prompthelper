@@ -332,6 +332,17 @@ const INSTRUCTION_TEMPLATES = {
         'minimal': `You are an expert prompt engineer for code generation. Rewrite the user's text into a concise code request. Focus on essential requirements only. Specify language and key functions. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
         'comprehensive': `You are an expert prompt engineer for code generation. Rewrite the user's text into a comprehensive code specification including: programming language, input/output types, error handling, edge cases, performance requirements, code style, and testing approach. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
         'production-ready': `You are an expert prompt engineer specializing in production-grade code. Rewrite the user's text into a detailed specification for production-ready code including: language, architecture, error handling, logging, security considerations, scalability, documentation requirements, and testing strategy. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'cursor': `You are an expert prompt engineer specializing in optimizing prompts for Cursor AI. When optimizing a prompt for Cursor, especially for tasks like "improve my website's professionalism," generate a comprehensive, multi-step prompt that functions like an "executable README file." This means breaking the user's general idea into a structured, detailed, and actionable plan. The optimized prompt you generate for Cursor should be a detailed, guided template based on the user's original idea, following this structure:
+
+1. **Set the scene**: A section that defines a persona and mission for the AI (e.g., "Act as an expert UI/UX designer and frontend developer... Your goal is to elevate the design...").
+
+2. **Define style and brand**: A section that prompts the user for context on their aesthetic preferences, target audience, brand colors, and fonts.
+
+3. **Work page by page, component by component**: A section with specific, actionable sub-prompts for improving individual UI components (e.g., Navigation Bar, Hero Section, CTA Buttons), encouraging the use of file-specific context (e.g., "@file:src/components/Navbar.js").
+
+4. **Refactor and optimize**: A final section with prompts for cleaning up the codebase, improving performance (e.g., lazy loading images), and refactoring styles for consistency.
+
+Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
     },
     IMAGE_ENHANCEMENT: {
         'default': SYSTEM_INSTRUCTIONS.IMAGE_ENHANCEMENT,
@@ -622,28 +633,38 @@ const extractImprovedPrompt = (data, provider = 'gemini') => {
             return `Error: ${data.error.message || data.error || 'Unknown error'}`;
         }
         
+        let extractedText = '';
+        
         if (provider === 'gemini') {
             if (data?.promptFeedback?.blockReason) {
                 return `Error: Content was blocked. Try rephrasing your prompt.`;
             }
             const candidate = data.candidates?.[0];
             if (candidate?.content?.parts?.[0]?.text) {
-                return candidate.content.parts[0].text.trim();
+                extractedText = candidate.content.parts[0].text.trim();
             }
         } else if (provider === 'openai') {
             const choice = data.choices?.[0];
             if (choice?.message?.content) {
-                return choice.message.content.trim();
+                extractedText = choice.message.content.trim();
             }
         } else if (provider === 'anthropic') {
             const content = data.content?.[0];
             if (content?.text) {
-                return content.text.trim();
+                extractedText = content.text.trim();
             }
         }
         
-        debug.warn(`Unexpected ${provider} response structure:`, data);
-        return "Error: No response generated. Please try again.";
+        if (!extractedText) {
+            debug.warn(`Unexpected ${provider} response structure:`, data);
+            return "Error: No response generated. Please try again.";
+        }
+        
+        // Strip markdown code blocks if present
+        // Matches patterns like ```text, ```, ```markdown, etc.
+        extractedText = extractedText.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
+        
+        return extractedText;
     } catch (e) {
         debug.error(`Error processing ${provider} API response:`, e, data);
         return "Error: Failed to process the API response structure.";
