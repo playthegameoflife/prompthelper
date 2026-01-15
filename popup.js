@@ -5,15 +5,8 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Storage keys for different providers
-  const STORAGE_KEYS = {
-    gemini: 'userGeminiApiKey',
-    openai: 'userOpenAIApiKey',
-    anthropic: 'userAnthropicApiKey',
-    grok: 'userGrokApiKey',
-    deepseek: 'userDeepSeekApiKey'
-  };
-  const STORAGE_PROVIDER = 'selectedProvider';
+  // Storage key for Gemini API key
+  const STORAGE_GEMINI_API_KEY = 'userGeminiApiKey';
   const STORAGE_ENHANCEMENT_MODE = 'popupEnhancementMode'; // Separate from injected button mode
   const STORAGE_PROMPT_INPUT = 'savedPromptInput';
   const STORAGE_ASK_INPUT = 'savedAskInput';
@@ -24,38 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_ZOOM_LEVEL = 'popupZoomLevel';
   const STORAGE_SHOW_STYLE_SELECTOR = 'showStyleSelector';
   
-  // Provider configuration
-  const PROVIDERS = {
-    gemini: {
-      name: 'Google Gemini',
-      placeholder: 'AIza... (paste your key here)',
-      helpUrl: 'https://aistudio.google.com/api-keys',
-      keyPrefix: 'AIza'
-    },
-    openai: {
-      name: 'OpenAI',
-      placeholder: 'sk-... (paste your key here)',
-      helpUrl: 'https://platform.openai.com/api-keys',
-      keyPrefix: 'sk-'
-    },
-    anthropic: {
-      name: 'Anthropic Claude',
-      placeholder: 'sk-ant-... (paste your key here)',
-      helpUrl: 'https://console.anthropic.com/settings/keys',
-      keyPrefix: 'sk-ant-'
-    },
-    grok: {
-      name: 'xAI Grok',
-      placeholder: 'xai-... (paste your key here)',
-      helpUrl: 'https://console.x.ai/api-keys',
-      keyPrefix: 'xai-'
-    },
-    deepseek: {
-      name: 'DeepSeek',
-      placeholder: 'sk-... (paste your key here)',
-      helpUrl: 'https://platform.deepseek.com/api_keys',
-      keyPrefix: 'sk-'
-    }
+  // Gemini API configuration
+  const GEMINI_CONFIG = {
+    name: 'Google Gemini',
+    placeholder: 'AIza... (paste your key here)',
+    helpUrl: 'https://aistudio.google.com/api-keys',
+    keyPrefix: 'AIza',
+    model: 'gemini-2.5-flash-lite'
   };
 
   // Ensure enhance section is visible by default
@@ -207,16 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Setup View Elements
-  const providerSelector = document.getElementById('provider-selector');
-  const modelSelector = document.getElementById('model-selector');
   const apiKeyInput = document.getElementById('api-key-input');
-  const apiKeyLabel = document.getElementById('api-key-label');
   const apiKeyLink = document.getElementById('api-key-link');
   const saveButton = document.getElementById('save-button');
-  const savedView = document.getElementById('saved-view');
-  const changeKeyLink = document.getElementById('change-key-link');
-
-  let currentProvider = 'gemini'; // Default provider
 
   // Enhance View Elements
   const promptInput = document.getElementById('prompt-input');
@@ -252,109 +213,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4000);
   }
 
-  /**
-   * Loads available models for a provider and populates the model selector
-   */
-  async function loadModelsForProvider(provider) {
-    if (!modelSelector) return;
-    
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'getAvailableModels',
-        provider: provider
-      });
-      
-      if (response && response.success && response.models) {
-        // Clear existing options
-        modelSelector.innerHTML = '';
-        
-        const recommendedModelId = response.recommendedModelId;
-        const recommendedModels = response.recommendedModels || [];
-        const allModels = response.models || [];
-        
-        // Separate recommended from other models
-        const recommendedIds = new Set(recommendedModels.map(m => m.id));
-        const otherModels = allModels.filter(m => !recommendedIds.has(m.id));
-        
-        // Add Recommended optgroup
-        if (recommendedModels.length > 0) {
-          const recommendedGroup = document.createElement('optgroup');
-          recommendedGroup.label = 'Recommended';
-          recommendedModels.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model.id;
-            option.textContent = model.name;
-            recommendedGroup.appendChild(option);
-          });
-          modelSelector.appendChild(recommendedGroup);
-        }
-        
-        // Add separator if there are other models
-        if (otherModels.length > 0) {
-          const otherGroup = document.createElement('optgroup');
-          otherGroup.label = 'All Models';
-          otherModels.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model.id;
-            option.textContent = model.name;
-            otherGroup.appendChild(option);
-          });
-          modelSelector.appendChild(otherGroup);
-        }
-        
-        // Load and set selected model
-        const selectedResponse = await chrome.runtime.sendMessage({
-          action: 'getSelectedModel',
-          provider: provider
-        });
-        
-        if (selectedResponse && selectedResponse.success && selectedResponse.modelId) {
-          modelSelector.value = selectedResponse.modelId;
-        } else {
-          // Use recommended model as default
-          if (recommendedModelId) {
-            modelSelector.value = recommendedModelId;
-          } else if (recommendedModels.length > 0) {
-            modelSelector.value = recommendedModels[0].id;
-          } else {
-            const defaultModel = allModels[0]?.id || '';
-            if (defaultModel) {
-              modelSelector.value = defaultModel;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading models:', error);
-    }
-  }
-  
-  /**
-   * Updates the UI based on selected provider.
-   */
-  async function updateProviderUI(provider) {
-    const providerConfig = PROVIDERS[provider];
-    if (!providerConfig) return;
-    
-    apiKeyLabel.textContent = `${providerConfig.name} API Key`;
-    apiKeyInput.placeholder = providerConfig.placeholder;
-    apiKeyLink.href = providerConfig.helpUrl;
-    apiKeyLink.textContent = `Get your ${providerConfig.name} API key`;
-    
-    // Load models for the selected provider
-    await loadModelsForProvider(provider);
-  }
+  // No provider/model selection needed - always use Gemini 2.5 Flash Lite
 
   /**
    * Updates the UI to reflect whether the key is saved or needs to be entered.
    */
   function updateUIState(key) {
-      if (key) {
-          savedView.style.display = 'block';
-      document.querySelector('#setup-section .glass-card:first-child').style.display = 'none';
-      } else {
-          savedView.style.display = 'none';
-      document.querySelector('#setup-section .glass-card:first-child').style.display = 'block';
+      // Always show the input form
+      const setupCard = document.querySelector('#setup-section .glass-card:first-child');
+      if (setupCard) {
+          setupCard.style.display = 'block';
       }
       // Update API key notice in Enhance tab
       updateApiKeyNotice();
@@ -369,10 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!apiKeyCta || !enhanceButton) return;
     
     const hasKey = await new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], (result) => {
-        const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
-        const storageKey = STORAGE_KEYS[selectedProvider];
-        const apiKey = result[storageKey];
+      chrome.storage.local.get([STORAGE_GEMINI_API_KEY], (result) => {
+        const apiKey = result[STORAGE_GEMINI_API_KEY];
         resolve(!!apiKey);
       });
     });
@@ -422,22 +288,19 @@ document.addEventListener('DOMContentLoaded', () => {
    * Loads the stored API key and updates the UI state.
    */
   async function loadApiKey() {
-    chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], async (result) => {
-      const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
-      currentProvider = selectedProvider;
-      
-      if (providerSelector) {
-        providerSelector.value = selectedProvider;
-      }
-      
-      await updateProviderUI(selectedProvider);
-      
-      const storageKey = STORAGE_KEYS[selectedProvider];
-      const key = result[storageKey];
-      updateUIState(key);
+    chrome.storage.local.get([STORAGE_GEMINI_API_KEY], (result) => {
+      const key = result[STORAGE_GEMINI_API_KEY];
       
       if (apiKeyInput && key) {
         apiKeyInput.value = key;
+      }
+      
+      updateUIState(key);
+      
+      // Set up API key link
+      if (apiKeyLink) {
+        apiKeyLink.href = GEMINI_CONFIG.helpUrl;
+        apiKeyLink.textContent = 'Get your Gemini API key';
       }
       
       // Update API key notice
@@ -455,79 +318,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  
-  /**
-   * Handle provider selection change.
-   */
-  if (providerSelector) {
-    providerSelector.addEventListener('change', async (e) => {
-      currentProvider = e.target.value;
-      await updateProviderUI(currentProvider);
-      
-      // Load the key for the selected provider
-      const storageKey = STORAGE_KEYS[currentProvider];
-      chrome.storage.local.get([storageKey], (result) => {
-        const key = result[storageKey];
-        if (apiKeyInput) {
-          apiKeyInput.value = key || '';
-        }
-        updateUIState(key);
-      });
-      
-      // Save selected provider
-      chrome.storage.local.set({ [STORAGE_PROVIDER]: currentProvider });
-    });
-  }
-  
-  /**
-   * Handle model selection change.
-   */
-  if (modelSelector) {
-    modelSelector.addEventListener('change', async (e) => {
-      const selectedModelId = e.target.value;
-      
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: 'setSelectedModel',
-          provider: currentProvider,
-          modelId: selectedModelId
-        });
-        
-        if (response && response.success) {
-          // Show subtle feedback
-          const originalBg = modelSelector.style.background;
-          modelSelector.style.background = 'rgba(52, 199, 89, 0.1)';
-          setTimeout(() => {
-            modelSelector.style.background = originalBg;
-          }, 500);
-          
-          // Ensure API key input shows the saved key (if it exists)
-          const storageKey = STORAGE_KEYS[currentProvider];
-          chrome.storage.local.get([storageKey], (result) => {
-            const key = result[storageKey];
-            if (apiKeyInput && key) {
-              apiKeyInput.value = key;
-              updateUIState(key);
-            }
-          });
-        } else {
-          console.error('Error saving model selection:', response?.error);
-        }
-      } catch (error) {
-        console.error('Error setting model:', error);
-      }
-    });
-  }
 
   /**
-   * Handles saving the key when the button is clicked.
+   * Handles saving the Gemini API key when the button is clicked.
    */
   if (saveButton && apiKeyInput) {
   saveButton.addEventListener('click', () => {
       const key = apiKeyInput.value.trim();
       
       if (!key) {
-          showStatus('Key cannot be empty.', 'error');
+          showStatus('API key cannot be empty.', 'error');
           return;
       }
 
@@ -537,21 +337,16 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.querySelector('span:last-child').textContent = 'Saving...';
       }
       
-      const storageKey = STORAGE_KEYS[currentProvider];
-      const providerName = PROVIDERS[currentProvider].name;
-      
       chrome.storage.local.set({ 
-        [storageKey]: key,
-        [STORAGE_PROVIDER]: currentProvider
+        [STORAGE_GEMINI_API_KEY]: key
       }, () => {
           if (chrome.runtime.lastError) {
-              showStatus('Error saving key.', 'error');
+              showStatus('Error saving API key.', 'error');
               console.error("Storage error:", chrome.runtime.lastError);
               updateUIState(null);
           } else {
-          showStatus(`${providerName} key saved successfully!`, 'success');
-              // Keep the key in the input field so user doesn't have to re-enter when switching models
-              // The key is already in apiKeyInput.value, so no need to clear it
+          showStatus('Gemini API key saved successfully!', 'success');
+              // Keep the input visible with the saved key
               updateUIState(key);
               updateApiKeyNotice();
           }
@@ -563,33 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   }
 
-  /**
-   * Handles the link to change the key.
-   */
-  if (changeKeyLink) {
-  changeKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      const storageKey = STORAGE_KEYS[currentProvider];
-      // Load the current key and show it in the input field for editing
-      chrome.storage.local.get([storageKey], (result) => {
-          const currentKey = result[storageKey] || '';
-          if (apiKeyInput) {
-              apiKeyInput.value = currentKey;
-          }
-          // Switch to the input view so user can edit the key
-          const setupCard = document.querySelector('#setup-section .glass-card:first-child');
-          if (setupCard) setupCard.style.display = 'block';
-          if (savedView) savedView.style.display = 'none';
-          // Focus on the input field for easy editing
-          if (apiKeyInput) {
-              apiKeyInput.focus();
-              // Select all text so user can easily replace it
-              apiKeyInput.select();
-          }
-          showStatus('Key loaded. Edit and save to update.', 'info');
-      });
-  });
-  }
 
   /**
    * Mode Selection
@@ -1166,13 +934,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Check for API key
-      chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], async (result) => {
-        const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
-        const storageKey = STORAGE_KEYS[selectedProvider];
-        const apiKey = result[storageKey];
+      chrome.storage.local.get([STORAGE_GEMINI_API_KEY], async (result) => {
+        const apiKey = result[STORAGE_GEMINI_API_KEY];
         
         if (!apiKey) {
-          showStatus('Please set your API key in the Setup tab first.', 'error');
+          showStatus('Please set your Gemini API key in the Setup tab first.', 'error');
           // Switch to setup tab
           const setupTabButton = document.querySelector('[data-tab="setup"]');
           if (setupTabButton) {
@@ -1188,12 +954,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (resultContainer) resultContainer.classList.remove('show');
 
         try {
-          // Send message to background script
+          // Send message to background script (always use Gemini)
           const response = await chrome.runtime.sendMessage({
             action: 'enhancePrompt',
             prompt: prompt,
             enhancementType: selectedMode,
-            provider: selectedProvider
+            provider: 'gemini'
           });
 
           // Check for runtime errors
@@ -1399,9 +1165,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function checkAndShowOnboarding() {
     chrome.storage.local.get(['hasSeenOnboarding'], (result) => {
       if (!result.hasSeenOnboarding) {
-        // Check if API key is set
-        chrome.storage.local.get(['userGeminiApiKey', 'userOpenAIApiKey', 'userAnthropicApiKey'], (keys) => {
-          const hasApiKey = keys.userGeminiApiKey || keys.userOpenAIApiKey || keys.userAnthropicApiKey;
+        // Check if Gemini API key is set
+        chrome.storage.local.get([STORAGE_GEMINI_API_KEY], (keys) => {
+          const hasApiKey = !!keys[STORAGE_GEMINI_API_KEY];
           
           if (!hasApiKey) {
             // Show onboarding - guide user to setup
@@ -1452,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.innerHTML = `
       <div style="text-align: center; margin-bottom: 28px;">
         <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
-        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Fruited</h2>
+        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Prompt Helper Gemini</h2>
         <p style="margin: 0; font-size: 15px; color: var(--text-secondary); line-height: 1.5;">
           Transform your prompts into powerful AI instructions
         </p>
@@ -1773,13 +1539,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Check for API key
-      chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], async (result) => {
-        const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
-        const storageKey = STORAGE_KEYS[selectedProvider];
-        const apiKey = result[storageKey];
+      chrome.storage.local.get([STORAGE_GEMINI_API_KEY], async (result) => {
+        const apiKey = result[STORAGE_GEMINI_API_KEY];
         
         if (!apiKey) {
-          showAskStatus('Please set your API key in the Setup tab first.', 'error');
+          showAskStatus('Please set your Gemini API key in the Setup tab first.', 'error');
           // Switch to setup tab
           const setupTabButton = document.querySelector('[data-tab="setup"]');
           if (setupTabButton) {
@@ -1799,12 +1563,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (enhanceQuestionToggle && enhanceQuestionToggle.checked) {
             showAskStatus('Enhancing question...', 'info', true);
             
-            // Enhance the question using TEXT_ENHANCEMENT mode
+            // Enhance the question using TEXT_ENHANCEMENT mode (always use Gemini)
             const enhanceResponse = await chrome.runtime.sendMessage({
               action: 'enhancePrompt',
               prompt: question,
               enhancementType: 'TEXT_ENHANCEMENT',
-              provider: selectedProvider
+              provider: 'gemini'
             });
 
             const enhancedQuestion = enhanceResponse?.enhancedPrompt || question;
@@ -1822,11 +1586,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
 
-          // Now ask the question (enhanced or original)
+          // Now ask the question (enhanced or original) - always use Gemini
           const response = await chrome.runtime.sendMessage({
             action: 'askQuestion',
             question: question,
-            provider: selectedProvider
+            provider: 'gemini'
           });
 
           const answer = response?.answer || "Error: Failed to receive answer.";
@@ -2082,7 +1846,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const pricingPlans = document.getElementById('pricing-plans');
   const activeSubscription = document.getElementById('active-subscription');
   const subscriptionLoading = document.getElementById('subscription-loading');
-  const subscribeProButton = document.getElementById('subscribe-pro-button');
   const subscribePremiumButton = document.getElementById('subscribe-premium-button');
   const manageSubscriptionButton = document.getElementById('manage-subscription-button');
   const subscriptionDetails = document.getElementById('subscription-details');
@@ -2110,16 +1873,13 @@ document.addEventListener('DOMContentLoaded', () => {
         activeSubscription.style.display = 'block';
         pricingPlans.style.display = 'none';
         
-        const planName = status.plan === 'price_pro_monthly' ? 'Pro' : 
-                        status.plan === 'price_premium_monthly' ? 'Premium' : 'Premium';
-        
-        subscriptionStatusText.textContent = `Active - ${planName} Plan`;
+        subscriptionStatusText.textContent = 'Active - Premium Plan';
         subscriptionStatus.style.background = 'rgba(52, 199, 89, 0.1)';
         subscriptionStatus.style.borderLeftColor = '#30D158';
         
         if (subscriptionDetails) {
           const expiresDate = status.expiresAt ? new Date(status.expiresAt).toLocaleDateString() : 'N/A';
-          subscriptionDetails.textContent = `Your ${planName} subscription is active. Renews on ${expiresDate}. Enjoy all premium features!`;
+          subscriptionDetails.textContent = `Your Premium subscription is active. Renews on ${expiresDate}. Enjoy unlimited enhancements!`;
         }
       } else {
         // User doesn't have subscription - show pricing
@@ -2143,16 +1903,9 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Handle subscription button clicks
    */
-  if (subscribeProButton) {
-    subscribeProButton.addEventListener('click', async () => {
-      const priceId = subscribeProButton.dataset.priceId || 'price_pro_monthly';
-      await handleSubscribe(priceId);
-    });
-  }
-  
   if (subscribePremiumButton) {
     subscribePremiumButton.addEventListener('click', async () => {
-      const priceId = subscribePremiumButton.dataset.priceId || 'price_premium_monthly';
+      const priceId = subscribePremiumButton.dataset.priceId || 'price_1SpzCbGqilA1wQCPH91vAF6R';
       await handleSubscribe(priceId);
     });
   }
@@ -2162,12 +1915,10 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   async function handleSubscribe(priceId) {
     try {
-      // Disable buttons
-      if (subscribeProButton) subscribeProButton.disabled = true;
+      // Disable button
       if (subscribePremiumButton) subscribePremiumButton.disabled = true;
       
       // Show loading state
-      if (subscribeProButton) subscribeProButton.textContent = 'Opening checkout...';
       if (subscribePremiumButton) subscribePremiumButton.textContent = 'Opening checkout...';
       
       // Open Stripe Checkout
@@ -2181,10 +1932,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('Error: ' + (error.message || 'Failed to open checkout. Please try again.'), 'error');
       
       // Re-enable buttons
-      if (subscribeProButton) {
-        subscribeProButton.disabled = false;
-        subscribeProButton.textContent = 'Subscribe to Pro';
-      }
       if (subscribePremiumButton) {
         subscribePremiumButton.disabled = false;
         subscribePremiumButton.textContent = 'Subscribe to Premium';

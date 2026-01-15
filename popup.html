@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Fruited - AI Prompt Helper</title>
+    <title>Prompt Helper Gemini</title>
     <!-- Version 2.0 - Recommended Models & Enhanced UI -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1339,7 +1339,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1 class="header-title">Fruited - AI Prompt Helper</h1>
+            <h1 class="header-title">Prompt Helper Gemini</h1>
         </div>
 
         <!-- Tab Navigation -->
@@ -1384,7 +1384,7 @@
                             line-height: 1.5;
                             letter-spacing: -0.01em;
                         ">
-                            Set up your API key to start enhancing prompts
+                            Set up your Gemini API key to start enhancing prompts
                         </div>
                         <button id="setup-cta-button" class="premium-button" style="width: 100%;">
                             Set Up API Key
@@ -1533,47 +1533,45 @@
                 <div id="pricing-plans" style="display: none;">
                     <h3 class="section-title" style="font-size: 16px; margin-bottom: var(--spacing-md);">Choose Your Plan</h3>
                     
-                    <div style="display: flex; flex-direction: column; gap: var(--spacing-md); margin-bottom: var(--spacing-xl);">
-                        <!-- Pro Plan -->
-                        <div class="glass-card" style="border: 2px solid var(--primary-blue-light);">
-                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-md);">
-                                <div>
-                                    <h4 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 700; color: var(--text-primary);">Pro</h4>
-                                    <p style="margin: 0; font-size: 24px; font-weight: 700; color: var(--primary-blue);">$9.99<span style="font-size: 14px; font-weight: 400; color: var(--text-secondary);">/month</span></p>
-                                </div>
+                    <!-- Free Plan Info -->
+                    <div class="glass-card" style="margin-bottom: var(--spacing-md); border: 1px solid rgba(0, 122, 255, 0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-sm);">
+                            <div>
+                                <h4 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Free</h4>
+                                <p style="margin: 0; font-size: 18px; font-weight: 600; color: var(--text-secondary);">$0<span style="font-size: 14px; font-weight: 400; color: var(--text-secondary);">/month</span></p>
                             </div>
-                            <ul style="margin: 0 0 var(--spacing-md) 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
-                                <li>Unlimited prompt enhancements</li>
-                                <li>Priority API access</li>
-                                <li>Advanced style templates</li>
-                                <li>Export history</li>
-                                <li>Priority support</li>
-                            </ul>
-                            <button id="subscribe-pro-button" class="premium-button" data-price-id="price_pro_monthly">
-                                Subscribe to Pro
-                            </button>
                         </div>
-                        
-                        <!-- Premium Plan -->
-                        <div class="glass-card" style="border: 2px solid rgba(102, 126, 234, 0.3); background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
-                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-md);">
-                                <div>
-                                    <div style="display: inline-block; padding: 2px 8px; background: rgba(102, 126, 234, 0.2); border-radius: 4px; font-size: 11px; font-weight: 600; color: #667eea; margin-bottom: 4px;">POPULAR</div>
-                                    <h4 style="margin: 4px 0; font-size: 18px; font-weight: 700; color: var(--text-primary);">Premium</h4>
-                                    <p style="margin: 0; font-size: 24px; font-weight: 700; color: #667eea;">$19.99<span style="font-size: 14px; font-weight: 400; color: var(--text-secondary);">/month</span></p>
-                                </div>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                            <li>10 prompt enhancements per week</li>
+                            <li>5 "Ask" questions per day</li>
+                            <li>Basic style templates</li>
+                            <li>Last 20 history items</li>
+                            <li>Community support</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Premium Plan -->
+                    <div class="glass-card" style="border: 2px solid rgba(102, 126, 234, 0.3); background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-md);">
+                            <div>
+                                <div style="display: inline-block; padding: 2px 8px; background: rgba(102, 126, 234, 0.2); border-radius: 4px; font-size: 11px; font-weight: 600; color: #667eea; margin-bottom: 4px;">PREMIUM</div>
+                                <h4 style="margin: 4px 0; font-size: 18px; font-weight: 700; color: var(--text-primary);">Premium</h4>
+                                <p style="margin: 0; font-size: 24px; font-weight: 700; color: #667eea;">$19.99<span style="font-size: 14px; font-weight: 400; color: var(--text-secondary);">/month</span></p>
                             </div>
-                            <ul style="margin: 0 0 var(--spacing-md) 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
-                                <li>Everything in Pro</li>
-                                <li>Custom AI model training</li>
-                                <li>API access for integrations</li>
-                                <li>White-label options</li>
-                                <li>Dedicated support</li>
-                            </ul>
-                            <button id="subscribe-premium-button" class="premium-button" data-price-id="price_premium_monthly" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                                Subscribe to Premium
-                            </button>
                         </div>
+                        <ul style="margin: 0 0 var(--spacing-md) 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
+                            <li>✅ <strong>Unlimited</strong> prompt enhancements</li>
+                            <li>✅ <strong>Unlimited</strong> "Ask" questions</li>
+                            <li>✅ All style templates (including advanced)</li>
+                            <li>✅ Unlimited history (50+ items)</li>
+                            <li>✅ Export history (CSV/JSON)</li>
+                            <li>✅ Priority API access</li>
+                            <li>✅ Priority support</li>
+                            <li>✅ Unlimited custom styles</li>
+                        </ul>
+                        <button id="subscribe-premium-button" class="premium-button" data-price-id="price_1SpzCbGqilA1wQCPH91vAF6R" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            Subscribe to Premium
+                        </button>
                     </div>
                 </div>
                 
@@ -1607,49 +1605,32 @@
                 <div class="section-header">
                     <div class="section-header-icon">🔑</div>
                     <div class="section-header-content">
-                        <h2 class="section-title">API Key Setup</h2>
-                        <p class="section-subtitle">Configure your AI provider API key</p>
+                        <h2 class="section-title">Gemini API Key Setup</h2>
+                        <p class="section-subtitle">Configure your Google Gemini API key</p>
                     </div>
                 </div>
                 
                 <div class="info-box">
                     <p>
                         <strong>Why do I need this?</strong><br>
-                        Your API key enables prompt enhancement. It's stored locally and never shared.
+                        Your Gemini API key enables prompt enhancement. It's stored locally and never shared. Gemini 2.5 Flash Lite offers a generous free tier and low-cost paid usage.
                     </p>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">AI Provider</label>
-                    <select id="provider-selector" class="premium-input" style="cursor: pointer;">
-                        <option value="gemini">Google Gemini</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="anthropic">Anthropic Claude</option>
-                        <option value="grok">xAI Grok</option>
-                        <option value="deepseek">DeepSeek</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label id="model-label" class="form-label">Model</label>
-                    <select id="model-selector" class="premium-input" style="cursor: pointer;">
-                        <!-- Models will be populated dynamically -->
-                    </select>
-                    <div id="model-help" class="help-text">
-                        Select the AI model to use for enhancements
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label id="api-key-label" class="form-label">API Key</label>
+                    <label class="form-label">Google Gemini API Key</label>
                     <input 
                         type="password" 
                         id="api-key-input" 
                         class="premium-input monospace-input" 
-                        placeholder="Enter your API key..."
+                        placeholder="AIza... (paste your Gemini API key here)"
                     />
                     <div id="api-key-help" class="help-text">
-                        <a id="api-key-link" href="https://aistudio.google.com/api-keys" target="_blank" class="link">Get your API key</a>
+                        <a id="api-key-link" href="https://aistudio.google.com/api-keys" target="_blank" class="link">Get your Gemini API key</a>
+                        <br>
+                        <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: block;">
+                            Using Gemini 2.5 Flash Lite - Fast, efficient, and cost-effective
+                        </span>
                     </div>
                 </div>
                 
@@ -1662,19 +1643,6 @@
                 
             </div>
 
-            <div id="saved-view" class="glass-card" style="display: none;">
-                <div class="centered-content">
-                    <div class="success-icon">✓</div>
-                    <h2 class="section-title">API Key Active</h2>
-                    <p class="section-subtitle">
-                        Your API key is securely stored. You're all set to enhance prompts in the Enhance tab or directly in AI chat interfaces.
-                    </p>
-                    <button id="change-key-link" class="copy-button" style="margin: 0 auto; display: block; padding: 10px 20px; font-size: 13px;">
-                        Change/Update Key
-                    </button>
-                </div>
-            </div>
-            
             <!-- Advanced Settings Section (merged into Setup) -->
             <div id="advanced-section" style="margin-top: var(--spacing-2xl); padding-top: var(--spacing-2xl); border-top: 1px solid var(--border-subtle);">
             <div class="glass-card">

@@ -23,14 +23,7 @@ const debug = {
         console.error('[Prompt Architect]', ...args);
     }
 };
-const STORAGE_KEYS = {
-    gemini: 'userGeminiApiKey',
-    openai: 'userOpenAIApiKey',
-    anthropic: 'userAnthropicApiKey',
-    grok: 'userGrokApiKey',
-    deepseek: 'userDeepSeekApiKey'
-};
-const STORAGE_PROVIDER = 'selectedProvider';
+const STORAGE_GEMINI_API_KEY = 'userGeminiApiKey';
 const STORAGE_SELECTED_MODELS = 'selectedModels'; // { provider: modelId }
 const STORAGE_PROMPT_HISTORY = 'promptHistory';
 const MAX_HISTORY_ITEMS = 50;
@@ -70,7 +63,7 @@ const ERROR_MESSAGES = {
 /**
  * Maps API error codes to user-friendly messages
  */
-function getUserFriendlyError(error, provider) {
+function getUserFriendlyError(error) {
     const errorMsg = (error.message || error || '').toLowerCase();
     
     if (errorMsg.includes('api_key') || errorMsg.includes('key') || errorMsg.includes('401') || errorMsg.includes('403')) {
@@ -775,26 +768,16 @@ async function getActiveStyle(enhancementType) {
 // --- Helper Functions (Same as previous version, adapted for multiple modes) ---
 
 /**
- * Retrieves the API key for the specified provider from chrome.storage.local.
+ * Retrieves the Gemini API key from chrome.storage.local.
  */
-const getApiKey = (provider = 'gemini') => {
+const getApiKey = () => {
     return new Promise((resolve) => {
-        const config = API_CONFIGS[provider];
-        if (!config) {
-            debug.error(`Unknown provider: ${provider}`);
-            resolve(null);
-            return;
-        }
-        
-        chrome.storage.local.get([config.storageKey, STORAGE_PROVIDER], (result) => {
+        chrome.storage.local.get([STORAGE_GEMINI_API_KEY], (result) => {
             if (chrome.runtime.lastError) {
                 debug.error("Error retrieving API key in background:", chrome.runtime.lastError);
                 resolve(null);
             } else {
-                // Use provider from request, or fallback to stored provider, or default to gemini
-                const selectedProvider = provider || result[STORAGE_PROVIDER] || 'gemini';
-                const storageKey = API_CONFIGS[selectedProvider]?.storageKey;
-                resolve(result[storageKey] || null);
+                resolve(result[STORAGE_GEMINI_API_KEY] || null);
             }
         });
     });
@@ -825,48 +808,18 @@ function isValidModel(provider, modelId) {
 }
 
 /**
- * Gets the selected model for a provider, or returns the default model
- * Also validates the model and falls back to default if invalid
- * @param {string} provider - The provider name
+ * Gets the model - always returns Gemini 2.5 Flash Lite
  * @returns {Promise<string>} The model ID to use
  */
-async function getSelectedModel(provider = 'gemini') {
-    return new Promise((resolve) => {
-        const config = API_CONFIGS[provider];
-        if (!config) {
-            debug.error(`Unknown provider: ${provider}`);
-            resolve(config?.defaultModel || 'gpt-4');
-            return;
-        }
-        
-        chrome.storage.local.get([STORAGE_SELECTED_MODELS], (result) => {
-            if (chrome.runtime.lastError) {
-                debug.error("Error retrieving selected model:", chrome.runtime.lastError);
-                resolve(config.defaultModel);
-            } else {
-                const selectedModels = result[STORAGE_SELECTED_MODELS] || {};
-                let selectedModel = selectedModels[provider] || config.defaultModel;
-                
-                // Validate the model exists - if not, use default and update storage
-                if (!isValidModel(provider, selectedModel)) {
-                    debug.warn(`Invalid model "${selectedModel}" for provider "${provider}", falling back to default "${config.defaultModel}"`);
-                    selectedModel = config.defaultModel;
-                    // Update storage with valid model
-                    const updatedModels = { ...selectedModels };
-                    updatedModels[provider] = selectedModel;
-                    chrome.storage.local.set({ [STORAGE_SELECTED_MODELS]: updatedModels });
-                }
-                
-                resolve(selectedModel);
-            }
-        });
-    });
+async function getSelectedModel() {
+    // Always use Gemini 2.5 Flash Lite
+    return Promise.resolve('gemini-2.5-flash-lite');
 }
 
 /**
- * Extracts the improved prompt text from API responses (supports multiple providers).
+ * Extracts the improved prompt text from Gemini API responses.
  */
-const extractImprovedPrompt = (data, provider = 'gemini') => {
+const extractImprovedPrompt = (data) => {
     try {
         // Check for error structure first
         if (data?.error) {
@@ -882,31 +835,20 @@ const extractImprovedPrompt = (data, provider = 'gemini') => {
             return `Error: ${data.error.message || data.error || 'Unknown error'}`;
         }
         
+        // Extract text from Gemini response
+        if (data?.promptFeedback?.blockReason) {
+            return `Error: Content was blocked. Try rephrasing your prompt.`;
+        }
+        
+        const candidate = data.candidates?.[0];
         let extractedText = '';
         
-        if (provider === 'gemini') {
-            if (data?.promptFeedback?.blockReason) {
-                return `Error: Content was blocked. Try rephrasing your prompt.`;
-            }
-            const candidate = data.candidates?.[0];
-            if (candidate?.content?.parts?.[0]?.text) {
-                extractedText = candidate.content.parts[0].text.trim();
-            }
-        } else if (provider === 'openai' || provider === 'grok' || provider === 'deepseek') {
-            // OpenAI-compatible APIs
-            const choice = data.choices?.[0];
-            if (choice?.message?.content) {
-                extractedText = choice.message.content.trim();
-            }
-        } else if (provider === 'anthropic') {
-            const content = data.content?.[0];
-            if (content?.text) {
-                extractedText = content.text.trim();
-            }
+        if (candidate?.content?.parts?.[0]?.text) {
+            extractedText = candidate.content.parts[0].text.trim();
         }
         
         if (!extractedText) {
-            debug.warn(`Unexpected ${provider} response structure:`, data);
+            debug.warn('Unexpected Gemini response structure:', data);
             return "Error: No response generated. Please try again.";
         }
         
@@ -916,77 +858,34 @@ const extractImprovedPrompt = (data, provider = 'gemini') => {
         
         return extractedText;
     } catch (e) {
-        debug.error(`Error processing ${provider} API response:`, e, data);
+        debug.error('Error processing Gemini API response:', e, data);
         return "Error: Failed to process the API response structure.";
     }
 };
 
 /**
- * Structures the request body for different API providers.
+ * Structures the request body for Gemini API.
  * @param {string} prompt - The user prompt
  * @param {string} systemInstruction - The system instruction
- * @param {string} provider - The provider name
- * @param {string} modelId - The model ID to use
- * @returns {string|null} The request body as JSON string
+ * @param {string} modelId - The model ID to use (always gemini-2.5-flash-lite)
+ * @returns {string} The request body as JSON string
  */
-const getRequestBody = (prompt, systemInstruction, provider = 'gemini', modelId = null) => {
+const getRequestBody = (prompt, systemInstruction, modelId = 'gemini-2.5-flash-lite') => {
     const fullInstruction = `${systemInstruction}\n\nUser's raw text:\n"${prompt}"\n\nImproved Output:`;
-    const config = API_CONFIGS[provider];
-    if (!config) return null;
     
-    // Get the actual model ID to use
-    const actualModelId = config.getModelId ? config.getModelId(modelId || config.defaultModel) : (modelId || config.defaultModel);
-
-    if (provider === 'gemini') {
-        return JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: fullInstruction
-                }]
-            }],
-            generationConfig: {
-                temperature: 0.6,
-                maxOutputTokens: 8000,
-                topP: 0.9,
-            }
-        });
-    } else if (provider === 'openai' || provider === 'grok' || provider === 'deepseek') {
-        // OpenAI-compatible APIs (OpenAI, xAI Grok, DeepSeek)
-        // GPT-5 and O-series models use max_completion_tokens, others use max_tokens
-        const maxTokens = 4096;
-        const isNewModel = actualModelId.startsWith('gpt-5') || 
-                          actualModelId.startsWith('o3') || 
-                          actualModelId.startsWith('o4');
-        
-        const requestBody = {
-            model: actualModelId,
-            messages: [
-                { role: 'system', content: systemInstruction },
-                { role: 'user', content: `User's raw text:\n"${prompt}"\n\nImproved Output:` }
-            ],
-            temperature: 0.6
-        };
-        
-        // Use appropriate parameter based on model
-        if (isNewModel) {
-            requestBody.max_completion_tokens = maxTokens;
-        } else {
-            requestBody.max_tokens = maxTokens;
+    // Always use Gemini format
+    return JSON.stringify({
+        contents: [{
+            parts: [{
+                text: fullInstruction
+            }]
+        }],
+        generationConfig: {
+            temperature: 0.6,
+            maxOutputTokens: 8000,
+            topP: 0.9,
         }
-        
-        return JSON.stringify(requestBody);
-    } else if (provider === 'anthropic') {
-        return JSON.stringify({
-            model: actualModelId,
-            max_tokens: 8000,
-            system: systemInstruction,
-            messages: [
-                { role: 'user', content: `User's raw text:\n"${prompt}"\n\nImproved Output:` }
-            ]
-        });
-    }
-    
-    return null;
+    });
 };
 
 /**
@@ -999,7 +898,8 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini', modelId 
  * @returns {Promise<string>} The enhanced prompt text or an error message.
  */
 async function executeEnhancement(enhancementType, userText, provider = 'gemini', forceDefaultStyle = false) {
-    const selectedProvider = provider || 'gemini';
+    // Always use Gemini 2.5 Flash Lite
+    const selectedProvider = 'gemini';
     
     // Get active style key first
     // If forceDefaultStyle is true, always use 'default' (injected button always uses default)
@@ -1025,7 +925,7 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
     // Create the enhancement promise
     const enhancementPromise = (async () => {
         try {
-            const apiKey = await getApiKey(selectedProvider);
+            const apiKey = await getApiKey();
             if (!apiKey) {
                 const providerNames = {
                     'gemini': 'Google AI',
@@ -1088,66 +988,20 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 );
             }
 
-            const config = API_CONFIGS[selectedProvider];
-            if (!config) {
-                throw new EnhancementError(
-                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
-                    'UNKNOWN_PROVIDER',
-                    false,
-                    `Unknown provider: ${selectedProvider}`
-                );
-            }
-
-            // Get selected model for this provider
-            const selectedModel = await getSelectedModel(selectedProvider);
+            const config = API_CONFIGS.gemini;
+            
+            // Always use Gemini 2.5 Flash Lite
+            const selectedModel = 'gemini-2.5-flash-lite';
             const actualModelId = config.getModelId ? config.getModelId(selectedModel) : selectedModel;
             
-            // Determine timeout based on model type (reasoning models need more time)
-            const isReasoningModel = actualModelId.includes('reasoning') || 
-                                   actualModelId.includes('reasoner') ||
-                                   actualModelId.includes('thinking') ||
-                                   actualModelId.includes('opus') ||
-                                   actualModelId.includes('pro') ||
-                                   actualModelId === 'gpt-5' ||
-                                   actualModelId === 'gpt-5-pro';
+            // Gemini 2.5 Flash Lite is fast, no special timeout needed
+            const isReasoningModel = false;
 
-            const requestBody = getRequestBody(userText, systemInstruction, selectedProvider, selectedModel);
-            if (!requestBody) {
-                throw new EnhancementError(
-                    ERROR_MESSAGES.UNEXPECTED_ERROR,
-                    'REQUEST_BODY_FAILED',
-                    false,
-                    `Failed to create request body for ${selectedProvider}`
-                );
-            }
+            const requestBody = getRequestBody(userText, systemInstruction, selectedModel);
 
-            // Build API URL and headers based on provider
-            let fullApiUrl;
-            let requestHeaders = { 'Content-Type': 'application/json' };
-            
-            if (selectedProvider === 'gemini') {
-                fullApiUrl = `${config.baseUrl}${actualModelId}${config.action}?key=${apiKey}`;
-            } else if (selectedProvider === 'openai' || selectedProvider === 'grok' || selectedProvider === 'deepseek') {
-                // OpenAI-compatible APIs
-                // Handle DeepSeek Speciale special base URL
-                let baseUrl = config.baseUrl;
-                if (selectedProvider === 'deepseek' && config.getBaseUrl) {
-                    baseUrl = config.getBaseUrl(selectedModel);
-                }
-                fullApiUrl = `${baseUrl}${config.endpoint}`;
-                requestHeaders['Authorization'] = `Bearer ${apiKey}`;
-            } else if (selectedProvider === 'anthropic') {
-                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
-                requestHeaders['x-api-key'] = apiKey;
-                requestHeaders['anthropic-version'] = '2023-06-01';
-            } else {
-                throw new EnhancementError(
-                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
-                    'UNSUPPORTED_PROVIDER',
-                    false,
-                    `Unsupported provider: ${selectedProvider}`
-                );
-            }
+            // Build API URL and headers for Gemini
+            const fullApiUrl = `${config.baseUrl}${actualModelId}${config.action}?key=${apiKey}`;
+            const requestHeaders = { 'Content-Type': 'application/json' };
 
             // Validate URL was constructed
             if (!fullApiUrl) {
@@ -1198,11 +1052,11 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 const error = new Error(errorData?.error?.message || `Connection failed (${response.status}).`);
-                throw getUserFriendlyError(error, selectedProvider);
+                throw getUserFriendlyError(error);
             }
 
             const data = await response.json();
-            const improvedPrompt = extractImprovedPrompt(data, selectedProvider);
+            const improvedPrompt = extractImprovedPrompt(data);
             
             // Cache successful results (now includes style in key)
             if (!improvedPrompt.startsWith('Error:')) {
@@ -1210,7 +1064,7 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 // cacheEnhancement(userText, enhancementType, selectedProvider, improvedPrompt, styleKeyForCache);
                 
                 // Save to history
-                saveToHistory(userText, improvedPrompt, enhancementType, selectedProvider);
+                saveToHistory(userText, improvedPrompt, enhancementType, 'gemini');
             }
             
             return improvedPrompt;
@@ -1223,7 +1077,7 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 return `Error: ${error.userMessage}`;
             }
             
-            const friendlyError = getUserFriendlyError(error, selectedProvider);
+            const friendlyError = getUserFriendlyError(error);
             return `Error: ${friendlyError.userMessage}`;
         } finally {
             // Remove from pending requests
@@ -1244,7 +1098,8 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
  * @returns {Promise<string>} The answer text or an error message
  */
 async function executeAskQuestion(question, provider = 'gemini') {
-    const selectedProvider = provider || 'gemini';
+    // Always use Gemini 2.5 Flash Lite
+    const selectedProvider = 'gemini';
     
     // Caching disabled - always make fresh API calls for unique responses
     // const cached = getCachedEnhancement(question, 'ASK_QUESTION', selectedProvider);
@@ -1265,137 +1120,46 @@ async function executeAskQuestion(question, provider = 'gemini') {
     // Create the question-answering promise
     const questionPromise = (async () => {
         try {
-            const apiKey = await getApiKey(selectedProvider);
+            const apiKey = await getApiKey();
             if (!apiKey) {
-                const providerNames = {
-                    'gemini': 'Google AI',
-                    'openai': 'OpenAI',
-                    'anthropic': 'Anthropic',
-                    'grok': 'xAI Grok',
-                    'deepseek': 'DeepSeek'
-                };
-                const providerName = providerNames[selectedProvider] || 'AI Provider';
                 throw new EnhancementError(
                     ERROR_MESSAGES.API_KEY_MISSING,
                     'API_KEY_MISSING',
                     true,
-                    `${providerName} API Key not found. Please set your key in the Setup tab.`
+                    'Gemini API Key not found. Please set your key in the Setup tab.'
                 );
             }
             
             // Use ASK_QUESTION system instruction
             const systemInstruction = SYSTEM_INSTRUCTIONS.ASK_QUESTION;
             
-            // Get provider configuration
-            const config = API_CONFIGS[selectedProvider];
-            if (!config) {
-                throw new EnhancementError(
-                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
-                    'UNKNOWN_PROVIDER',
-                    false,
-                    `Unsupported provider: ${selectedProvider}`
-                );
-            }
+            // Always use Gemini configuration
+            const config = API_CONFIGS.gemini;
             
-            // Get selected model for this provider
-            const selectedModel = await getSelectedModel(selectedProvider);
+            // Always use Gemini 2.5 Flash Lite
+            const selectedModel = 'gemini-2.5-flash-lite';
             const actualModelId = config.getModelId ? config.getModelId(selectedModel) : selectedModel;
             
-            // Determine timeout based on model type (reasoning models need more time)
-            // Declare once for use in multiple places
-            let isReasoningModel = actualModelId.includes('reasoning') || 
-                                   actualModelId.includes('reasoner') ||
-                                   actualModelId.includes('thinking') ||
-                                   actualModelId.includes('opus') ||
-                                   actualModelId.includes('pro') ||
-                                   actualModelId === 'gpt-5' ||
-                                   actualModelId === 'gpt-5-pro';
+            // Gemini 2.5 Flash Lite is fast, no special timeout needed
+            const isReasoningModel = false;
             
-            // Build request body for Ask (different format than enhancement)
-            let requestBody;
-            if (selectedProvider === 'gemini') {
-                requestBody = JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: `${systemInstruction}\n\nQuestion: ${question}\n\nAnswer:`
-                        }]
-                    }],
-                    generationConfig: {
-                        temperature: 0.7,
-                        maxOutputTokens: 8000,
-                        topP: 0.9,
-                    }
-                });
-        } else if (selectedProvider === 'openai' || selectedProvider === 'grok' || selectedProvider === 'deepseek') {
-            // OpenAI-compatible APIs
-            // GPT-5 and O-series models use max_completion_tokens, others use max_tokens
-            const maxTokens = 4096;
-            const isNewModel = actualModelId.startsWith('gpt-5') || 
-                              actualModelId.startsWith('o3') || 
-                              actualModelId.startsWith('o4');
-            
-            const requestBodyObj = {
-                model: actualModelId,
-                messages: [
-                    { role: 'system', content: systemInstruction },
-                    { role: 'user', content: question }
-                ],
-                temperature: 0.7
-            };
-            
-            // Use appropriate parameter based on model
-            if (isNewModel) {
-                requestBodyObj.max_completion_tokens = maxTokens;
-            } else {
-                requestBodyObj.max_tokens = maxTokens;
-            }
-            
-            requestBody = JSON.stringify(requestBodyObj);
-        } else if (selectedProvider === 'anthropic') {
-                requestBody = JSON.stringify({
-                    model: actualModelId,
-                    max_tokens: 8000,
-                    system: systemInstruction,
-                    messages: [
-                        { role: 'user', content: question }
-                    ]
-                });
-            } else {
-                throw new EnhancementError(
-                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
-                    'UNSUPPORTED_PROVIDER',
-                    false,
-                    `Unsupported provider: ${selectedProvider}`
-                );
-            }
-            
-            // Build API URL and headers
-            let fullApiUrl;
-            let requestHeaders = { 'Content-Type': 'application/json' };
-            
-            if (selectedProvider === 'gemini') {
-                fullApiUrl = `${config.baseUrl}${actualModelId}${config.action}?key=${apiKey}`;
-            } else if (selectedProvider === 'openai' || selectedProvider === 'grok' || selectedProvider === 'deepseek') {
-                // OpenAI-compatible APIs
-                // Handle DeepSeek Speciale special base URL
-                let baseUrl = config.baseUrl;
-                if (selectedProvider === 'deepseek' && config.getBaseUrl) {
-                    baseUrl = config.getBaseUrl(selectedModel);
+            // Build request body for Ask (Gemini format)
+            const requestBody = JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `${systemInstruction}\n\nQuestion: ${question}\n\nAnswer:`
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 8000,
+                    topP: 0.9,
                 }
-                fullApiUrl = `${baseUrl}${config.endpoint}`;
-                requestHeaders['Authorization'] = `Bearer ${apiKey}`;
-            } else if (selectedProvider === 'anthropic') {
-                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
-                requestHeaders['x-api-key'] = apiKey;
-                requestHeaders['anthropic-version'] = '2023-06-01';
-            } else {
-                throw new EnhancementError(
-                    ERROR_MESSAGES.UNKNOWN_PROVIDER,
-                    'UNSUPPORTED_PROVIDER',
-                    false,
-                    `Unsupported provider: ${selectedProvider}`
-                );
-            }
+            });
+            
+            // Build API URL and headers for Gemini
+            const fullApiUrl = `${config.baseUrl}${actualModelId}${config.action}?key=${apiKey}`;
+            const requestHeaders = { 'Content-Type': 'application/json' };
             
             // Apply rate limiting
             await apiRateLimiter.waitIfNeeded();
@@ -1426,12 +1190,12 @@ async function executeAskQuestion(question, provider = 'gemini') {
                     });
                     const errorMessage = errorData?.error?.message || errorData?.message || `Connection failed (${response.status}).`;
                     const error = new Error(errorMessage);
-                    throw getUserFriendlyError(error, selectedProvider);
+                    throw getUserFriendlyError(error);
                 }
                 
                 const data = await response.json();
                 debug.log('Ask API response data:', data);
-                const answer = extractImprovedPrompt(data, selectedProvider);
+                const answer = extractImprovedPrompt(data);
                 debug.log('Extracted answer (first 100 chars):', answer.substring(0, 100));
                 
                 // Cache successful results
@@ -1440,7 +1204,7 @@ async function executeAskQuestion(question, provider = 'gemini') {
                     // cacheEnhancement(question, 'ASK_QUESTION', selectedProvider, answer, 'ask');
                     
                     // Save to history (questions history)
-                    saveToHistory(question, answer, 'ASK_QUESTION', selectedProvider);
+                    saveToHistory(question, answer, 'ASK_QUESTION', 'gemini');
                 }
                 
                 return answer;
@@ -1466,7 +1230,7 @@ async function executeAskQuestion(question, provider = 'gemini') {
                 return error.userMessage;
             }
             
-            const friendlyError = getUserFriendlyError(error, selectedProvider);
+            const friendlyError = getUserFriendlyError(error);
             return `Error: ${friendlyError.userMessage}`;
         } finally {
             // Remove from pending requests
@@ -1487,54 +1251,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         // Log for debugging
         debug.log('Received message:', request.action);
         
-        if (request.action === 'getAvailableModels') {
-            const provider = request.provider || 'gemini';
-            let models = AVAILABLE_MODELS[provider] || [];
-            
-            // Filter out non-text models for Gemini (e.g., TTS models)
-            if (provider === 'gemini') {
-                models = models.filter(m => {
-                    const id = m.id.toLowerCase();
-                    // Filter out TTS (text-to-speech) models
-                    if (id.includes('tts') || id.includes('text-to-speech')) return false;
-                    // Filter out audio models
-                    if (id.includes('audio') && !id.includes('transcribe')) return false;
-                    return true;
-                });
-            }
-            
-            const config = API_CONFIGS[provider];
-            const recommendedModelId = config?.defaultModel || null;
-            const recommendedModels = models.filter(m => m.recommended === true);
-            sendResponse({ success: true, models, recommendedModelId, recommendedModels });
-            return true;
-        }
-        
-        if (request.action === 'getSelectedModel') {
-            getSelectedModel(request.provider || 'gemini')
-                .then(modelId => {
-                    sendResponse({ success: true, modelId });
-                })
-                .catch(error => {
-                    sendResponse({ success: false, error: error.message });
-                });
-            return true;
-        }
-        
-        if (request.action === 'setSelectedModel') {
-            const provider = request.provider || 'gemini';
-            const modelId = request.modelId;
-            
-            chrome.storage.local.get([STORAGE_SELECTED_MODELS], (result) => {
-                const selectedModels = result[STORAGE_SELECTED_MODELS] || {};
-                selectedModels[provider] = modelId;
-                chrome.storage.local.set({ [STORAGE_SELECTED_MODELS]: selectedModels }, () => {
-                    if (chrome.runtime.lastError) {
-                        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-                    } else {
-                        sendResponse({ success: true });
-                    }
-                });
+        // Model selection removed - always use Gemini 2.5 Flash Lite
+        if (request.action === 'getAvailableModels' || request.action === 'getSelectedModel' || request.action === 'setSelectedModel') {
+            // Always return Gemini 2.5 Flash Lite
+            sendResponse({ 
+                success: true, 
+                modelId: 'gemini-2.5-flash-lite',
+                models: [{ id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', recommended: true }],
+                recommendedModelId: 'gemini-2.5-flash-lite'
             });
             return true;
         }
@@ -1657,9 +1381,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'enhancePrompt') {
             const enhancementType = request.enhancementType || 'TEXT_ENHANCEMENT';
-            const provider = request.provider || 'gemini';
             const forceDefaultStyle = request.forceDefaultStyle || false; // Injected button always uses default
-            let promise = executeEnhancement(enhancementType, request.prompt, provider, forceDefaultStyle);
+            // Always use Gemini 2.5 Flash Lite
+            let promise = executeEnhancement(enhancementType, request.prompt, 'gemini', forceDefaultStyle);
 
             // Handle the promise result and send back to the content script
             promise.then(result => {
@@ -1674,8 +1398,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         }
         
         if (request.action === 'askQuestion') {
-            const provider = request.provider || 'gemini';
-            let promise = executeAskQuestion(request.question, provider);
+            // Always use Gemini 2.5 Flash Lite
+            let promise = executeAskQuestion(request.question, 'gemini');
 
             // Handle the promise result and send back
             promise.then(result => {
@@ -1718,10 +1442,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         const selectedText = info.selectionText;
         const enhancementType = info.menuItemId; // ID is now the enhancement type key
         
-        // Use stored provider or default to gemini for context menu
-        chrome.storage.local.get([STORAGE_PROVIDER], (result) => {
-            const provider = result[STORAGE_PROVIDER] || 'gemini';
-            const promise = executeEnhancement(enhancementType, selectedText, provider);
+        // Always use Gemini
+        const promise = executeEnhancement(enhancementType, selectedText, 'gemini');
 
             // Send the result back to the content script via a message to update the input box
             promise.then(result => {

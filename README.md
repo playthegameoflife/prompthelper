@@ -1,16 +1,17 @@
-# Prompt Helper
+# Prompt Helper Gemini
 
 Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience that works directly in your favorite AI chat interfaces.
 
 ## Features
 
-- 🚀 **Multi-Provider Support**: Works with Google Gemini, OpenAI GPT-4, and Anthropic Claude
-- 🎯 **Smart Mode Detection**: Automatically detects the best enhancement mode (Text, Code, Image, Video)
-- ⚡ **Fast & Efficient**: Caching and request deduplication for optimal performance
+- 🚀 **Powered by Gemini 2.5 Flash Lite**: Fast, efficient, and cost-effective AI enhancement
+- 🎯 **Multiple Enhancement Modes**: Text, Code, Image, and Video prompt optimization
+- ⚡ **Fast & Efficient**: Optimized for speed and low cost
 - 📝 **Enhancement History**: View and reuse your recently enhanced prompts
 - ⌨️ **Keyboard Shortcuts**: Quick access with `Ctrl+Shift+E` (or `Cmd+Shift+E` on Mac)
 - 🎨 **Beautiful UI**: Modern, clean interface inspired by Apple's design language
-- 🔒 **Privacy First**: All API keys stored locally, never shared
+- 🔒 **Privacy First**: API key stored locally, never shared
+- 💰 **Free Tier Available**: Generous free usage limits from Google
 
 ## Supported Platforms
 
@@ -38,21 +39,18 @@ Intelligent prompt refinement for Text, Code, Image, and Video generation. A fri
 
 ## Setup
 
-### 1. Get an API Key
+### 1. Get Your Gemini API Key
 
-Choose one of the supported providers:
-
-- **Google Gemini**: Visit [Google AI Studio](https://aistudio.google.com/api-keys) to get your free API key
-- **OpenAI**: Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-- **Anthropic**: Get your API key from [Anthropic Console](https://console.anthropic.com/)
+- Visit [Google AI Studio](https://aistudio.google.com/api-keys) to get your free Gemini API key
+- Free tier includes generous usage limits
+- No credit card required for free tier
 
 ### 2. Configure the Extension
 
-1. Click the Prompt Helper icon in your browser toolbar
+1. Click the Prompt Helper Gemini icon in your browser toolbar
 2. Navigate to the "Setup" tab
-3. Select your AI provider
-4. Enter your API key
-5. Click "Save & Activate"
+3. Enter your Gemini API key
+4. Click "Save & Activate"
 
 ### 3. Start Enhancing
 

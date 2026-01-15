@@ -39,11 +39,11 @@ async function isFeatureAvailable(featureName) {
   
   // Check plan level
   if (requiredPlan === 'pro') {
-    // Pro or Premium plans have access
-    return status.plan === 'price_pro_monthly' || status.plan === 'price_premium_monthly';
+    // Premium plan has access
+    return status.plan === 'price_1SpzCbGqilA1wQCPH91vAF6R';
   } else if (requiredPlan === 'premium') {
     // Only Premium plan has access
-    return status.plan === 'price_premium_monthly';
+    return status.plan === 'price_1SpzCbGqilA1wQCPH91vAF6R';
   }
   
   return false;

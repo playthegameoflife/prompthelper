@@ -22,14 +22,12 @@ The integration consists of:
 ### 2. Create Products and Prices in Stripe
 
 1. Go to https://dashboard.stripe.com/products
-2. Create two products:
-   - **Pro Plan**: $9.99/month
+2. Create one product:
    - **Premium Plan**: $19.99/month
-3. For each product, create a recurring price (monthly subscription)
-4. Copy the Price IDs (e.g., `price_1234567890`)
-5. Update the Price IDs in `popup.html`:
+3. Create a recurring price (monthly subscription)
+4. Copy the Price ID (e.g., `price_1234567890`)
+5. Update the Price ID in `popup.html`:
    ```html
-   <button data-price-id="price_pro_monthly">Subscribe to Pro</button>
    <button data-price-id="price_premium_monthly">Subscribe to Premium</button>
    ```
 

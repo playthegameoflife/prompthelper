@@ -12,6 +12,9 @@
  * 3. Run: node stripe-server.js
  */
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const cors = require('cors');

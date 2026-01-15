@@ -1,5 +1,5 @@
 {
-  "name": "prompt-helper",
+  "name": "prompt-helper-gemini",
   "version": "1.6.0",
   "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation",
   "scripts": {

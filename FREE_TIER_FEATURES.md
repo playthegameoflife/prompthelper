@@ -42,12 +42,6 @@ Based on the current implementation, **free users get full access** to all core 
 
 The following features are **defined in the code** but **not yet enforced** with usage limits:
 
-### 🔒 Pro Plan Features ($9.99/month)
-- `unlimited_enhancements` - Currently unlimited for everyone
-- `priority_api` - Currently same priority for everyone
-- `advanced_templates` - Currently all templates available
-- `export_history` - Not yet implemented
-
 ### 🔒 Premium Plan Features ($19.99/month)
 - `custom_models` - Not yet implemented
 - `api_access` - Not yet implemented
@@ -62,17 +56,17 @@ To create a proper freemium model, you should implement these limits:
 ```javascript
 // Free tier limits
 const FREE_TIER_LIMITS = {
-  enhancements_per_day: 10,        // 10 enhancements per day
-  history_items: 20,               // Keep last 20 items (vs 50 for Pro)
+  enhancements_per_week: 10,       // 10 enhancements per week
+  history_items: 20,               // Keep last 20 items (vs 50 for Premium)
   ask_questions_per_day: 5,        // 5 questions per day
   custom_styles: 2,                // Only 2 custom styles
   advanced_templates: false,       // No access to advanced templates
-  export_history: false,            // No export feature
+  export_history: false,           // No export feature
   priority_support: false,         // Community support only
 };
 ```
 
-### Pro Tier Benefits
+### Premium Tier Benefits ($19.99/month)
 - ✅ Unlimited enhancements
 - ✅ Unlimited history (50+ items)
 - ✅ Unlimited questions
@@ -81,13 +75,6 @@ const FREE_TIER_LIMITS = {
 - ✅ Export history (CSV/JSON)
 - ✅ Priority API access
 - ✅ Priority support
-
-### Premium Tier Benefits
-- ✅ Everything in Pro
-- ✅ Custom AI model training
-- ✅ API access for integrations
-- ✅ White-label options
-- ✅ Dedicated support
 
 ## Implementation Status
 
@@ -149,11 +136,11 @@ async function enhancePrompt(prompt) {
   
   if (!hasActive) {
     // Check free tier limit
-    const canEnhance = await checkLimit('enhancements', 10);
+    const canEnhance = await checkLimit('enhancements', 10); // 10 per week
     if (!canEnhance) {
       return {
-        error: 'Daily limit reached',
-        message: 'You\'ve used your 10 free enhancements today. Upgrade to Pro for unlimited!',
+        error: 'Weekly limit reached',
+        message: 'You\'ve used your 10 free enhancements this week. Upgrade to Premium for unlimited!',
         upgradeRequired: true
       };
     }
@@ -188,11 +175,11 @@ async function enhancePrompt(prompt) {
 ### Free User Experience
 
 ```
-Day 1:
+Week 1:
 ✅ Enhanced 10 prompts (limit reached)
-❌ "You've reached your daily limit. Upgrade for unlimited!"
+❌ "You've reached your weekly limit. Upgrade for unlimited!"
 
-Day 2:
+Week 2:
 ✅ Enhanced 10 prompts (limit reset)
 ❌ Limit reached again
 

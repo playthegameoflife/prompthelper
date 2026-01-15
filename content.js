@@ -1678,8 +1678,8 @@ async function isInjectButtonEnabled() {
  */
 async function hasApiKey() {
     return new Promise((resolve) => {
-        chrome.storage.local.get(['userGeminiApiKey', 'userOpenAIApiKey', 'userAnthropicApiKey'], (result) => {
-            const hasKey = !!(result.userGeminiApiKey || result.userOpenAIApiKey || result.userAnthropicApiKey);
+        chrome.storage.local.get(['userGeminiApiKey'], (result) => {
+            const hasKey = !!result.userGeminiApiKey;
             resolve(hasKey);
         });
     });
@@ -1761,7 +1761,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         }
         
         // Handle API key changes
-        const apiKeyChanged = changes.userGeminiApiKey || changes.userOpenAIApiKey || changes.userAnthropicApiKey;
+        const apiKeyChanged = changes.userGeminiApiKey;
         if (apiKeyChanged) {
             (async () => {
                 const apiKeyExists = await hasApiKey();

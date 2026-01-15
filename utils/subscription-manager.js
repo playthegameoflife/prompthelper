@@ -5,7 +5,7 @@
 
 // Configuration - Update with your server URL
 const PAYMENT_SERVER_URL = process.env.PAYMENT_SERVER_URL || 'http://localhost:3000';
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here';
+const STRIPE_PUBLISHABLE_KEY = 'pk_test_51SpzA8GqilA1wQCPwzbv9wMwZEQlZr223zliFRUlUPvC4wLkbYKhR3gq7kU3aFkKKAAB4dNUdnQ99SBSzbNiT1n300hZItRPye';
 
 // Storage keys
 const STORAGE_USER_ID = 'userId';

@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Fruited - AI Prompt Helper",
-  "short_name": "Fruited",
+  "name": "Prompt Helper Gemini",
+  "short_name": "Prompt Helper Gemini",
   "version": "2.3.0",
-  "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience.",
+  "description": "Intelligent prompt refinement powered by Gemini 2.5 Flash Lite. Enhance Text, Code, Image, and Video prompts with AI.",
   "homepage_url": "https://github.com/yourusername/prompt-architect",
   "permissions": [
     "activeTab",

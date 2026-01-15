@@ -14,8 +14,8 @@ export class InjectionManager {
      */
     static async hasApiKey() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(['userGeminiApiKey', 'userOpenAIApiKey', 'userAnthropicApiKey'], (result) => {
-                const hasKey = !!(result.userGeminiApiKey || result.userOpenAIApiKey || result.userAnthropicApiKey);
+            chrome.storage.local.get(['userGeminiApiKey'], (result) => {
+                const hasKey = !!result.userGeminiApiKey;
                 resolve(hasKey);
             });
         });
