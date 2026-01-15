@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Prompt Helper v1.5</title>
-    <!-- Version 1.5 - Premium UI with Enhance Tab -->
+    <title>Fruited - AI Prompt Helper</title>
+    <!-- Version 2.0 - Recommended Models & Enhanced UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         /* Premium Jony Ive-Inspired Design System */
         :root {
@@ -50,6 +53,8 @@
             color: var(--text-primary);
             overflow-x: hidden;
             overflow-y: auto;
+            /* Ensure scrolling works when zoomed */
+            position: relative;
         }
 
         .container {
@@ -57,8 +62,8 @@
             display: flex;
             flex-direction: column;
             gap: var(--spacing-xl);
-            max-height: 600px;
-            overflow-y: auto;
+            /* Remove max-height to allow natural growth - body handles scrolling */
+            min-height: 100%;
             overflow-x: hidden;
             /* Ensure smooth scrolling */
             overscroll-behavior: contain;
@@ -73,6 +78,7 @@
         }
 
         .header-title {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             font-size: 22px;
             font-weight: 700;
             letter-spacing: -0.02em;
@@ -203,6 +209,33 @@
 
         .premium-input::placeholder {
             color: var(--text-tertiary);
+        }
+
+        /* Elegant Optgroup Styling - Steve Jobs Inspired */
+        .premium-input optgroup {
+            font-weight: 500;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            padding: 8px 0 4px 0;
+            margin-top: 8px;
+        }
+
+        .premium-input optgroup[label="Recommended"] {
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+
+        .premium-input option {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 400;
+            color: var(--text-primary);
+        }
+
+        .premium-input optgroup[label="Recommended"] option {
+            font-weight: 500;
         }
 
         /* Premium Textarea */
@@ -1306,7 +1339,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1 class="header-title">Prompt Helper</h1>
+            <h1 class="header-title">Fruited - AI Prompt Helper</h1>
         </div>
 
         <!-- Tab Navigation -->
@@ -1314,6 +1347,7 @@
             <button class="tab-button active" data-tab="enhance">Enhance</button>
             <button class="tab-button" data-tab="ask">Ask</button>
             <button class="tab-button" data-tab="recent">Recent</button>
+            <button class="tab-button" data-tab="premium">Premium</button>
             <button class="tab-button" data-tab="setup">Setup</button>
         </div>
 
@@ -1475,6 +1509,98 @@
             </div>
         </div>
         
+        <!-- Premium Tab -->
+        <div id="premium-section" class="setup-section">
+            <div class="glass-card">
+                <div class="section-header">
+                    <div class="section-header-icon">⭐</div>
+                    <div class="section-header-content">
+                        <h2 class="section-title">Premium Features</h2>
+                        <p class="section-subtitle">Unlock advanced capabilities</p>
+                    </div>
+                </div>
+                
+                <!-- Subscription Status -->
+                <div id="subscription-status" class="info-box" style="margin-bottom: var(--spacing-xl);">
+                    <div id="subscription-status-content">
+                        <p style="margin: 0; font-size: 13px;">
+                            <strong>Status:</strong> <span id="subscription-status-text">Checking...</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Pricing Plans -->
+                <div id="pricing-plans" style="display: none;">
+                    <h3 class="section-title" style="font-size: 16px; margin-bottom: var(--spacing-md);">Choose Your Plan</h3>
+                    
+                    <div style="display: flex; flex-direction: column; gap: var(--spacing-md); margin-bottom: var(--spacing-xl);">
+                        <!-- Pro Plan -->
+                        <div class="glass-card" style="border: 2px solid var(--primary-blue-light);">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-md);">
+                                <div>
+                                    <h4 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 700; color: var(--text-primary);">Pro</h4>
+                                    <p style="margin: 0; font-size: 24px; font-weight: 700; color: var(--primary-blue);">$9.99<span style="font-size: 14px; font-weight: 400; color: var(--text-secondary);">/month</span></p>
+                                </div>
+                            </div>
+                            <ul style="margin: 0 0 var(--spacing-md) 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
+                                <li>Unlimited prompt enhancements</li>
+                                <li>Priority API access</li>
+                                <li>Advanced style templates</li>
+                                <li>Export history</li>
+                                <li>Priority support</li>
+                            </ul>
+                            <button id="subscribe-pro-button" class="premium-button" data-price-id="price_pro_monthly">
+                                Subscribe to Pro
+                            </button>
+                        </div>
+                        
+                        <!-- Premium Plan -->
+                        <div class="glass-card" style="border: 2px solid rgba(102, 126, 234, 0.3); background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--spacing-md);">
+                                <div>
+                                    <div style="display: inline-block; padding: 2px 8px; background: rgba(102, 126, 234, 0.2); border-radius: 4px; font-size: 11px; font-weight: 600; color: #667eea; margin-bottom: 4px;">POPULAR</div>
+                                    <h4 style="margin: 4px 0; font-size: 18px; font-weight: 700; color: var(--text-primary);">Premium</h4>
+                                    <p style="margin: 0; font-size: 24px; font-weight: 700; color: #667eea;">$19.99<span style="font-size: 14px; font-weight: 400; color: var(--text-secondary);">/month</span></p>
+                                </div>
+                            </div>
+                            <ul style="margin: 0 0 var(--spacing-md) 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
+                                <li>Everything in Pro</li>
+                                <li>Custom AI model training</li>
+                                <li>API access for integrations</li>
+                                <li>White-label options</li>
+                                <li>Dedicated support</li>
+                            </ul>
+                            <button id="subscribe-premium-button" class="premium-button" data-price-id="price_premium_monthly" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                Subscribe to Premium
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Active Subscription View -->
+                <div id="active-subscription" style="display: none;">
+                    <div class="centered-content">
+                        <div class="success-icon">✓</div>
+                        <h2 class="section-title">Premium Active</h2>
+                        <p class="section-subtitle" id="subscription-details">
+                            Your subscription is active. Enjoy all premium features!
+                        </p>
+                        <div style="display: flex; gap: var(--spacing-md); margin-top: var(--spacing-lg);">
+                            <button id="manage-subscription-button" class="premium-button-secondary" style="flex: 1;">
+                                Manage Subscription
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="subscription-loading" style="text-align: center; padding: var(--spacing-2xl);">
+                    <div class="loading-spinner show"></div>
+                    <p style="margin-top: var(--spacing-md); color: var(--text-secondary); font-size: 13px;">Loading subscription status...</p>
+                </div>
+            </div>
+        </div>
+        
         <!-- Setup Tab -->
         <div id="setup-section" class="setup-section">
             <div class="glass-card">
@@ -1497,9 +1623,21 @@
                     <label class="form-label">AI Provider</label>
                     <select id="provider-selector" class="premium-input" style="cursor: pointer;">
                         <option value="gemini">Google Gemini</option>
-                        <option value="openai">OpenAI (GPT-4)</option>
+                        <option value="openai">OpenAI</option>
                         <option value="anthropic">Anthropic Claude</option>
+                        <option value="grok">xAI Grok</option>
+                        <option value="deepseek">DeepSeek</option>
                     </select>
+                </div>
+                
+                <div class="form-group">
+                    <label id="model-label" class="form-label">Model</label>
+                    <select id="model-selector" class="premium-input" style="cursor: pointer;">
+                        <!-- Models will be populated dynamically -->
+                    </select>
+                    <div id="model-help" class="help-text">
+                        Select the AI model to use for enhancements
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -1633,6 +1771,7 @@
             </div>
         </div>
     </div>
+    <script src="utils/subscription-manager.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

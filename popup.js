@@ -9,7 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_KEYS = {
     gemini: 'userGeminiApiKey',
     openai: 'userOpenAIApiKey',
-    anthropic: 'userAnthropicApiKey'
+    anthropic: 'userAnthropicApiKey',
+    grok: 'userGrokApiKey',
+    deepseek: 'userDeepSeekApiKey'
   };
   const STORAGE_PROVIDER = 'selectedProvider';
   const STORAGE_ENHANCEMENT_MODE = 'popupEnhancementMode'; // Separate from injected button mode
@@ -41,6 +43,18 @@ document.addEventListener('DOMContentLoaded', () => {
       placeholder: 'sk-ant-... (paste your key here)',
       helpUrl: 'https://console.anthropic.com/settings/keys',
       keyPrefix: 'sk-ant-'
+    },
+    grok: {
+      name: 'xAI Grok',
+      placeholder: 'xai-... (paste your key here)',
+      helpUrl: 'https://console.x.ai/api-keys',
+      keyPrefix: 'xai-'
+    },
+    deepseek: {
+      name: 'DeepSeek',
+      placeholder: 'sk-... (paste your key here)',
+      helpUrl: 'https://platform.deepseek.com/api_keys',
+      keyPrefix: 'sk-'
     }
   };
 
@@ -48,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const enhanceTab = document.getElementById('enhance-section');
   const askTab = document.getElementById('ask-section');
   const recentTab = document.getElementById('recent-section');
+  const premiumTab = document.getElementById('premium-section');
   const setupTab = document.getElementById('setup-section');
   const advancedSection = document.getElementById('advanced-section');
   
@@ -66,6 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (recentTab) {
     recentTab.classList.remove('active');
     recentTab.style.display = 'none';
+  }
+  
+  if (premiumTab) {
+    premiumTab.classList.remove('active');
+    premiumTab.style.display = 'none';
   }
   
   if (setupTab) {
@@ -138,9 +158,31 @@ document.addEventListener('DOMContentLoaded', () => {
         recentTab.style.display = 'flex';
         recentTab.style.flexDirection = 'column';
         recentTab.style.gap = '16px';
+        if (premiumTab) {
+          premiumTab.classList.remove('active');
+          premiumTab.style.display = 'none';
+        }
         setupTab.classList.remove('active');
         setupTab.style.display = 'none';
         loadHistory(); // Load history when tab is opened
+      } else if (tab === 'premium') {
+        enhanceTab.classList.remove('active');
+        enhanceTab.style.display = 'none';
+        if (askTab) {
+          askTab.classList.remove('active');
+          askTab.style.display = 'none';
+        }
+        recentTab.classList.remove('active');
+        recentTab.style.display = 'none';
+        if (premiumTab) {
+          premiumTab.classList.add('active');
+          premiumTab.style.display = 'flex';
+          premiumTab.style.flexDirection = 'column';
+          premiumTab.style.gap = '16px';
+        }
+        setupTab.classList.remove('active');
+        setupTab.style.display = 'none';
+        loadPremiumTab(); // Load premium tab content
       } else {
         enhanceTab.classList.remove('active');
         enhanceTab.style.display = 'none';
@@ -150,6 +192,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         recentTab.classList.remove('active');
         recentTab.style.display = 'none';
+        if (premiumTab) {
+          premiumTab.classList.remove('active');
+          premiumTab.style.display = 'none';
+        }
         setupTab.classList.add('active');
         setupTab.style.display = 'flex';
         setupTab.style.flexDirection = 'column';
@@ -162,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Setup View Elements
   const providerSelector = document.getElementById('provider-selector');
+  const modelSelector = document.getElementById('model-selector');
   const apiKeyInput = document.getElementById('api-key-input');
   const apiKeyLabel = document.getElementById('api-key-label');
   const apiKeyLink = document.getElementById('api-key-link');
@@ -206,9 +253,86 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * Loads available models for a provider and populates the model selector
+   */
+  async function loadModelsForProvider(provider) {
+    if (!modelSelector) return;
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getAvailableModels',
+        provider: provider
+      });
+      
+      if (response && response.success && response.models) {
+        // Clear existing options
+        modelSelector.innerHTML = '';
+        
+        const recommendedModelId = response.recommendedModelId;
+        const recommendedModels = response.recommendedModels || [];
+        const allModels = response.models || [];
+        
+        // Separate recommended from other models
+        const recommendedIds = new Set(recommendedModels.map(m => m.id));
+        const otherModels = allModels.filter(m => !recommendedIds.has(m.id));
+        
+        // Add Recommended optgroup
+        if (recommendedModels.length > 0) {
+          const recommendedGroup = document.createElement('optgroup');
+          recommendedGroup.label = 'Recommended';
+          recommendedModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            recommendedGroup.appendChild(option);
+          });
+          modelSelector.appendChild(recommendedGroup);
+        }
+        
+        // Add separator if there are other models
+        if (otherModels.length > 0) {
+          const otherGroup = document.createElement('optgroup');
+          otherGroup.label = 'All Models';
+          otherModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            otherGroup.appendChild(option);
+          });
+          modelSelector.appendChild(otherGroup);
+        }
+        
+        // Load and set selected model
+        const selectedResponse = await chrome.runtime.sendMessage({
+          action: 'getSelectedModel',
+          provider: provider
+        });
+        
+        if (selectedResponse && selectedResponse.success && selectedResponse.modelId) {
+          modelSelector.value = selectedResponse.modelId;
+        } else {
+          // Use recommended model as default
+          if (recommendedModelId) {
+            modelSelector.value = recommendedModelId;
+          } else if (recommendedModels.length > 0) {
+            modelSelector.value = recommendedModels[0].id;
+          } else {
+            const defaultModel = allModels[0]?.id || '';
+            if (defaultModel) {
+              modelSelector.value = defaultModel;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading models:', error);
+    }
+  }
+  
+  /**
    * Updates the UI based on selected provider.
    */
-  function updateProviderUI(provider) {
+  async function updateProviderUI(provider) {
     const providerConfig = PROVIDERS[provider];
     if (!providerConfig) return;
     
@@ -216,6 +340,9 @@ document.addEventListener('DOMContentLoaded', () => {
     apiKeyInput.placeholder = providerConfig.placeholder;
     apiKeyLink.href = providerConfig.helpUrl;
     apiKeyLink.textContent = `Get your ${providerConfig.name} API key`;
+    
+    // Load models for the selected provider
+    await loadModelsForProvider(provider);
   }
 
   /**
@@ -294,8 +421,8 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Loads the stored API key and updates the UI state.
    */
-  function loadApiKey() {
-    chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], (result) => {
+  async function loadApiKey() {
+    chrome.storage.local.get([STORAGE_PROVIDER, ...Object.values(STORAGE_KEYS)], async (result) => {
       const selectedProvider = result[STORAGE_PROVIDER] || 'gemini';
       currentProvider = selectedProvider;
       
@@ -303,11 +430,11 @@ document.addEventListener('DOMContentLoaded', () => {
         providerSelector.value = selectedProvider;
       }
       
-      updateProviderUI(selectedProvider);
+      await updateProviderUI(selectedProvider);
       
       const storageKey = STORAGE_KEYS[selectedProvider];
       const key = result[storageKey];
-          updateUIState(key);
+      updateUIState(key);
       
       if (apiKeyInput && key) {
         apiKeyInput.value = key;
@@ -333,9 +460,9 @@ document.addEventListener('DOMContentLoaded', () => {
    * Handle provider selection change.
    */
   if (providerSelector) {
-    providerSelector.addEventListener('change', (e) => {
+    providerSelector.addEventListener('change', async (e) => {
       currentProvider = e.target.value;
-      updateProviderUI(currentProvider);
+      await updateProviderUI(currentProvider);
       
       // Load the key for the selected provider
       const storageKey = STORAGE_KEYS[currentProvider];
@@ -349,7 +476,47 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Save selected provider
       chrome.storage.local.set({ [STORAGE_PROVIDER]: currentProvider });
-      });
+    });
+  }
+  
+  /**
+   * Handle model selection change.
+   */
+  if (modelSelector) {
+    modelSelector.addEventListener('change', async (e) => {
+      const selectedModelId = e.target.value;
+      
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'setSelectedModel',
+          provider: currentProvider,
+          modelId: selectedModelId
+        });
+        
+        if (response && response.success) {
+          // Show subtle feedback
+          const originalBg = modelSelector.style.background;
+          modelSelector.style.background = 'rgba(52, 199, 89, 0.1)';
+          setTimeout(() => {
+            modelSelector.style.background = originalBg;
+          }, 500);
+          
+          // Ensure API key input shows the saved key (if it exists)
+          const storageKey = STORAGE_KEYS[currentProvider];
+          chrome.storage.local.get([storageKey], (result) => {
+            const key = result[storageKey];
+            if (apiKeyInput && key) {
+              apiKeyInput.value = key;
+              updateUIState(key);
+            }
+          });
+        } else {
+          console.error('Error saving model selection:', response?.error);
+        }
+      } catch (error) {
+        console.error('Error setting model:', error);
+      }
+    });
   }
 
   /**
@@ -383,7 +550,8 @@ document.addEventListener('DOMContentLoaded', () => {
               updateUIState(null);
           } else {
           showStatus(`${providerName} key saved successfully!`, 'success');
-              apiKeyInput.value = ''; 
+              // Keep the key in the input field so user doesn't have to re-enter when switching models
+              // The key is already in apiKeyInput.value, so no need to clear it
               updateUIState(key);
               updateApiKeyNotice();
           }
@@ -402,16 +570,25 @@ document.addEventListener('DOMContentLoaded', () => {
   changeKeyLink.addEventListener('click', (e) => {
       e.preventDefault();
       const storageKey = STORAGE_KEYS[currentProvider];
-      chrome.storage.local.remove(storageKey, () => {
-          updateUIState(null);
-        if (apiKeyInput) apiKeyInput.value = '';
-          showStatus('Key removed. Enter new key below.', 'success');
-        // Switch to the input view
-        const setupCard = document.querySelector('#setup-section .glass-card:first-child');
-        if (setupCard) setupCard.style.display = 'block';
-        if (savedView) savedView.style.display = 'none';
+      // Load the current key and show it in the input field for editing
+      chrome.storage.local.get([storageKey], (result) => {
+          const currentKey = result[storageKey] || '';
+          if (apiKeyInput) {
+              apiKeyInput.value = currentKey;
+          }
+          // Switch to the input view so user can edit the key
+          const setupCard = document.querySelector('#setup-section .glass-card:first-child');
+          if (setupCard) setupCard.style.display = 'block';
+          if (savedView) savedView.style.display = 'none';
+          // Focus on the input field for easy editing
+          if (apiKeyInput) {
+              apiKeyInput.focus();
+              // Select all text so user can easily replace it
+              apiKeyInput.select();
+          }
+          showStatus('Key loaded. Edit and save to update.', 'info');
       });
-    });
+  });
   }
 
   /**
@@ -1275,7 +1452,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.innerHTML = `
       <div style="text-align: center; margin-bottom: 28px;">
         <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
-        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Prompt Helper</h2>
+        <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to Fruited</h2>
         <p style="margin: 0; font-size: 15px; color: var(--text-secondary); line-height: 1.5;">
           Transform your prompts into powerful AI instructions
         </p>
@@ -1733,14 +1910,21 @@ document.addEventListener('DOMContentLoaded', () => {
    * Applies zoom to the popup
    */
   function applyZoom(zoomLevel) {
-    const container = document.querySelector('.container') || document.body;
-    if (container) {
-      // Use CSS zoom property (better for popups)
-      container.style.zoom = zoomLevel;
+    // Apply zoom to body for better scrolling behavior
+    const body = document.body;
+    if (body) {
+      // Use CSS zoom property (better for popups and scrolling)
+      body.style.zoom = zoomLevel;
       // Fallback for browsers that don't support zoom
-      if (!container.style.zoom) {
-        container.style.transform = `scale(${zoomLevel})`;
-        container.style.transformOrigin = 'top left';
+      if (!body.style.zoom) {
+        body.style.transform = `scale(${zoomLevel})`;
+        body.style.transformOrigin = 'top left';
+        // Adjust max-height to account for scale
+        const originalMaxHeight = 600;
+        body.style.maxHeight = `${originalMaxHeight / zoomLevel}px`;
+      } else {
+        // Reset max-height when using zoom property (it handles it automatically)
+        body.style.maxHeight = '';
       }
     }
     if (zoomLevelDisplay) {
@@ -1888,6 +2072,198 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Load style selector visibility on popup open
   loadStyleSelectorVisibility();
+
+  // ============================================================================
+  // PREMIUM / SUBSCRIPTION MANAGEMENT
+  // ============================================================================
+  
+  const subscriptionStatus = document.getElementById('subscription-status');
+  const subscriptionStatusText = document.getElementById('subscription-status-text');
+  const pricingPlans = document.getElementById('pricing-plans');
+  const activeSubscription = document.getElementById('active-subscription');
+  const subscriptionLoading = document.getElementById('subscription-loading');
+  const subscribeProButton = document.getElementById('subscribe-pro-button');
+  const subscribePremiumButton = document.getElementById('subscribe-premium-button');
+  const manageSubscriptionButton = document.getElementById('manage-subscription-button');
+  const subscriptionDetails = document.getElementById('subscription-details');
+  
+  /**
+   * Load premium tab content
+   */
+  async function loadPremiumTab() {
+    if (!subscriptionStatus || !subscriptionLoading) return;
+    
+    // Show loading state
+    subscriptionLoading.style.display = 'block';
+    pricingPlans.style.display = 'none';
+    activeSubscription.style.display = 'none';
+    
+    try {
+      // Check subscription status
+      const status = await getSubscriptionStatus();
+      
+      // Hide loading
+      subscriptionLoading.style.display = 'none';
+      
+      if (status.active && status.status === 'active') {
+        // User has active subscription
+        activeSubscription.style.display = 'block';
+        pricingPlans.style.display = 'none';
+        
+        const planName = status.plan === 'price_pro_monthly' ? 'Pro' : 
+                        status.plan === 'price_premium_monthly' ? 'Premium' : 'Premium';
+        
+        subscriptionStatusText.textContent = `Active - ${planName} Plan`;
+        subscriptionStatus.style.background = 'rgba(52, 199, 89, 0.1)';
+        subscriptionStatus.style.borderLeftColor = '#30D158';
+        
+        if (subscriptionDetails) {
+          const expiresDate = status.expiresAt ? new Date(status.expiresAt).toLocaleDateString() : 'N/A';
+          subscriptionDetails.textContent = `Your ${planName} subscription is active. Renews on ${expiresDate}. Enjoy all premium features!`;
+        }
+      } else {
+        // User doesn't have subscription - show pricing
+        activeSubscription.style.display = 'none';
+        pricingPlans.style.display = 'block';
+        
+        subscriptionStatusText.textContent = 'Free Plan';
+        subscriptionStatus.style.background = 'rgba(0, 122, 255, 0.05)';
+        subscriptionStatus.style.borderLeftColor = 'var(--primary-blue)';
+      }
+    } catch (error) {
+      console.error('Error loading premium tab:', error);
+      subscriptionLoading.style.display = 'none';
+      pricingPlans.style.display = 'block';
+      subscriptionStatusText.textContent = 'Error loading status';
+      subscriptionStatus.style.background = 'rgba(255, 59, 48, 0.1)';
+      subscriptionStatus.style.borderLeftColor = '#FF3B30';
+    }
+  }
+  
+  /**
+   * Handle subscription button clicks
+   */
+  if (subscribeProButton) {
+    subscribeProButton.addEventListener('click', async () => {
+      const priceId = subscribeProButton.dataset.priceId || 'price_pro_monthly';
+      await handleSubscribe(priceId);
+    });
+  }
+  
+  if (subscribePremiumButton) {
+    subscribePremiumButton.addEventListener('click', async () => {
+      const priceId = subscribePremiumButton.dataset.priceId || 'price_premium_monthly';
+      await handleSubscribe(priceId);
+    });
+  }
+  
+  /**
+   * Handle subscription flow
+   */
+  async function handleSubscribe(priceId) {
+    try {
+      // Disable buttons
+      if (subscribeProButton) subscribeProButton.disabled = true;
+      if (subscribePremiumButton) subscribePremiumButton.disabled = true;
+      
+      // Show loading state
+      if (subscribeProButton) subscribeProButton.textContent = 'Opening checkout...';
+      if (subscribePremiumButton) subscribePremiumButton.textContent = 'Opening checkout...';
+      
+      // Open Stripe Checkout
+      await openCheckout(priceId);
+      
+      // Note: After successful payment, the webhook will update subscription status
+      // User will need to refresh or we can poll for status updates
+      
+    } catch (error) {
+      console.error('Error subscribing:', error);
+      showStatus('Error: ' + (error.message || 'Failed to open checkout. Please try again.'), 'error');
+      
+      // Re-enable buttons
+      if (subscribeProButton) {
+        subscribeProButton.disabled = false;
+        subscribeProButton.textContent = 'Subscribe to Pro';
+      }
+      if (subscribePremiumButton) {
+        subscribePremiumButton.disabled = false;
+        subscribePremiumButton.textContent = 'Subscribe to Premium';
+      }
+    }
+  }
+  
+  /**
+   * Handle manage subscription button
+   */
+  if (manageSubscriptionButton) {
+    manageSubscriptionButton.addEventListener('click', async () => {
+      try {
+        manageSubscriptionButton.disabled = true;
+        manageSubscriptionButton.textContent = 'Opening...';
+        
+        await openCustomerPortal();
+        
+        // Re-enable after a delay (portal opens in new tab)
+        setTimeout(() => {
+          manageSubscriptionButton.disabled = false;
+          manageSubscriptionButton.textContent = 'Manage Subscription';
+        }, 2000);
+      } catch (error) {
+        console.error('Error opening customer portal:', error);
+        showStatus('Error: ' + (error.message || 'Failed to open customer portal.'), 'error');
+        manageSubscriptionButton.disabled = false;
+        manageSubscriptionButton.textContent = 'Manage Subscription';
+      }
+    });
+  }
+  
+  /**
+   * Check for payment success/cancel in URL params
+   */
+  function checkPaymentStatus() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    
+    if (paymentStatus === 'success') {
+      // Clear cache and refresh subscription status
+      clearSubscriptionCache();
+      
+      // Switch to premium tab and reload
+      const premiumTabButton = document.querySelector('[data-tab="premium"]');
+      if (premiumTabButton) {
+        premiumTabButton.click();
+        setTimeout(() => {
+          loadPremiumTab();
+        }, 500);
+      }
+      
+      showStatus('Payment successful! Your subscription is now active.', 'success');
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentStatus === 'canceled') {
+      showStatus('Payment canceled. You can try again anytime.', 'error');
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
+  
+  // Check payment status on load
+  checkPaymentStatus();
+  
+  // Poll for subscription updates (every 30 seconds when on premium tab)
+  setInterval(() => {
+    const premiumTabButton = document.querySelector('[data-tab="premium"]');
+    if (premiumTabButton && premiumTabButton.classList.contains('active')) {
+      // Refresh subscription status
+      getSubscriptionStatus(true).then(status => {
+        if (status.active && status.status === 'active') {
+          loadPremiumTab();
+        }
+      });
+    }
+  }, 30000); // 30 seconds
 
   // Initial load - start fresh
   loadApiKey();

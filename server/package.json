@@ -1,0 +1,19 @@
+{
+  "name": "stripe-payment-server",
+  "version": "1.0.0",
+  "description": "Stripe payment server for Prompt Architect extension",
+  "main": "stripe-server.js",
+  "scripts": {
+    "start": "node stripe-server.js",
+    "dev": "nodemon stripe-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "stripe": "^14.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

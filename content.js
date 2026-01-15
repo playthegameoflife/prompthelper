@@ -1144,31 +1144,83 @@ async function injectChatGPT(inputElement) {
  * Gemini-specific injection
  */
 async function injectGemini(inputElement) {
-    // Find send button - don't pass container, let injectButtonNextToSend find the correct one
     let sendButton = null;
+    let targetContainer = null;
     
-    // Strategy 1: Search in parent hierarchy
+    // Strategy 1: Look for Gemini-specific button selectors
+    const geminiButtonSelectors = [
+        'button[aria-label*="Send" i]',
+        'button[aria-label*="Send message" i]',
+        'button[data-testid*="send" i]',
+        'button[type="submit"]',
+        'button[aria-label*="Submit" i]'
+    ];
+    
+    // Search in parent hierarchy with Gemini-specific patterns
     let parent = inputElement.parentElement;
-    for (let i = 0; i < 25 && parent; i++) {
-        const buttons = parent.querySelectorAll('button');
-        for (const btn of buttons) {
-            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-            if (ariaLabel.includes('send') || ariaLabel.includes('submit') || btn.querySelector('svg')) {
+    for (let i = 0; i < 30 && parent; i++) {
+        // Look for buttons with Gemini-specific patterns
+        for (const selector of geminiButtonSelectors) {
+            const buttons = parent.querySelectorAll(selector);
+            for (const btn of buttons) {
                 if (btn.offsetParent !== null) { // Check if visible
                     sendButton = btn;
+                    targetContainer = parent;
                     break;
                 }
             }
+            if (sendButton) break;
         }
+        
+        // Also check for buttons with SVG icons (common in Gemini)
+        if (!sendButton) {
+            const buttons = parent.querySelectorAll('button');
+            for (const btn of buttons) {
+                const hasIcon = btn.querySelector('svg');
+                const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                if (hasIcon && (ariaLabel.includes('send') || ariaLabel.includes('submit') || !ariaLabel)) {
+                    if (btn.offsetParent !== null) {
+                        sendButton = btn;
+                        targetContainer = parent;
+                        break;
+                    }
+                }
+            }
+        }
+        
         if (sendButton) break;
         parent = parent.parentElement;
     }
     
-    // Strategy 2: Search entire document for buttons near input
+    // Strategy 2: Find container with flex layout that contains both input and button
+    if (!sendButton) {
+        parent = inputElement.parentElement;
+        for (let i = 0; i < 30 && parent; i++) {
+            const style = window.getComputedStyle(parent);
+            if (style.display === 'flex' || style.display === 'inline-flex') {
+                const buttons = parent.querySelectorAll('button');
+                for (const btn of buttons) {
+                    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    const hasIcon = btn.querySelector('svg');
+                    if ((ariaLabel.includes('send') || ariaLabel.includes('submit') || hasIcon) && 
+                        btn.offsetParent !== null) {
+                        sendButton = btn;
+                        targetContainer = parent;
+                        break;
+                    }
+                }
+            }
+            if (sendButton) break;
+            parent = parent.parentElement;
+        }
+    }
+    
+    // Strategy 3: Search entire document for buttons near input (fallback)
     if (!sendButton) {
         const inputRect = inputElement.getBoundingClientRect();
         const allButtons = document.querySelectorAll('button');
         let closestButton = null;
+        let closestContainer = null;
         let closestDistance = Infinity;
         
         for (const btn of allButtons) {
@@ -1185,12 +1237,14 @@ async function injectGemini(inputElement) {
                 if (distance < closestDistance) {
                     closestDistance = distance;
                     closestButton = btn;
+                    closestContainer = btn.parentElement;
                 }
             }
         }
         
         if (closestButton) {
             sendButton = closestButton;
+            targetContainer = closestContainer;
         }
     }
     
@@ -1198,8 +1252,8 @@ async function injectGemini(inputElement) {
         throw new Error('Gemini send button not found');
     }
     
-    // Don't pass container - let injectButtonNextToSend use sendButton.parentElement
-    return injectButtonNextToSend(inputElement, sendButton);
+    // Use the found container or fall back to sendButton.parentElement
+    return injectButtonNextToSend(inputElement, sendButton, targetContainer || sendButton.parentElement);
 }
 
 /**
@@ -1429,6 +1483,20 @@ async function injectPerplexity(inputElement) {
 async function injectButtonNextToSend(inputElement, sendButton, container = null) {
     return new Promise(async (resolve, reject) => {
         try {
+            // Check if button injection is enabled by user preference
+            const buttonEnabled = await isInjectButtonEnabled();
+            if (!buttonEnabled) {
+                resolve(); // Resolve silently - button shouldn't be shown
+                return;
+            }
+
+            // Check if API key is set - don't show button if no API key
+            const apiKeyExists = await hasApiKey();
+            if (!apiKeyExists) {
+                resolve(); // Resolve silently - button shouldn't be shown
+                return;
+            }
+
             // Check if already injected
             const existingContainer = document.getElementById('prompt-architect-buttons-container');
             if (existingContainer && document.body.contains(existingContainer)) {
@@ -1443,6 +1511,23 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
             if (targetContainer && !targetContainer.contains(sendButton)) {
                 // If not, use the send button's actual parent
                 targetContainer = sendButton.parentElement;
+            }
+            
+            // For Gemini: Look for a flex container that makes sense for button placement
+            if (targetContainer) {
+                const containerStyle = window.getComputedStyle(targetContainer);
+                // If container is not flex, try to find a parent that is flex and contains the button
+                if (!containerStyle.display.includes('flex')) {
+                    let parent = targetContainer.parentElement;
+                    for (let i = 0; i < 10 && parent; i++) {
+                        const parentStyle = window.getComputedStyle(parent);
+                        if (parentStyle.display.includes('flex') && parent.contains(sendButton)) {
+                            targetContainer = parent;
+                            break;
+                        }
+                        parent = parent.parentElement;
+                    }
+                }
             }
             
             if (!targetContainer) {
@@ -1461,6 +1546,9 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
             enhancerDiv.style.setProperty('z-index', '999999', 'important');
             enhancerDiv.style.setProperty('visibility', 'visible', 'important');
             enhancerDiv.style.setProperty('opacity', '1', 'important');
+            // Gemini-specific: ensure button is properly positioned
+            enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+            enhancerDiv.style.setProperty('position', 'relative', 'important');
 
             // Status area
             const statusArea = document.createElement('div');
@@ -1520,13 +1608,46 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 return;
             }
 
-            // Insert before send button
-            targetContainer.insertBefore(enhancerDiv, sendButton);
+            // For Gemini: Try to insert right before the send button
+            // If send button has a sibling before it, insert after that sibling
+            try {
+                // Check if there's a previous sibling that might be another button or icon
+                const prevSibling = sendButton.previousElementSibling;
+                if (prevSibling && (prevSibling.tagName === 'BUTTON' || prevSibling.tagName === 'DIV')) {
+                    // Insert after the previous sibling but before send button
+                    targetContainer.insertBefore(enhancerDiv, sendButton);
+                } else {
+                    // Insert directly before send button
+                    targetContainer.insertBefore(enhancerDiv, sendButton);
+                }
+            } catch (e) {
+                // Fallback: insert before send button
+                targetContainer.insertBefore(enhancerDiv, sendButton);
+            }
 
             // Verify and set up protection
             setTimeout(() => {
                 const injectedButton = document.getElementById('main-enhance-button');
                 if (injectedButton) {
+                    // Verify button is visible and in correct position
+                    const buttonRect = injectedButton.getBoundingClientRect();
+                    const sendButtonRect = sendButton.getBoundingClientRect();
+                    
+                    // For Gemini: Ensure button is near the send button
+                    const platform = detectPlatform();
+                    if (platform === 'gemini') {
+                        const distance = Math.abs(buttonRect.top - sendButtonRect.top) + 
+                                       Math.abs(buttonRect.right - sendButtonRect.left);
+                        // If button is too far from send button, try to fix positioning
+                        if (distance > 100) {
+                            // Re-verify container and reposition if needed
+                            if (targetContainer.contains(sendButton) && targetContainer.contains(enhancerDiv)) {
+                                // Button is in correct container, just might need layout adjustment
+                                enhancerDiv.style.setProperty('order', '-1', 'important');
+                            }
+                        }
+                    }
+                    
                     setupButtonProtection(enhancerDiv, inputElement);
                     resolve();
                 } else {
@@ -1553,68 +1674,112 @@ async function isInjectButtonEnabled() {
 }
 
 /**
+ * Checks if any API key is configured
+ */
+async function hasApiKey() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['userGeminiApiKey', 'userOpenAIApiKey', 'userAnthropicApiKey'], (result) => {
+            const hasKey = !!(result.userGeminiApiKey || result.userOpenAIApiKey || result.userAnthropicApiKey);
+            resolve(hasKey);
+        });
+    });
+}
+
+/**
  * Listen for storage changes to immediately update button visibility
  */
 chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes.injectButtonEnabled) {
-        const buttonEnabled = changes.injectButtonEnabled.newValue !== false;
-        
-        if (!buttonEnabled) {
-            // Aggressively remove all button-related UI
-            // Use requestAnimationFrame to ensure DOM is ready
-            requestAnimationFrame(() => {
-                // Remove container (this should remove everything inside)
-                const existingUI = document.getElementById('prompt-architect-buttons-container');
-                if (existingUI) {
-                    existingUI.remove();
-                }
-                
-                // Also remove button directly if it exists separately
-                const button = document.getElementById('main-enhance-button');
-                if (button) {
-                    // Remove the button's parent container if it's a direct child
-                    const container = button.closest('#prompt-architect-buttons-container');
-                    if (container) {
-                        container.remove();
-                    } else if (button.parentElement) {
-                        // If no container, remove the button itself
-                        button.remove();
+    if (areaName === 'local') {
+        // Handle injectButtonEnabled changes
+        if (changes.injectButtonEnabled) {
+            const buttonEnabled = changes.injectButtonEnabled.newValue !== false;
+            
+            if (!buttonEnabled) {
+                // Aggressively remove all button-related UI
+                // Use requestAnimationFrame to ensure DOM is ready
+                requestAnimationFrame(() => {
+                    // Remove container (this should remove everything inside)
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
+                    if (existingUI) {
+                        existingUI.remove();
                     }
-                }
-                
-                // Remove status area
-                const statusArea = document.getElementById('prompt-architect-status-area');
-                if (statusArea) {
-                    statusArea.remove();
-                }
-                
-                // Also search for any buttons with "Improve" text that might be ours
-                const allButtons = document.querySelectorAll('button');
-                allButtons.forEach(btn => {
-                    if (btn.id === 'main-enhance-button') {
-                        const parent = btn.parentElement;
-                        if (parent && parent.id === 'prompt-architect-buttons-container') {
-                            parent.remove();
-                        } else {
-                            btn.remove();
+                    
+                    // Also remove button directly if it exists separately
+                    const button = document.getElementById('main-enhance-button');
+                    if (button) {
+                        // Remove the button's parent container if it's a direct child
+                        const container = button.closest('#prompt-architect-buttons-container');
+                        if (container) {
+                            container.remove();
+                        } else if (button.parentElement) {
+                            // If no container, remove the button itself
+                            button.remove();
                         }
                     }
-                });
-            });
-        } else {
-            // Re-inject button if enabled, platform is enabled, and input exists
-            (async () => {
-                const platformEnabled = await isPlatformEnabled();
-                if (!platformEnabled) {
-                    return; // Don't inject if platform is disabled
-                }
-                
-                const existingUI = document.getElementById('prompt-architect-buttons-container');
-                const input = findPlatformSpecificInput();
-                if (input && (!existingUI || !document.body.contains(existingUI))) {
-                    injectUI(input).catch(err => {
-                        // Silent injection failure
+                    
+                    // Remove status area
+                    const statusArea = document.getElementById('prompt-architect-status-area');
+                    if (statusArea) {
+                        statusArea.remove();
+                    }
+                    
+                    // Also search for any buttons with "Improve" text that might be ours
+                    const allButtons = document.querySelectorAll('button');
+                    allButtons.forEach(btn => {
+                        if (btn.id === 'main-enhance-button') {
+                            const parent = btn.parentElement;
+                            if (parent && parent.id === 'prompt-architect-buttons-container') {
+                                parent.remove();
+                            } else {
+                                btn.remove();
+                            }
+                        }
                     });
+                });
+            } else {
+                // Re-inject button if enabled, platform is enabled, API key exists, and input exists
+                (async () => {
+                    const platformEnabled = await isPlatformEnabled();
+                    if (!platformEnabled) {
+                        return; // Don't inject if platform is disabled
+                    }
+                    
+                    const apiKeyExists = await hasApiKey();
+                    if (!apiKeyExists) {
+                        return; // Don't inject if no API key
+                    }
+                    
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
+                    const input = findPlatformSpecificInput();
+                    if (input && (!existingUI || !document.body.contains(existingUI))) {
+                        injectUI(input).catch(err => {
+                            // Silent injection failure
+                        });
+                    }
+                })();
+            }
+        }
+        
+        // Handle API key changes
+        const apiKeyChanged = changes.userGeminiApiKey || changes.userOpenAIApiKey || changes.userAnthropicApiKey;
+        if (apiKeyChanged) {
+            (async () => {
+                const apiKeyExists = await hasApiKey();
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                const buttonEnabled = await isInjectButtonEnabled();
+                const platformEnabled = await isPlatformEnabled();
+                
+                if (!apiKeyExists && existingUI) {
+                    // Hide button if API key was removed
+                    existingUI.remove();
+                } else if (apiKeyExists && buttonEnabled && platformEnabled && !existingUI) {
+                    // Show button if API key was added
+                    const input = findPlatformSpecificInput();
+                    if (input) {
+                        injectUI(input).catch(err => {
+                            // Silent injection failure
+                        });
+                    }
                 }
             })();
         }
@@ -1637,6 +1802,12 @@ async function injectUI(inputElement) {
     const buttonEnabled = await isInjectButtonEnabled();
     if (!buttonEnabled) {
         throw new Error('Injected button disabled by user');
+    }
+    
+    // Check if API key is configured - don't inject if no API key
+    const apiKeyExists = await hasApiKey();
+    if (!apiKeyExists) {
+        throw new Error('API key not configured');
     }
     
     // Route to platform-specific injection

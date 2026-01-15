@@ -26,9 +26,12 @@ const debug = {
 const STORAGE_KEYS = {
     gemini: 'userGeminiApiKey',
     openai: 'userOpenAIApiKey',
-    anthropic: 'userAnthropicApiKey'
+    anthropic: 'userAnthropicApiKey',
+    grok: 'userGrokApiKey',
+    deepseek: 'userDeepSeekApiKey'
 };
 const STORAGE_PROVIDER = 'selectedProvider';
+const STORAGE_SELECTED_MODELS = 'selectedModels'; // { provider: modelId }
 const STORAGE_PROMPT_HISTORY = 'promptHistory';
 const MAX_HISTORY_ITEMS = 50;
 
@@ -252,25 +255,208 @@ async function saveToHistory(original, enhanced, enhancementType, provider) {
     });
 }
 
+// Available models organized by provider
+// Note: Models marked with [FUTURE] are placeholders for upcoming models
+const AVAILABLE_MODELS = {
+    openai: [
+        // GPT-5 Series (Latest - Best for Prompt Enhancement)
+        { id: 'gpt-5-mini', name: 'GPT-5 Mini', recommended: true },
+        { id: 'gpt-5-nano', name: 'GPT-5 Nano' },
+        { id: 'gpt-5', name: 'GPT-5' },
+        // GPT-4.1 Series
+        { id: 'gpt-4.1', name: 'GPT-4.1' },
+        { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' },
+        { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano' },
+        // GPT-4o Series
+        { id: 'gpt-4o', name: 'GPT-4o' },
+        { id: 'gpt-4o-mini', name: 'GPT-4o mini', recommended: true },
+        // GPT-3.5 Series
+        { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
+    ],
+    gemini: [
+        // Current Available Models (as of Jan 2025)
+        { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', recommended: true }, // Default: Fast, cheap, efficient
+        { id: 'gemini-1.5-flash-002', name: 'Gemini 1.5 Flash' },
+        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', recommended: true },
+        { id: 'gemini-2.5-flash-lite-preview-09-2025', name: 'Gemini 2.5 Flash-Lite Preview' },
+        { id: 'gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
+        { id: 'gemini-2.0-flash-lite-001', name: 'Gemini 2.0 Flash-Lite' },
+        { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 2.0 Pro Experimental' },
+        { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini 2.0 Flash Thinking Experimental' },
+        { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Experimental' },
+        { id: 'gemini-1.5-pro-002', name: 'Gemini 1.5 Pro' },
+        { id: 'gemini-1.5-flash-002', name: 'Gemini 1.5 Flash' },
+        { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash-8B' },
+        // Gemma Models
+        { id: 'gemma-3-27b-it', name: 'Gemma 3 27B' },
+        { id: 'gemma-3-12b-it', name: 'Gemma 3 12B' },
+        { id: 'gemma-3-4b-it', name: 'Gemma 3 4B', recommended: true },
+        { id: 'gemma-3-1b-it', name: 'Gemma 3 1B' },
+        { id: 'gemma-3-270m-it', name: 'Gemma 3 270M' },
+        // Legacy/Alternative IDs (for backward compatibility)
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (legacy)' },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (legacy)' },
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (legacy)' }
+    ],
+    anthropic: [
+        // Current Available Models (as of Dec 2025)
+        { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1', recommended: true },
+        { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
+        { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', recommended: true },
+        { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
+        { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
+        { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5', recommended: true },
+        // Legacy Models (still available but deprecated)
+        { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus (legacy)' },
+        { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet (legacy)' },
+        { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku (legacy)' }
+    ],
+    grok: [
+        { id: 'grok-4-0709', name: 'Grok 4', recommended: true },
+        { id: 'grok-4-1-fast-reasoning', name: 'Grok 4.1 Fast Reasoning' },
+        { id: 'grok-4-1-fast-non-reasoning', name: 'Grok 4.1 Fast Non-Reasoning', recommended: true },
+        { id: 'grok-4-fast-reasoning', name: 'Grok 4 Fast Reasoning' },
+        { id: 'grok-4-fast-non-reasoning', name: 'Grok 4 Fast Non-Reasoning' },
+        { id: 'grok-code-fast-1', name: 'Grok Code Fast 1', recommended: true },
+        { id: 'grok-3', name: 'Grok 3' },
+        { id: 'grok-3-mini', name: 'Grok 3 Mini' }
+    ],
+    deepseek: [
+        { id: 'deepseek-chat', name: 'DeepSeek Chat', recommended: true },
+        { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' }
+    ]
+};
+
 // API configurations for different providers
 const API_CONFIGS = {
     gemini: {
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models/',
-        model: 'gemini-2.0-flash',
+        defaultModel: 'gemini-2.5-flash-lite', // Fast, cheap, and efficient
         action: ':generateContent',
-        storageKey: STORAGE_KEYS.gemini
+        storageKey: STORAGE_KEYS.gemini,
+        getModelId: (modelId) => {
+            // Map friendly IDs to actual Gemini model IDs
+            const modelMap = {
+                // Legacy mappings for backward compatibility
+                'gemini-2.0-flash': 'gemini-2.0-flash-001',
+                'gemini-1.5-pro': 'gemini-1.5-pro-002',
+                'gemini-1.5-flash': 'gemini-1.5-flash-002',
+                // Invalid/future models - map to valid alternatives
+                'gemini-2.5-flash-sep': 'gemini-2.5-flash-lite', // Map invalid to valid
+                'gemini-2.5-flash-lite-sep': 'gemini-2.5-flash-lite', // Map invalid to valid
+                'gemini-3-pro-preview-high': 'gemini-2.5-pro', // Map future to current
+                'gemini-3-pro-preview-low': 'gemini-2.5-pro', // Map future to current
+                // Current models (already correct)
+                'gemini-2.5-pro': 'gemini-2.5-pro',
+                'gemini-2.5-flash': 'gemini-2.5-flash',
+                'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
+                'gemini-2.5-flash-lite-preview-09-2025': 'gemini-2.5-flash-lite-preview-09-2025',
+                'gemini-2.0-flash-001': 'gemini-2.0-flash-001',
+                'gemini-2.0-flash-lite-001': 'gemini-2.0-flash-lite-001',
+                'gemini-2.0-pro-exp-02-05': 'gemini-2.0-pro-exp-02-05',
+                'gemini-2.0-flash-thinking-exp-01-21': 'gemini-2.0-flash-thinking-exp-01-21',
+                'gemini-2.0-flash-exp': 'gemini-2.0-flash-exp',
+                'gemini-1.5-pro-002': 'gemini-1.5-pro-002',
+                'gemini-1.5-flash-002': 'gemini-1.5-flash-002',
+                'gemini-1.5-flash-8b': 'gemini-1.5-flash-8b',
+                // Gemma models
+                'gemma-3-27b-it': 'gemma-3-27b-it',
+                'gemma-3-12b-it': 'gemma-3-12b-it',
+                'gemma-3-4b-it': 'gemma-3-4b-it',
+                'gemma-3-1b-it': 'gemma-3-1b-it',
+                'gemma-3-270m-it': 'gemma-3-270m-it',
+                // Legacy/invalid Gemma IDs - map to correct format
+                'gemma-3-27b': 'gemma-3-27b-it',
+                'gemma-3-12b': 'gemma-3-12b-it',
+                'gemma-3-4b': 'gemma-3-4b-it',
+                'gemma-3-1b': 'gemma-3-1b-it',
+                'gemma-3-270m': 'gemma-3-270m-it'
+            };
+            return modelMap[modelId] || modelId;
+        }
     },
     openai: {
         baseUrl: 'https://api.openai.com/v1/',
-        model: 'gpt-4',
+        defaultModel: 'gpt-5-mini', // Best model for prompt enhancement
         endpoint: 'chat/completions',
-        storageKey: STORAGE_KEYS.openai
+        storageKey: STORAGE_KEYS.openai,
+        getModelId: (modelId) => {
+            // Map friendly IDs to actual OpenAI model IDs
+            const modelMap = {
+                // GPT-5 Series (Latest - Best for Prompt Enhancement)
+                'gpt-5-mini': 'gpt-5-mini',
+                'gpt-5-nano': 'gpt-5-nano',
+                'gpt-5': 'gpt-5',
+                // GPT-4.1 Series
+                'gpt-4.1': 'gpt-4.1',
+                'gpt-4.1-mini': 'gpt-4.1-mini',
+                'gpt-4.1-nano': 'gpt-4.1-nano',
+                // GPT-4o Series
+                'gpt-4o': 'gpt-4o',
+                'gpt-4o-mini': 'gpt-4o-mini',
+                // GPT-3.5 Series
+                'gpt-3.5-turbo': 'gpt-3.5-turbo'
+            };
+            return modelMap[modelId] || modelId;
+        }
     },
     anthropic: {
         baseUrl: 'https://api.anthropic.com/v1/',
-        model: 'claude-3-5-sonnet-20241022',
+        defaultModel: 'claude-sonnet-4-20250514',
         endpoint: 'messages',
-        storageKey: STORAGE_KEYS.anthropic
+        storageKey: STORAGE_KEYS.anthropic,
+        getModelId: (modelId) => {
+            // Map friendly IDs to actual Anthropic model IDs
+            const modelMap = {
+                // Current available models (as of Dec 2025)
+                'claude-opus-4-1-20250805': 'claude-opus-4-1-20250805',
+                'claude-opus-4-20250514': 'claude-opus-4-20250514',
+                'claude-sonnet-4-20250514': 'claude-sonnet-4-20250514',
+                'claude-3-7-sonnet-20250219': 'claude-3-7-sonnet-20250219',
+                'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet-20241022',
+                'claude-3-5-haiku-20241022': 'claude-3-5-haiku-20241022',
+                // Legacy models (still available)
+                'claude-3-opus-20240229': 'claude-3-opus-20240229',
+                'claude-3-sonnet-20240229': 'claude-3-sonnet-20240229',
+                'claude-3-haiku-20240307': 'claude-3-haiku-20240307'
+            };
+            return modelMap[modelId] || modelId;
+        }
+    },
+    grok: {
+        baseUrl: 'https://api.x.ai/v1/',
+        defaultModel: 'grok-4-0709',
+        endpoint: 'chat/completions',
+        storageKey: STORAGE_KEYS.grok,
+        getModelId: (modelId) => {
+            // xAI uses OpenAI-compatible API, model IDs are direct
+            const modelMap = {
+                'grok-4-0709': 'grok-4-0709',
+                'grok-4-1-fast-reasoning': 'grok-4-1-fast-reasoning',
+                'grok-4-1-fast-non-reasoning': 'grok-4-1-fast-non-reasoning',
+                'grok-4-fast-reasoning': 'grok-4-fast-reasoning',
+                'grok-4-fast-non-reasoning': 'grok-4-fast-non-reasoning',
+                'grok-code-fast-1': 'grok-code-fast-1',
+                'grok-3': 'grok-3',
+                'grok-3-mini': 'grok-3-mini'
+            };
+            return modelMap[modelId] || modelId;
+        }
+    },
+    deepseek: {
+        baseUrl: 'https://api.deepseek.com/',
+        defaultModel: 'deepseek-chat',
+        endpoint: 'chat/completions',
+        storageKey: STORAGE_KEYS.deepseek,
+        getModelId: (modelId) => {
+            // DeepSeek uses OpenAI-compatible API, model IDs are direct
+            const modelMap = {
+                'deepseek-chat': 'deepseek-chat',
+                'deepseek-reasoner': 'deepseek-reasoner'
+            };
+            return modelMap[modelId] || modelId;
+        }
     }
 };
 
@@ -615,6 +801,69 @@ const getApiKey = (provider = 'gemini') => {
 };
 
 /**
+ * Validates if a model ID exists in the available models list
+ * @param {string} provider - The provider name
+ * @param {string} modelId - The model ID to validate
+ * @returns {boolean} True if model exists, false otherwise
+ */
+function isValidModel(provider, modelId) {
+    let models = AVAILABLE_MODELS[provider] || [];
+    
+    // Filter out non-text models for Gemini (e.g., TTS models)
+    if (provider === 'gemini') {
+        models = models.filter(m => {
+            const id = m.id.toLowerCase();
+            // Filter out TTS (text-to-speech) models
+            if (id.includes('tts') || id.includes('text-to-speech')) return false;
+            // Filter out audio models
+            if (id.includes('audio') && !id.includes('transcribe')) return false;
+            return true;
+        });
+    }
+    
+    return models.some(model => model.id === modelId);
+}
+
+/**
+ * Gets the selected model for a provider, or returns the default model
+ * Also validates the model and falls back to default if invalid
+ * @param {string} provider - The provider name
+ * @returns {Promise<string>} The model ID to use
+ */
+async function getSelectedModel(provider = 'gemini') {
+    return new Promise((resolve) => {
+        const config = API_CONFIGS[provider];
+        if (!config) {
+            debug.error(`Unknown provider: ${provider}`);
+            resolve(config?.defaultModel || 'gpt-4');
+            return;
+        }
+        
+        chrome.storage.local.get([STORAGE_SELECTED_MODELS], (result) => {
+            if (chrome.runtime.lastError) {
+                debug.error("Error retrieving selected model:", chrome.runtime.lastError);
+                resolve(config.defaultModel);
+            } else {
+                const selectedModels = result[STORAGE_SELECTED_MODELS] || {};
+                let selectedModel = selectedModels[provider] || config.defaultModel;
+                
+                // Validate the model exists - if not, use default and update storage
+                if (!isValidModel(provider, selectedModel)) {
+                    debug.warn(`Invalid model "${selectedModel}" for provider "${provider}", falling back to default "${config.defaultModel}"`);
+                    selectedModel = config.defaultModel;
+                    // Update storage with valid model
+                    const updatedModels = { ...selectedModels };
+                    updatedModels[provider] = selectedModel;
+                    chrome.storage.local.set({ [STORAGE_SELECTED_MODELS]: updatedModels });
+                }
+                
+                resolve(selectedModel);
+            }
+        });
+    });
+}
+
+/**
  * Extracts the improved prompt text from API responses (supports multiple providers).
  */
 const extractImprovedPrompt = (data, provider = 'gemini') => {
@@ -643,7 +892,8 @@ const extractImprovedPrompt = (data, provider = 'gemini') => {
             if (candidate?.content?.parts?.[0]?.text) {
                 extractedText = candidate.content.parts[0].text.trim();
             }
-        } else if (provider === 'openai') {
+        } else if (provider === 'openai' || provider === 'grok' || provider === 'deepseek') {
+            // OpenAI-compatible APIs
             const choice = data.choices?.[0];
             if (choice?.message?.content) {
                 extractedText = choice.message.content.trim();
@@ -673,9 +923,19 @@ const extractImprovedPrompt = (data, provider = 'gemini') => {
 
 /**
  * Structures the request body for different API providers.
+ * @param {string} prompt - The user prompt
+ * @param {string} systemInstruction - The system instruction
+ * @param {string} provider - The provider name
+ * @param {string} modelId - The model ID to use
+ * @returns {string|null} The request body as JSON string
  */
-const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
+const getRequestBody = (prompt, systemInstruction, provider = 'gemini', modelId = null) => {
     const fullInstruction = `${systemInstruction}\n\nUser's raw text:\n"${prompt}"\n\nImproved Output:`;
+    const config = API_CONFIGS[provider];
+    if (!config) return null;
+    
+    // Get the actual model ID to use
+    const actualModelId = config.getModelId ? config.getModelId(modelId || config.defaultModel) : (modelId || config.defaultModel);
 
     if (provider === 'gemini') {
         return JSON.stringify({
@@ -690,19 +950,34 @@ const getRequestBody = (prompt, systemInstruction, provider = 'gemini') => {
                 topP: 0.9,
             }
         });
-    } else if (provider === 'openai') {
-        return JSON.stringify({
-            model: API_CONFIGS.openai.model,
+    } else if (provider === 'openai' || provider === 'grok' || provider === 'deepseek') {
+        // OpenAI-compatible APIs (OpenAI, xAI Grok, DeepSeek)
+        // GPT-5 and O-series models use max_completion_tokens, others use max_tokens
+        const maxTokens = 4096;
+        const isNewModel = actualModelId.startsWith('gpt-5') || 
+                          actualModelId.startsWith('o3') || 
+                          actualModelId.startsWith('o4');
+        
+        const requestBody = {
+            model: actualModelId,
             messages: [
                 { role: 'system', content: systemInstruction },
                 { role: 'user', content: `User's raw text:\n"${prompt}"\n\nImproved Output:` }
             ],
-            temperature: 0.6,
-            max_tokens: 8000
-        });
+            temperature: 0.6
+        };
+        
+        // Use appropriate parameter based on model
+        if (isNewModel) {
+            requestBody.max_completion_tokens = maxTokens;
+        } else {
+            requestBody.max_tokens = maxTokens;
+        }
+        
+        return JSON.stringify(requestBody);
     } else if (provider === 'anthropic') {
         return JSON.stringify({
-            model: API_CONFIGS.anthropic.model,
+            model: actualModelId,
             max_tokens: 8000,
             system: systemInstruction,
             messages: [
@@ -752,8 +1027,14 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
         try {
             const apiKey = await getApiKey(selectedProvider);
             if (!apiKey) {
-                const providerName = selectedProvider === 'gemini' ? 'Google AI' : 
-                                    selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic';
+                const providerNames = {
+                    'gemini': 'Google AI',
+                    'openai': 'OpenAI',
+                    'anthropic': 'Anthropic',
+                    'grok': 'xAI Grok',
+                    'deepseek': 'DeepSeek'
+                };
+                const providerName = providerNames[selectedProvider] || 'AI Provider';
                 throw new EnhancementError(
                     ERROR_MESSAGES.API_KEY_MISSING,
                     'API_KEY_MISSING',
@@ -817,7 +1098,20 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 );
             }
 
-            const requestBody = getRequestBody(userText, systemInstruction, selectedProvider);
+            // Get selected model for this provider
+            const selectedModel = await getSelectedModel(selectedProvider);
+            const actualModelId = config.getModelId ? config.getModelId(selectedModel) : selectedModel;
+            
+            // Determine timeout based on model type (reasoning models need more time)
+            const isReasoningModel = actualModelId.includes('reasoning') || 
+                                   actualModelId.includes('reasoner') ||
+                                   actualModelId.includes('thinking') ||
+                                   actualModelId.includes('opus') ||
+                                   actualModelId.includes('pro') ||
+                                   actualModelId === 'gpt-5' ||
+                                   actualModelId === 'gpt-5-pro';
+
+            const requestBody = getRequestBody(userText, systemInstruction, selectedProvider, selectedModel);
             if (!requestBody) {
                 throw new EnhancementError(
                     ERROR_MESSAGES.UNEXPECTED_ERROR,
@@ -832,9 +1126,15 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             let requestHeaders = { 'Content-Type': 'application/json' };
             
             if (selectedProvider === 'gemini') {
-                fullApiUrl = `${config.baseUrl}${config.model}${config.action}?key=${apiKey}`;
-            } else if (selectedProvider === 'openai') {
-                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
+                fullApiUrl = `${config.baseUrl}${actualModelId}${config.action}?key=${apiKey}`;
+            } else if (selectedProvider === 'openai' || selectedProvider === 'grok' || selectedProvider === 'deepseek') {
+                // OpenAI-compatible APIs
+                // Handle DeepSeek Speciale special base URL
+                let baseUrl = config.baseUrl;
+                if (selectedProvider === 'deepseek' && config.getBaseUrl) {
+                    baseUrl = config.getBaseUrl(selectedModel);
+                }
+                fullApiUrl = `${baseUrl}${config.endpoint}`;
                 requestHeaders['Authorization'] = `Bearer ${apiKey}`;
             } else if (selectedProvider === 'anthropic') {
                 fullApiUrl = `${config.baseUrl}${config.endpoint}`;
@@ -862,11 +1162,14 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             // Apply rate limiting
             await apiRateLimiter.waitIfNeeded();
             
-            // Set up timeout (30 seconds)
+            // Use the isReasoningModel variable already declared above
+            const timeoutMs = isReasoningModel ? 120000 : 60000; // 120s for reasoning, 60s for others
+            
+            // Set up timeout
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
                 controller.abort();
-            }, 30000); // 30 second timeout
+            }, timeoutMs);
             
             let response;
             try {
@@ -879,11 +1182,12 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
             } catch (error) {
                 clearTimeout(timeoutId);
                 if (error.name === 'AbortError') {
+                    const timeoutSeconds = isReasoningModel ? 120 : 60;
                     throw new EnhancementError(
-                        'Request timed out after 30 seconds. Please try again.',
+                        `Request timed out after ${timeoutSeconds} seconds. Please try again.`,
                         'TIMEOUT',
                         true,
-                        'Request timed out. The API is taking too long to respond. Please try again.'
+                        `Request timed out after ${timeoutSeconds} seconds. The API is taking too long to respond. Please try again.`
                     );
                 }
                 throw error;
@@ -963,8 +1267,14 @@ async function executeAskQuestion(question, provider = 'gemini') {
         try {
             const apiKey = await getApiKey(selectedProvider);
             if (!apiKey) {
-                const providerName = selectedProvider === 'gemini' ? 'Google AI' : 
-                                    selectedProvider === 'openai' ? 'OpenAI' : 'Anthropic';
+                const providerNames = {
+                    'gemini': 'Google AI',
+                    'openai': 'OpenAI',
+                    'anthropic': 'Anthropic',
+                    'grok': 'xAI Grok',
+                    'deepseek': 'DeepSeek'
+                };
+                const providerName = providerNames[selectedProvider] || 'AI Provider';
                 throw new EnhancementError(
                     ERROR_MESSAGES.API_KEY_MISSING,
                     'API_KEY_MISSING',
@@ -987,6 +1297,20 @@ async function executeAskQuestion(question, provider = 'gemini') {
                 );
             }
             
+            // Get selected model for this provider
+            const selectedModel = await getSelectedModel(selectedProvider);
+            const actualModelId = config.getModelId ? config.getModelId(selectedModel) : selectedModel;
+            
+            // Determine timeout based on model type (reasoning models need more time)
+            // Declare once for use in multiple places
+            let isReasoningModel = actualModelId.includes('reasoning') || 
+                                   actualModelId.includes('reasoner') ||
+                                   actualModelId.includes('thinking') ||
+                                   actualModelId.includes('opus') ||
+                                   actualModelId.includes('pro') ||
+                                   actualModelId === 'gpt-5' ||
+                                   actualModelId === 'gpt-5-pro';
+            
             // Build request body for Ask (different format than enhancement)
             let requestBody;
             if (selectedProvider === 'gemini') {
@@ -1002,19 +1326,34 @@ async function executeAskQuestion(question, provider = 'gemini') {
                         topP: 0.9,
                     }
                 });
-            } else if (selectedProvider === 'openai') {
+        } else if (selectedProvider === 'openai' || selectedProvider === 'grok' || selectedProvider === 'deepseek') {
+            // OpenAI-compatible APIs
+            // GPT-5 and O-series models use max_completion_tokens, others use max_tokens
+            const maxTokens = 4096;
+            const isNewModel = actualModelId.startsWith('gpt-5') || 
+                              actualModelId.startsWith('o3') || 
+                              actualModelId.startsWith('o4');
+            
+            const requestBodyObj = {
+                model: actualModelId,
+                messages: [
+                    { role: 'system', content: systemInstruction },
+                    { role: 'user', content: question }
+                ],
+                temperature: 0.7
+            };
+            
+            // Use appropriate parameter based on model
+            if (isNewModel) {
+                requestBodyObj.max_completion_tokens = maxTokens;
+            } else {
+                requestBodyObj.max_tokens = maxTokens;
+            }
+            
+            requestBody = JSON.stringify(requestBodyObj);
+        } else if (selectedProvider === 'anthropic') {
                 requestBody = JSON.stringify({
-                    model: API_CONFIGS.openai.model,
-                    messages: [
-                        { role: 'system', content: systemInstruction },
-                        { role: 'user', content: question }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 8000
-                });
-            } else if (selectedProvider === 'anthropic') {
-                requestBody = JSON.stringify({
-                    model: API_CONFIGS.anthropic.model,
+                    model: actualModelId,
                     max_tokens: 8000,
                     system: systemInstruction,
                     messages: [
@@ -1035,9 +1374,15 @@ async function executeAskQuestion(question, provider = 'gemini') {
             let requestHeaders = { 'Content-Type': 'application/json' };
             
             if (selectedProvider === 'gemini') {
-                fullApiUrl = `${config.baseUrl}${config.model}${config.action}?key=${apiKey}`;
-            } else if (selectedProvider === 'openai') {
-                fullApiUrl = `${config.baseUrl}${config.endpoint}`;
+                fullApiUrl = `${config.baseUrl}${actualModelId}${config.action}?key=${apiKey}`;
+            } else if (selectedProvider === 'openai' || selectedProvider === 'grok' || selectedProvider === 'deepseek') {
+                // OpenAI-compatible APIs
+                // Handle DeepSeek Speciale special base URL
+                let baseUrl = config.baseUrl;
+                if (selectedProvider === 'deepseek' && config.getBaseUrl) {
+                    baseUrl = config.getBaseUrl(selectedModel);
+                }
+                fullApiUrl = `${baseUrl}${config.endpoint}`;
                 requestHeaders['Authorization'] = `Bearer ${apiKey}`;
             } else if (selectedProvider === 'anthropic') {
                 fullApiUrl = `${config.baseUrl}${config.endpoint}`;
@@ -1055,9 +1400,12 @@ async function executeAskQuestion(question, provider = 'gemini') {
             // Apply rate limiting
             await apiRateLimiter.waitIfNeeded();
             
+            // Use the isReasoningModel variable already declared above
+            const timeoutMs = isReasoningModel ? 120000 : 60000; // 120s for reasoning, 60s for others
+            
             // Make API request
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
             
             try {
                 const response = await fetch(fullApiUrl, {
@@ -1100,11 +1448,13 @@ async function executeAskQuestion(question, provider = 'gemini') {
                 clearTimeout(timeoutId);
                 console.error('[Prompt Architect] Fetch error in executeAskQuestion:', fetchError);
                 if (fetchError.name === 'AbortError') {
+                    // Use the isReasoningModel variable already declared above
+                    const timeoutSeconds = isReasoningModel ? 120 : 60;
                     throw new EnhancementError(
-                        ERROR_MESSAGES.TIMEOUT,
+                        `Request timed out after ${timeoutSeconds} seconds. Please try again.`,
                         'TIMEOUT',
                         true,
-                        ERROR_MESSAGES.TIMEOUT
+                        `Request timed out after ${timeoutSeconds} seconds. The API is taking too long to respond. Please try again.`
                     );
                 }
                 throw fetchError;
@@ -1136,6 +1486,58 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Log for debugging
         debug.log('Received message:', request.action);
+        
+        if (request.action === 'getAvailableModels') {
+            const provider = request.provider || 'gemini';
+            let models = AVAILABLE_MODELS[provider] || [];
+            
+            // Filter out non-text models for Gemini (e.g., TTS models)
+            if (provider === 'gemini') {
+                models = models.filter(m => {
+                    const id = m.id.toLowerCase();
+                    // Filter out TTS (text-to-speech) models
+                    if (id.includes('tts') || id.includes('text-to-speech')) return false;
+                    // Filter out audio models
+                    if (id.includes('audio') && !id.includes('transcribe')) return false;
+                    return true;
+                });
+            }
+            
+            const config = API_CONFIGS[provider];
+            const recommendedModelId = config?.defaultModel || null;
+            const recommendedModels = models.filter(m => m.recommended === true);
+            sendResponse({ success: true, models, recommendedModelId, recommendedModels });
+            return true;
+        }
+        
+        if (request.action === 'getSelectedModel') {
+            getSelectedModel(request.provider || 'gemini')
+                .then(modelId => {
+                    sendResponse({ success: true, modelId });
+                })
+                .catch(error => {
+                    sendResponse({ success: false, error: error.message });
+                });
+            return true;
+        }
+        
+        if (request.action === 'setSelectedModel') {
+            const provider = request.provider || 'gemini';
+            const modelId = request.modelId;
+            
+            chrome.storage.local.get([STORAGE_SELECTED_MODELS], (result) => {
+                const selectedModels = result[STORAGE_SELECTED_MODELS] || {};
+                selectedModels[provider] = modelId;
+                chrome.storage.local.set({ [STORAGE_SELECTED_MODELS]: selectedModels }, () => {
+                    if (chrome.runtime.lastError) {
+                        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        sendResponse({ success: true });
+                    }
+                });
+            });
+            return true;
+        }
         
         if (request.action === 'getTemplates') {
             getTemplatesForType(request.enhancementType)

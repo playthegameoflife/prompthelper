@@ -9,6 +9,32 @@
  */
 export class InjectionManager {
     /**
+     * Checks if any API key is configured
+     * @returns {Promise<boolean>}
+     */
+    static async hasApiKey() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['userGeminiApiKey', 'userOpenAIApiKey', 'userAnthropicApiKey'], (result) => {
+                const hasKey = !!(result.userGeminiApiKey || result.userOpenAIApiKey || result.userAnthropicApiKey);
+                resolve(hasKey);
+            });
+        });
+    }
+
+    /**
+     * Checks if injected button is enabled by user preference
+     * @returns {Promise<boolean>}
+     */
+    static async isInjectButtonEnabled() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['injectButtonEnabled'], (result) => {
+                // Default to true for backward compatibility
+                resolve(result.injectButtonEnabled !== false);
+            });
+        });
+    }
+
+    /**
      * Injects the enhance button next to the send button
      * @param {HTMLElement} inputElement - The input element
      * @param {HTMLElement} sendButton - The send button
@@ -19,6 +45,20 @@ export class InjectionManager {
     static async injectButtonNextToSend(inputElement, sendButton, container = null, design = {}) {
         return new Promise(async (resolve, reject) => {
             try {
+                // Check if button injection is enabled by user preference
+                const buttonEnabled = await this.isInjectButtonEnabled();
+                if (!buttonEnabled) {
+                    resolve(); // Resolve silently - button shouldn't be shown
+                    return;
+                }
+
+                // Check if API key is set - don't show button if no API key
+                const apiKeyExists = await this.hasApiKey();
+                if (!apiKeyExists) {
+                    resolve(); // Resolve silently - button shouldn't be shown
+                    return;
+                }
+
                 // Check if already injected
                 const existingContainer = document.getElementById('prompt-architect-buttons-container');
                 if (existingContainer && document.body.contains(existingContainer)) {

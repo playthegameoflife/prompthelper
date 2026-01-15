@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Prompt Helper",
-  "short_name": "PromptHelper",
-  "version": "1.6",
+  "name": "Fruited - AI Prompt Helper",
+  "short_name": "Fruited",
+  "version": "2.3.0",
   "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience.",
   "homepage_url": "https://github.com/yourusername/prompt-architect",
   "permissions": [
     "activeTab",
     "contextMenus",
-    "storage"
+    "storage",
+    "identity"
   ],
   "host_permissions": [
     "https://chat.openai.com/*",
@@ -23,7 +24,12 @@
     "https://x.com/*",
     "https://twitter.com/*",
     "https://perplexity.ai/*",
-    "https://www.perplexity.ai/*"
+    "https://www.perplexity.ai/*",
+    "https://api.deepseek.com/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.x.ai/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
