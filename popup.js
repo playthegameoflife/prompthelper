@@ -46,6 +46,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Chrome extension: Firebase LOCAL persistence is not supported in MV3, so we persist user in chrome.storage
   // and restore by re-authenticating with chrome.identity when the popup opens.
   const STORAGE_FIREBASE_USER = 'pa_firebase_user';
+  /** When true, skip Google sign-in (development mode). Must match content.js STORAGE_DEV_BYPASS_AUTH. */
+  const STORAGE_DEV_BYPASS_AUTH = 'pa_dev_bypass_auth';
+  /** Fake user object when dev bypass is on (so header/settings don't break). */
+  const DEV_BYPASS_FAKE_USER = { uid: 'dev', email: 'dev@local', displayName: 'Dev User' };
 
   function saveFirebaseUserToStorage(user) {
     if (!user || !chrome.storage || !chrome.storage.local) return;
@@ -312,9 +316,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Wait for Firebase to set persistence and expose auth, or fallback after 2s
   let authSetupDone = false;
-  function runSetupOnce() {
+  async function runSetupOnce() {
     if (authSetupDone) return;
     authSetupDone = true;
+    // Development: bypass Google auth when pa_dev_bypass_auth is set
+    if (chrome.storage?.local) {
+      const result = await new Promise((resolve) => chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH], resolve));
+      if (result[STORAGE_DEV_BYPASS_AUTH]) {
+        showMainInterface(DEV_BYPASS_FAKE_USER);
+        subscriptionManager.getSubscriptionStatus(true).catch(() => {}).then(() => loadPremiumTab?.());
+        return;
+      }
+    }
     setupFirebaseAuth();
   }
   if (window.auth && window.provider && window.signInWithPopup) {
@@ -963,6 +976,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   if (tabsContainer) tabsContainer.style.display = 'none';
+
+  // Developer: bypass sign-in checkbox (login section + sync when showing login)
+  const devBypassCheckbox = document.getElementById('dev-bypass-auth-checkbox');
+  if (devBypassCheckbox) {
+    chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH], (result) => {
+      devBypassCheckbox.checked = !!result[STORAGE_DEV_BYPASS_AUTH];
+    });
+    devBypassCheckbox.addEventListener('change', () => {
+      const enabled = devBypassCheckbox.checked;
+      chrome.storage.local.set({ [STORAGE_DEV_BYPASS_AUTH]: enabled }, () => {
+        if (enabled) {
+          showMainInterface(DEV_BYPASS_FAKE_USER);
+          if (typeof subscriptionManager !== 'undefined') subscriptionManager.getSubscriptionStatus(true).catch(() => {}).then(() => loadPremiumTab?.());
+        } else {
+          showLoginSection();
+        }
+      });
+    });
+  }
 
   function hideInitialLoader() {
     const loader = document.getElementById('initial-loader');
@@ -2324,6 +2356,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (userInfo) userInfo.style.display = 'none';
     if (logoutButton) logoutButton.style.display = 'none';
 
+    // Unsync dev bypass checkbox so it reflects actual state
+    const devBypassCheckbox = document.getElementById('dev-bypass-auth-checkbox');
+    if (devBypassCheckbox) devBypassCheckbox.checked = false;
+
     // Show login section
     if (loginSection) {
       loginSection.style.display = 'flex';
@@ -2492,6 +2528,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save auto-send preference
     autoSendToggle.addEventListener('change', (e) => {
       chrome.storage.local.set({ autoSendAfterEnhancement: e.target.checked });
+    });
+  }
+
+  // Developer: bypass sign-in (Settings toggle — turn off to return to login when in dev mode)
+  const devBypassToggle = document.getElementById('dev-bypass-auth-toggle');
+  if (devBypassToggle) {
+    chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH], (result) => {
+      devBypassToggle.checked = !!result[STORAGE_DEV_BYPASS_AUTH];
+    });
+    devBypassToggle.addEventListener('change', (e) => {
+      const enabled = e.target.checked;
+      chrome.storage.local.set({ [STORAGE_DEV_BYPASS_AUTH]: enabled });
+      if (!enabled && !(auth && auth.currentUser)) showLoginSection();
     });
   }
 

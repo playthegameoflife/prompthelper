@@ -1130,9 +1130,22 @@ function updateChatGPTPersistentPosition() {
     const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
     if (!wrapper || !wrapper.firstElementChild) return;
     const input = findPlatformSpecificInput();
+    const inner = wrapper.firstElementChild;
+    const w = inner.offsetWidth || 48;
+    const h = inner.offsetHeight || 40;
+
+    // Fallback: position relative to input when send button is missing or in a different layout (e.g. not signed in / no text)
+    const inputRect = input ? input.getBoundingClientRect() : null;
     const sendButton = input ? _findSendButton(input, 'chatgpt') : null;
-    if (!sendButton || !sendButton.parentElement) return;
-    // Position to the left of the leftmost button in the row (dictate/mic) so we don't cover it
+    if (!sendButton || !sendButton.parentElement) {
+        if (inputRect && inputRect.width > 0 && inputRect.height > 0) {
+            wrapper.style.left = (inputRect.left - w - 8) + 'px';
+            wrapper.style.top = (inputRect.top + inputRect.height / 2 - h / 2) + 'px';
+            wrapper.style.pointerEvents = '';
+        }
+        return;
+    }
+
     const row = sendButton.parentElement;
     let leftmost = sendButton;
     let leftmostLeft = sendButton.getBoundingClientRect().left;
@@ -1145,15 +1158,19 @@ function updateChatGPTPersistentPosition() {
             leftmost = el;
         }
     }
-    const inner = wrapper.firstElementChild;
-    const w = inner.offsetWidth || 48;
-    const h = inner.offsetHeight || 40;
     const leftRect = leftmost.getBoundingClientRect();
     const sendRect = sendButton.getBoundingClientRect();
-    // Horizontal: to the left of the leftmost (dictate). Vertical: centered with send button so all three are level.
     const rowCenterY = sendRect.top + sendRect.height / 2;
-    wrapper.style.left = (leftRect.left - w - 8) + 'px';
-    wrapper.style.top = (rowCenterY - h / 2) + 'px';
+
+    // If send row is far below the input (logged-out / empty state layout), position relative to input instead
+    const maxRowBelowInput = 80;
+    if (inputRect && inputRect.height > 0 && (sendRect.top - (inputRect.top + inputRect.height)) > maxRowBelowInput) {
+        wrapper.style.left = (inputRect.left - w - 8) + 'px';
+        wrapper.style.top = (inputRect.top + inputRect.height / 2 - h / 2) + 'px';
+    } else {
+        wrapper.style.left = (leftRect.left - w - 8) + 'px';
+        wrapper.style.top = (rowCenterY - h / 2) + 'px';
+    }
     wrapper.style.pointerEvents = '';
 }
 
@@ -1185,6 +1202,14 @@ function ensureChatGPTButtonInWrapper(wrapper) {
     wrapper.appendChild(enhancerDiv);
 }
 
+/** Returns true if the ChatGPT composer input has any text (so we can show the button only after they start typing). */
+function chatGPTComposerHasText() {
+    const input = findPlatformSpecificInput();
+    if (!input) return false;
+    const v = (typeof input.value === 'string' ? input.value : (input.textContent || '')).trim();
+    return v.length > 0;
+}
+
 /**
  * ChatGPT-specific injection (persistent container = zero flicker when typing)
  */
@@ -1201,7 +1226,10 @@ async function injectChatGPT(inputElement) {
     const wrapper = getOrCreateChatGPTPersistentWrapper();
     ensureChatGPTButtonInWrapper(wrapper);
     updateChatGPTPersistentPosition();
-    wrapper.style.display = '';
+    // Only show the button when the composer has text (avoids wrong position when not signed in / empty)
+    wrapper.style.display = chatGPTComposerHasText() ? '' : 'none';
+    setTimeout(updateChatGPTPersistentPosition, 350);
+    setTimeout(updateChatGPTPersistentPosition, 900);
 }
 
 /**
@@ -1791,14 +1819,21 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
 
 /** Storage key for persisted Firebase user (must match popup.js); when set, user is signed in */
 const STORAGE_FIREBASE_USER = 'pa_firebase_user';
+/** When true, skip Google sign-in (development mode); in-chat button and popup treat as signed in */
+const STORAGE_DEV_BYPASS_AUTH = 'pa_dev_bypass_auth';
 
 /**
  * Checks if the user is signed in (Firebase auth persisted in chrome.storage by popup).
  * In-chat Improve button is shown only when signed in for a consistent experience.
+ * When dev bypass is on (pa_dev_bypass_auth), returns true without requiring Google auth.
  */
 async function isUserSignedIn() {
     return new Promise((resolve) => {
-        chrome.storage.local.get([STORAGE_FIREBASE_USER], (result) => {
+        chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH, STORAGE_FIREBASE_USER], (result) => {
+            if (result[STORAGE_DEV_BYPASS_AUTH]) {
+                resolve(true);
+                return;
+            }
             const user = result[STORAGE_FIREBASE_USER];
             resolve(!!(user && user.uid));
         });
@@ -3568,8 +3603,13 @@ async function observeDOM() {
             if (platform === 'chatgpt') {
                 const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
                 if (wrapper && wrapper.firstElementChild) {
-                    wrapper.style.display = '';
-                    updateChatGPTPersistentPosition();
+                    const hasText = chatGPTComposerHasText();
+                    if (hasText) {
+                        wrapper.style.display = '';
+                        updateChatGPTPersistentPosition();
+                    } else {
+                        wrapper.style.display = 'none';
+                    }
                     return;
                 }
             }
@@ -3594,7 +3634,10 @@ async function observeDOM() {
             if (platformForComposer === 'chatgpt') {
                 const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
                 if (wrapper && wrapper.firstElementChild) {
-                    updateChatGPTPersistentPosition();
+                    if (chatGPTComposerHasText()) {
+                        wrapper.style.display = '';
+                        updateChatGPTPersistentPosition();
+                    }
                     return;
                 }
             }
@@ -3607,13 +3650,21 @@ async function observeDOM() {
     function onComposerInteraction(e) {
         const target = e.target;
         if (!target || !target.closest) return;
-        const now = Date.now();
-        if (now - lastComposerCheck < COMPOSER_CHECK_THROTTLE_MS) return;
-        lastComposerCheck = now;
         const input = findPlatformSpecificInput();
         if (!input) return;
         const isComposer = target === input || input.contains(target);
         if (!isComposer) return;
+        // ChatGPT: show button instantly on first keystroke (no throttle wait)
+        if (platformForComposer === 'chatgpt' && e.type === 'input' && chatGPTComposerHasText()) {
+            const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+            if (wrapper && wrapper.firstElementChild) {
+                wrapper.style.display = '';
+                updateChatGPTPersistentPosition();
+            }
+        }
+        const now = Date.now();
+        if (now - lastComposerCheck < COMPOSER_CHECK_THROTTLE_MS) return;
+        lastComposerCheck = now;
         scheduleComposerReinject();
     }
     document.addEventListener('focusin', onComposerInteraction, { passive: true, capture: true });
