@@ -1,10 +1,10 @@
 # Prompt Helper Gemini
 
-Intelligent prompt refinement for Text, Code, Image, and Video generation. A frictionless enhancement experience that works directly in your favorite AI chat interfaces.
+Intelligent prompt refinement for AI chats. Enhance Text, Code, Image, and Video prompts with one click—directly in your favorite AI chat interfaces.
 
 ## Features
 
-- 🚀 **Powered by Gemini 2.5 Flash Lite**: Fast, efficient, and cost-effective AI enhancement
+- 🚀 **One-Click Enhancement**: Fast, efficient AI refinement in any supported chat
 - 🎯 **Multiple Enhancement Modes**: Text, Code, Image, and Video prompt optimization
 - ⚡ **Fast & Efficient**: Optimized for speed and low cost
 - 📝 **Enhancement History**: View and reuse your recently enhanced prompts
@@ -54,7 +54,7 @@ Intelligent prompt refinement for Text, Code, Image, and Video generation. A fri
 
 ### 3. Start Enhancing
 
-- **In Chat Interfaces**: Look for the "Improve" button next to the send button
+- **In Chat Interfaces**: Look for the ✨ button next to the send button
 - **From Popup**: Enter your prompt in the Enhance tab and click "Enhance Prompt"
 - **Keyboard Shortcut**: Press `Ctrl+Shift+E` (or `Cmd+Shift+E` on Mac) to enhance the current prompt
 - **Context Menu**: Right-click selected text and choose "Architect: Enhance"
@@ -82,7 +82,7 @@ Intelligent prompt refinement for Text, Code, Image, and Video generation. A fri
 
 ## Troubleshooting
 
-### The "Improve" button doesn't appear
+### The ✨ button doesn't appear
 
 - Make sure you're on a supported platform (ChatGPT, Gemini, Claude, etc.)
 - Refresh the page

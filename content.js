@@ -1,8 +1,15 @@
 /**
  * content.js
- * Injects the premium Prompt Architect UI (Mode Selector + Enhance Button) 
+ * Injects the premium Prompt Architect UI (Mode Selector + Enhance Button)
  * into target AI chat interfaces. Designed with a clean, Apple-inspired aesthetic.
  */
+
+(function() {
+  const host = window.location.hostname;
+  if (/chat\.openai\.com|chatgpt\.com|gemini\.google\.com|claude\.ai|perplexity\.ai|grok\.com|x\.com/i.test(host)) {
+    console.log('[Prompt Architect] Content script loaded on', host);
+  }
+})();
 
 // Define supported platforms and their domain patterns
 const PLATFORMS = {
@@ -61,6 +68,174 @@ const elementCache = {
 
 /** Cache for platform design tokens */
 const designCache = new Map();
+
+/** Stream port for enhanced prompt on this tab (ChatGPT, Gemini, etc.) */
+let enhanceStreamPagePort = null;
+/** Active streaming state: { currentInputElement, elementToUpdate, enhanceButton, statusEl, statusArea, design, platform, accumulated } */
+let streamingContext = null;
+/** Throttle: last time we updated the input during streaming */
+let streamUpdateScheduled = null;
+
+function connectEnhanceStreamPagePort() {
+    if (enhanceStreamPagePort) return;
+    try {
+        enhanceStreamPagePort = chrome.runtime.connect({ name: 'enhanceStreamPage' });
+        enhanceStreamPagePort.onMessage.addListener((msg) => {
+            const ctx = streamingContext;
+            if (!ctx) return;
+            if (msg.chunk) {
+                ctx.accumulated += msg.chunk;
+                // Keep spinner visible until stream ends (re-apply in case button was re-injected)
+                const btn = document.getElementById('main-enhance-button');
+                if (btn) {
+                    const iconEl = btn.querySelector('.pa-enhance-button-icon');
+                    const spinnerEl = btn.querySelector('.pa-enhance-spinner');
+                    if (iconEl) iconEl.style.display = 'none';
+                    if (spinnerEl) spinnerEl.style.display = 'flex';
+                }
+                if (!streamUpdateScheduled) {
+                    streamUpdateScheduled = true;
+                    requestAnimationFrame(() => {
+                        streamUpdateScheduled = null;
+                        if (streamingContext && streamingContext.currentInputElement && document.body.contains(streamingContext.currentInputElement)) {
+                            updateInputAndDispatch(streamingContext.accumulated, streamingContext.currentInputElement).catch(() => {});
+                        }
+                    });
+                }
+            }
+            if (msg.done && msg.fullText != null) {
+                const fullText = msg.fullText;
+                let elementToUpdate = ctx.elementToUpdate || ctx.currentInputElement;
+                if (ctx.platform === 'perplexity' && (!elementToUpdate || !document.body.contains(elementToUpdate))) {
+                    const perplexityInput = findPlatformSpecificInput();
+                    if (perplexityInput) elementToUpdate = perplexityInput;
+                }
+                updateInputAndDispatch(fullText, elementToUpdate).then((updateSuccess) => {
+                    if (!updateSuccess && ctx.platform === 'perplexity') {
+                        setTimeout(() => {
+                            const freshInput = findPlatformSpecificInput();
+                            if (freshInput) updateInputAndDispatch(fullText, freshInput).catch(() => {});
+                        }, 200);
+                    } else if (updateSuccess) {
+                        chrome.storage.local.get(['autoSendAfterEnhancement'], async (result) => {
+                            if (result.autoSendAfterEnhancement) {
+                                await new Promise(r => setTimeout(r, 300));
+                                const sendButton = findSendButton(elementToUpdate || ctx.currentInputElement);
+                                if (sendButton && sendButton.offsetParent !== null) sendButton.click();
+                            }
+                        });
+                    }
+                }).catch(() => {});
+                // Use current button in DOM so we clear spinner even if React replaced the node (fixes stuck spinner)
+                const btn = document.getElementById('main-enhance-button') || ctx.enhanceButton;
+                if (btn) {
+                    const iconEl = btn.querySelector('.pa-enhance-button-icon');
+                    const spinnerEl = btn.querySelector('.pa-enhance-spinner');
+                    if (iconEl) iconEl.style.display = 'flex';
+                    if (spinnerEl) spinnerEl.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.animation = '';
+                    btn.style.background = `linear-gradient(180deg, ${ctx.design.primaryHover || ctx.design.primary} 0%, ${ctx.design.primary} 100%)`;
+                    btn.style.cursor = 'pointer';
+                    btn.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease';
+                    btn.style.animation = 'pa-success-pop 0.4s ease-out forwards';
+                    setTimeout(() => {
+                        const currentBtn = document.getElementById('main-enhance-button') || btn;
+                        if (currentBtn) {
+                            currentBtn.style.animation = '';
+                            currentBtn.style.transition = 'box-shadow 0.2s ease, background 0.2s ease, transform 0.15s ease';
+                            currentBtn.style.transform = '';
+                        }
+                    }, 420);
+                }
+                const statusAreaEl = document.getElementById('prompt-architect-status-area');
+                const statusElEl = document.getElementById('prompt-architect-status');
+                if (statusAreaEl) { statusAreaEl.style.display = 'none'; statusAreaEl.style.width = '0'; }
+                if (statusElEl) statusElEl.style.display = 'none';
+                streamingContext = null;
+            }
+            if (msg.error) {
+                const errMsg = msg.error;
+                const statusArea = document.getElementById('prompt-architect-status-area') || ctx.statusArea;
+                const statusEl = document.getElementById('prompt-architect-status') || ctx.statusEl;
+                if (statusArea && statusEl) {
+                    statusArea.style.display = 'inline-flex';
+                    statusArea.style.width = 'auto';
+                    statusEl.textContent = errMsg;
+                    statusEl.style.color = '#ef4444';
+                    statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+                    statusEl.style.border = '0.5px solid rgba(239, 68, 68, 0.2)';
+                    statusEl.style.display = 'inline-flex';
+                    statusEl.style.opacity = '1';
+                    setTimeout(() => {
+                        if (statusArea) { statusArea.style.display = 'none'; statusArea.style.width = '0'; }
+                        if (statusEl) statusEl.style.display = 'none';
+                    }, 5000);
+                }
+                const btn = document.getElementById('main-enhance-button') || ctx.enhanceButton;
+                if (btn) {
+                    const iconEl = btn.querySelector('.pa-enhance-button-icon');
+                    const spinnerEl = btn.querySelector('.pa-enhance-spinner');
+                    if (iconEl) iconEl.style.display = 'flex';
+                    if (spinnerEl) spinnerEl.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.animation = '';
+                    btn.style.background = '#ef4444';
+                    btn.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
+                    setTimeout(() => {
+                        const currentBtn = document.getElementById('main-enhance-button') || btn;
+                        if (currentBtn) {
+                            const hex = (ctx.design.primary || '#1a73e8').replace('#', '');
+                            const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                            const glow = `rgba(${r},${g},${b},0.4)`;
+                            currentBtn.style.background = `linear-gradient(180deg, ${ctx.design.primaryHover || ctx.design.primary} 0%, ${ctx.design.primary} 100%)`;
+                            currentBtn.style.boxShadow = `0 2px 10px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.15) inset, 0 0 20px ${glow}`;
+                        }
+                    }, 2000);
+                }
+                streamingContext = null;
+            }
+        });
+        enhanceStreamPagePort.onDisconnect.addListener(() => {
+            enhanceStreamPagePort = null;
+            const ctx = streamingContext;
+            streamingContext = null;
+            if (ctx) {
+                const btn = document.getElementById('main-enhance-button') || ctx.enhanceButton;
+                if (btn) {
+                    const iconEl = btn.querySelector('.pa-enhance-button-icon');
+                    const spinnerEl = btn.querySelector('.pa-enhance-spinner');
+                    if (iconEl) iconEl.style.display = 'flex';
+                    if (spinnerEl) spinnerEl.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.animation = '';
+                    const hex = (ctx.design?.primary || '#1a73e8').replace('#', '');
+                    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                    const glow = `rgba(${r},${g},${b},0.4)`;
+                    btn.style.background = `linear-gradient(180deg, ${ctx.design?.primaryHover || ctx.design?.primary || '#1a73e8'} 0%, ${ctx.design?.primary || '#1a73e8'} 100%)`;
+                    btn.style.boxShadow = `0 2px 10px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.15) inset, 0 0 20px ${glow}`;
+                    btn.style.cursor = 'pointer';
+                }
+                const statusArea = document.getElementById('prompt-architect-status-area') || ctx.statusArea;
+                const statusEl = document.getElementById('prompt-architect-status') || ctx.statusEl;
+                if (statusArea && statusEl) {
+                    statusArea.style.display = 'inline-flex';
+                    statusArea.style.width = 'auto';
+                    statusEl.textContent = 'Connection lost. Please try again.';
+                    statusEl.style.color = '#f59e0b';
+                    statusEl.style.background = 'rgba(245, 158, 11, 0.1)';
+                    statusEl.style.display = 'inline-flex';
+                    setTimeout(() => {
+                        if (statusArea) { statusArea.style.display = 'none'; statusArea.style.width = '0'; }
+                        if (statusEl) statusEl.style.display = 'none';
+                    }, 4000);
+                }
+            }
+        });
+    } catch (e) {
+        enhanceStreamPagePort = null;
+    }
+}
 
 /**
  * Gets cached element or queries and caches it
@@ -707,108 +882,41 @@ function createEnhanceButton(inputElement, enhancerDiv) {
     button.id = 'main-enhance-button';
     // Detect platform for keyboard shortcut hint
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    button.title = isMac 
-      ? 'Improve prompt with AI (Cmd+Shift+E)' 
-      : 'Improve prompt with AI (Ctrl+Shift+E)';
-    
-    // Create button content container
-    const buttonContent = document.createElement('div');
-    buttonContent.style.cssText = 'display: flex; align-items: center; gap: 6px;';
-    
-    const buttonText = document.createElement('span');
-    buttonText.textContent = 'Improve';
-    buttonContent.appendChild(buttonText);
-    
-    // Create mode icon (tiny icon on the button)
-    const modeIcon = document.createElement('span');
-    modeIcon.id = 'pa-mode-icon';
-    modeIcon.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        font-size: 12px;
-        cursor: pointer;
-        border-radius: 3px;
-        transition: background-color 0.2s;
-        user-select: none;
-    `;
-    modeIcon.title = 'Click to change mode';
-    
-    // Load current button mode and set icon
-    chrome.storage.local.get(['buttonEnhancementMode'], (result) => {
-        const currentMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-        const modeIcons = {
-            'TEXT_ENHANCEMENT': '📝',
-            'CODE_ENHANCEMENT': '💻',
-            'IMAGE_ENHANCEMENT': '🎨',
-            'VIDEO_ENHANCEMENT': '🎬'
-        };
-        modeIcon.textContent = modeIcons[currentMode] || '📝';
-    });
-    
-    // Hover effect for icon
-    modeIcon.onmouseenter = () => {
-        modeIcon.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-    };
-    modeIcon.onmouseleave = () => {
-        modeIcon.style.backgroundColor = 'transparent';
-    };
-    
-    buttonContent.appendChild(modeIcon);
-    button.appendChild(buttonContent);
-    
-    // Define modes in order for cycling
-    const modes = [
-        { value: 'TEXT_ENHANCEMENT', icon: '📝' },
-        { value: 'CODE_ENHANCEMENT', icon: '💻' },
-        { value: 'IMAGE_ENHANCEMENT', icon: '🎨' },
-        { value: 'VIDEO_ENHANCEMENT', icon: '🎬' }
-    ];
-    
-    // Function to update icon based on current mode
-    const updateModeIcon = (mode) => {
-        const modeData = modes.find(m => m.value === mode);
-        if (modeData) {
-            modeIcon.textContent = modeData.icon;
-        }
-    };
-    
-    // Load current mode and set icon
-    chrome.storage.local.get(['buttonEnhancementMode'], (result) => {
-        const currentMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-        updateModeIcon(currentMode);
-    });
-    
-    // Cycle through modes on icon click
-    modeIcon.onclick = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        
-        chrome.storage.local.get(['buttonEnhancementMode'], (result) => {
-            const currentMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-            const currentIndex = modes.findIndex(m => m.value === currentMode);
-            const nextIndex = (currentIndex + 1) % modes.length;
-            const nextMode = modes[nextIndex];
-            
-            chrome.storage.local.set({ buttonEnhancementMode: nextMode.value }, () => {
-                updateModeIcon(nextMode.value);
-            });
-        });
-    };
-    
-    // Platform-specific styling
-    button.className = 'text-white font-semibold text-sm';
-    button.style.setProperty('height', design.height, 'important');
-    button.style.setProperty('padding', '0 14px', 'important');
-    button.style.setProperty('background', design.primary, 'important');
+    button.title = isMac
+      ? 'Enhance prompt with AI (Cmd+Shift+E)'
+      : 'Enhance prompt with AI (Ctrl+Shift+E)';
+
+    // Premium circular icon button — clean, polished look on dark composer bars
+    const size = 40;
+    const hex = design.primary.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    const glow = `rgba(${r},${g},${b},0.32)`;
+    const glowHover = `rgba(${r},${g},${b},0.48)`;
+
+    const iconSize = 24; // Slightly bigger, centered in 40px button
+    const sparkleSvg = `<svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block;margin:0;vertical-align:middle;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>`;
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'pa-enhance-button-icon';
+    iconWrap.style.cssText = `position:absolute;inset:0;margin:auto;display:flex;align-items:center;justify-content:center;width:${iconSize}px;height:${iconSize}px;line-height:0;pointer-events:none;filter:drop-shadow(0 0 1px rgba(0,0,0,0.25));`;
+    iconWrap.innerHTML = sparkleSvg;
+    button.appendChild(iconWrap);
+
+    const spinner = document.createElement('span');
+    spinner.id = 'pa-enhance-button-spinner';
+    spinner.className = 'pa-enhance-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    spinner.style.cssText = 'position:absolute;inset:0;margin:auto;display:none;align-items:center;justify-content:center;width:20px;height:20px;pointer-events:none;border:2px solid rgba(255,255,255,0.35);border-top-color:white;border-radius:50%;animation:pa-spinner-rotate 0.7s linear infinite;';
+    button.appendChild(spinner);
+
+    button.className = 'text-white text-sm';
+    button.style.setProperty('width', size + 'px', 'important');
+    button.style.setProperty('height', size + 'px', 'important');
+    button.style.setProperty('padding', '0', 'important');
+    button.style.setProperty('min-width', size + 'px', 'important');
+    button.style.setProperty('background', `linear-gradient(165deg, ${design.primaryHover || design.primary} 0%, ${design.primary} 45%, ${design.primary} 100%)`, 'important');
     button.style.setProperty('border', 'none', 'important');
     button.style.setProperty('white-space', 'nowrap', 'important');
-    button.style.setProperty('font-family', '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'important');
-    button.style.setProperty('font-size', design.fontSize, 'important');
-    button.style.setProperty('font-weight', design.fontWeight, 'important');
-    button.style.setProperty('letter-spacing', '-0.01em', 'important');
+    button.style.setProperty('font-family', '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'important');
     button.style.setProperty('flex-shrink', '0', 'important');
     button.style.setProperty('cursor', 'pointer', 'important');
     button.style.setProperty('user-select', 'none', 'important');
@@ -818,82 +926,26 @@ function createEnhanceButton(inputElement, enhancerDiv) {
     button.style.setProperty('visibility', 'visible', 'important');
     button.style.setProperty('opacity', '1', 'important');
     button.style.setProperty('z-index', '1000000', 'important');
-    button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
-    button.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    button.style.borderRadius = design.borderRadius;
-    
-    // Store original colors for restoration
+    button.style.setProperty('position', 'relative', 'important');
+    button.style.borderRadius = '50%';
+    button.style.boxShadow = `0 2px 8px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.12) inset, 0 0 16px ${glow}`;
+    button.style.transition = 'box-shadow 0.28s ease, background 0.22s ease, transform 0.24s cubic-bezier(0.34, 1.2, 0.64, 1)';
+
     button.dataset.originalColor = design.primary;
     button.dataset.originalHover = design.primaryHover;
-    
-    // Premium shadows and depth for ChatGPT
-    if (platform === 'chatgpt') {
-        // Multi-layer shadows for depth and premium feel
-        button.style.boxShadow = `
-            0 4px 14px rgba(0, 122, 255, 0.25),
-            0 2px 6px rgba(0, 122, 255, 0.15),
-            0 1px 2px rgba(0, 0, 0, 0.1),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.1)
-        `;
-        
-        // Enhanced hover with even more depth
-        button.onmouseenter = () => {
-            button.style.transform = 'translateY(-1px)';
-            button.style.boxShadow = `
-                0 8px 24px rgba(0, 122, 255, 0.35),
-                0 4px 12px rgba(0, 122, 255, 0.2),
-                0 2px 4px rgba(0, 0, 0, 0.15),
-                inset 0 1px 0 rgba(255, 255, 255, 0.3),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.1)
-            `;
-            button.style.background = design.primaryHover;
-        };
-        
-        button.onmouseleave = () => {
-            button.style.transform = 'translateY(0)';
-            button.style.boxShadow = `
-                0 4px 14px rgba(0, 122, 255, 0.25),
-                0 2px 6px rgba(0, 122, 255, 0.15),
-                0 1px 2px rgba(0, 0, 0, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.1)
-            `;
-            button.style.background = design.primary;
-        };
-    } else {
-        // Keep original hover for other platforms
-        button.onmouseenter = () => {
-            button.style.background = design.primaryHover;
-            button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
-        };
-        
-        button.onmouseleave = () => {
-            button.style.background = design.primary;
-            button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
-        };
-    }
-    
-    // First-time discovery animation
-    const hasSeenButton = sessionStorage.getItem('prompt-architect-seen');
-    if (!hasSeenButton) {
-        sessionStorage.setItem('prompt-architect-seen', 'true');
-        // Gentle pulse animation on first appearance
-        setTimeout(() => {
-            button.style.animation = 'gentlePulse 2s ease-in-out';
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes gentlePulse {
-                    0%, 100% { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 0 ${design.primary}40; }
-                    50% { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 4px ${design.primary}20; }
-                }
-            `;
-            document.head.appendChild(style);
-            setTimeout(() => {
-                button.style.animation = '';
-            }, 2000);
-        }, 500);
-    }
+
+    button.onmouseenter = () => {
+        button.style.background = `linear-gradient(165deg, ${design.primary} 0%, ${design.primaryHover || design.primary} 55%, ${design.primaryHover || design.primary} 100%)`;
+        button.style.transform = 'translateY(-1.5px)';
+        button.style.boxShadow = `0 4px 14px rgba(0,0,0,0.26), 0 0 0 1px rgba(0,0,0,0.06), 0 0 0 1px rgba(255,255,255,0.18) inset, 0 0 22px ${glowHover}`;
+    };
+    button.onmouseleave = () => {
+        button.style.background = `linear-gradient(165deg, ${design.primaryHover || design.primary} 0%, ${design.primary} 45%, ${design.primary} 100%)`;
+        button.style.transform = 'translateY(0)';
+        button.style.boxShadow = `0 2px 8px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.12) inset, 0 0 16px ${glow}`;
+    };
+
+    sessionStorage.setItem('prompt-architect-seen', 'true');
     
     // Prevent form submission
     let parentForm = button.closest('form');
@@ -923,38 +975,22 @@ function createEnhanceButton(inputElement, enhancerDiv) {
         parentForm.addEventListener('submit', preventFormSubmit, true);
     }
     
-    // Button click handler - use stored button mode (no auto-detection)
+    // Always text enhancement (no mode selection)
     button.onclick = async (event) => {
-        // Don't trigger if clicking the mode icon
-        if (event.target === modeIcon || modeIcon.contains(event.target)) {
-            return;
-        }
-        
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        
-        // Get stored button mode
-        chrome.storage.local.get(['buttonEnhancementMode'], (result) => {
-            const buttonMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-            handleButtonClick(inputElement, buttonMode, enhancerDiv);
-        });
-        
+        handleButtonClick(inputElement, 'TEXT_ENHANCEMENT', enhancerDiv);
         return false;
     };
-    
+
     button.onmousedown = (event) => {
-        // Don't prevent default for mode icon clicks
-        if (event.target === modeIcon || modeIcon.contains(event.target)) {
-            return;
-        }
         event.preventDefault();
         event.stopPropagation();
-        button.style.opacity = '0.9';
+        button.style.transform = 'translateY(0) scale(0.96)';
     };
-    
     button.onmouseup = () => {
-        button.style.opacity = '1';
+        button.style.transform = '';
     };
     
     return button;
@@ -1021,16 +1057,22 @@ function setupButtonProtection(enhancerDiv, inputElement) {
             }
         }
         
-        // Re-inject if removed
         if (needsReinjection) {
             buttonProtectionObserver.disconnect();
-            setTimeout(() => {
-                if (inputElement && document.body.contains(inputElement)) {
-                    injectUI(inputElement).catch(err => {
-                        console.error('[Prompt Architect] Failed to re-inject after removal:', err);
-                    });
+            const container = document.getElementById('prompt-architect-buttons-container');
+            if (container && document.body.contains(container)) return;
+            if (enhancerDiv && !document.body.contains(enhancerDiv)) {
+                if (reattachContainerToCurrentParent(enhancerDiv)) {
+                    const currentInput = findPlatformSpecificInput();
+                    if (currentInput) setupButtonProtection(enhancerDiv, currentInput);
+                    return;
                 }
-            }, 100);
+            }
+            setTimeout(() => {
+                if (document.getElementById('prompt-architect-buttons-container') && document.body.contains(document.getElementById('prompt-architect-buttons-container'))) return;
+                const input = inputElement && document.body.contains(inputElement) ? inputElement : findPlatformSpecificInput();
+                if (input) injectUI(input).catch(() => {});
+            }, 50);
         }
     });
     
@@ -1070,253 +1112,119 @@ function setupButtonProtection(enhancerDiv, inputElement) {
  */
 
 /**
- * ChatGPT-specific injection
+ * Zero-flicker ChatGPT: persistent container in body so the button is never removed when composer re-renders.
+ */
+const CHATGPT_PERSISTENT_WRAPPER_ID = 'prompt-architect-chatgpt-persistent';
+
+function getOrCreateChatGPTPersistentWrapper() {
+    let wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+    if (wrapper) return wrapper;
+    wrapper = document.createElement('div');
+    wrapper.id = CHATGPT_PERSISTENT_WRAPPER_ID;
+    wrapper.style.cssText = 'position:fixed;z-index:999999;pointer-events:none;margin:0;padding:0;';
+    document.body.appendChild(wrapper);
+    return wrapper;
+}
+
+function updateChatGPTPersistentPosition() {
+    const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+    if (!wrapper || !wrapper.firstElementChild) return;
+    const input = findPlatformSpecificInput();
+    const sendButton = input ? _findSendButton(input, 'chatgpt') : null;
+    if (!sendButton || !sendButton.parentElement) return;
+    // Position to the left of the leftmost button in the row (dictate/mic) so we don't cover it
+    const row = sendButton.parentElement;
+    let leftmost = sendButton;
+    let leftmostLeft = sendButton.getBoundingClientRect().left;
+    const siblings = row.querySelectorAll('button, [role="button"], a[role="button"]');
+    for (const el of siblings) {
+        if (el.offsetParent === null) continue;
+        const r = el.getBoundingClientRect();
+        if (r.left < leftmostLeft) {
+            leftmostLeft = r.left;
+            leftmost = el;
+        }
+    }
+    const inner = wrapper.firstElementChild;
+    const w = inner.offsetWidth || 48;
+    const h = inner.offsetHeight || 40;
+    const leftRect = leftmost.getBoundingClientRect();
+    const sendRect = sendButton.getBoundingClientRect();
+    // Horizontal: to the left of the leftmost (dictate). Vertical: centered with send button so all three are level.
+    const rowCenterY = sendRect.top + sendRect.height / 2;
+    wrapper.style.left = (leftRect.left - w - 8) + 'px';
+    wrapper.style.top = (rowCenterY - h / 2) + 'px';
+    wrapper.style.pointerEvents = '';
+}
+
+function ensureChatGPTButtonInWrapper(wrapper) {
+    if (wrapper.querySelector('#prompt-architect-buttons-container')) return;
+    const design = getPlatformDesign('chatgpt');
+    const enhancerDiv = document.createElement('div');
+    enhancerDiv.id = 'prompt-architect-buttons-container';
+    enhancerDiv.className = 'flex items-center';
+    enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
+    enhancerDiv.style.setProperty('align-items', 'center', 'important');
+    enhancerDiv.style.setProperty('gap', '8px', 'important');
+    enhancerDiv.style.setProperty('margin-right', '8px', 'important');
+    enhancerDiv.style.setProperty('pointer-events', 'auto', 'important');
+    enhancerDiv.style.setProperty('visibility', 'visible', 'important');
+    enhancerDiv.style.setProperty('opacity', '1', 'important');
+    enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+    enhancerDiv.style.setProperty('position', 'relative', 'important');
+    enhancerDiv.style.setProperty('align-self', 'center', 'important');
+    const statusArea = document.createElement('div');
+    statusArea.id = 'prompt-architect-status-area';
+    statusArea.style.cssText = 'display:none;align-items:center;gap:6px;';
+    const statusEl = document.createElement('span');
+    statusEl.id = 'prompt-architect-status';
+    statusArea.appendChild(statusEl);
+    enhancerDiv.appendChild(statusArea);
+    // null inputElement: handleButtonClick will use findPlatformSpecificInput() at click time
+    enhancerDiv.appendChild(createEnhanceButton(null, enhancerDiv));
+    wrapper.appendChild(enhancerDiv);
+}
+
+/**
+ * ChatGPT-specific injection (persistent container = zero flicker when typing)
  */
 async function injectChatGPT(inputElement) {
-    // Find the send button using multiple strategies
-    let sendButton = null;
-    
-    // Strategy 1: Look in the form containing the input
-    const form = inputElement.closest('form');
-    if (form) {
-        sendButton = form.querySelector('button[data-testid*="send" i]') ||
-                     form.querySelector('button[aria-label*="Send" i]') ||
-                     form.querySelector('button[type="submit"]') ||
-                     form.querySelector('button[id*="composer-submit"]') ||
-                     form.querySelector('button[class*="composer-submit"]');
-    }
-    
-    // Strategy 2: Search in parent hierarchy
-    if (!sendButton) {
-        let parent = inputElement.parentElement;
-        for (let i = 0; i < 20 && parent; i++) {
-            sendButton = parent.querySelector('button[data-testid*="send" i]') ||
-                         parent.querySelector('button[aria-label*="Send" i]') ||
-                         parent.querySelector('button[id*="composer-submit"]') ||
-                         parent.querySelector('button[class*="composer-submit"]') ||
-                         parent.querySelector('button[class*="submit"]');
-            if (sendButton && sendButton.offsetParent !== null) break;
-            parent = parent.parentElement;
-        }
-    }
-    
-    // Strategy 3: Search entire document for buttons near input
-    if (!sendButton) {
-        const inputRect = inputElement.getBoundingClientRect();
-        const allButtons = document.querySelectorAll('button');
-        let closestButton = null;
-        let closestDistance = Infinity;
-        
-        for (const btn of allButtons) {
-            if (btn.offsetParent === null) continue;
-            const btnRect = btn.getBoundingClientRect();
-            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
-            
-            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-            const id = (btn.id || '').toLowerCase();
-            const className = (btn.className || '').toLowerCase();
-            const hasSendIcon = btn.querySelector('svg');
-            const isSubmit = btn.type === 'submit';
-            
-            if ((isSubmit || ariaLabel.includes('send') || id.includes('submit') || 
-                 className.includes('submit') || className.includes('send') || hasSendIcon) && 
-                distance < 200) {
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestButton = btn;
-                }
-            }
-        }
-        
-        if (closestButton) {
-            sendButton = closestButton;
-        }
-    }
-    
+    const sendButton = _findSendButton(inputElement, 'chatgpt');
     if (!sendButton || !sendButton.parentElement) {
+        console.warn('[Prompt Architect] ChatGPT: send button not found. Input found:', !!inputElement);
         throw new Error('ChatGPT send button not found');
     }
-    
-    return injectButtonNextToSend(inputElement, sendButton);
+    // Remove any old inline container from composer so only the persistent one remains
+    const wrapperEl = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+    const anyContainer = document.getElementById('prompt-architect-buttons-container');
+    if (anyContainer && (!wrapperEl || !wrapperEl.contains(anyContainer))) anyContainer.remove();
+    const wrapper = getOrCreateChatGPTPersistentWrapper();
+    ensureChatGPTButtonInWrapper(wrapper);
+    updateChatGPTPersistentPosition();
+    wrapper.style.display = '';
 }
 
 /**
  * Gemini-specific injection
  */
 async function injectGemini(inputElement) {
-    let sendButton = null;
-    let targetContainer = null;
-    
-    // Strategy 1: Look for Gemini-specific button selectors
-    const geminiButtonSelectors = [
-        'button[aria-label*="Send" i]',
-        'button[aria-label*="Send message" i]',
-        'button[data-testid*="send" i]',
-        'button[type="submit"]',
-        'button[aria-label*="Submit" i]'
-    ];
-    
-    // Search in parent hierarchy with Gemini-specific patterns
-    let parent = inputElement.parentElement;
-    for (let i = 0; i < 30 && parent; i++) {
-        // Look for buttons with Gemini-specific patterns
-        for (const selector of geminiButtonSelectors) {
-            const buttons = parent.querySelectorAll(selector);
-            for (const btn of buttons) {
-                if (btn.offsetParent !== null) { // Check if visible
-                    sendButton = btn;
-                    targetContainer = parent;
-                    break;
-                }
-            }
-            if (sendButton) break;
-        }
-        
-        // Also check for buttons with SVG icons (common in Gemini)
-        if (!sendButton) {
-            const buttons = parent.querySelectorAll('button');
-            for (const btn of buttons) {
-                const hasIcon = btn.querySelector('svg');
-                const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-                if (hasIcon && (ariaLabel.includes('send') || ariaLabel.includes('submit') || !ariaLabel)) {
-                    if (btn.offsetParent !== null) {
-                        sendButton = btn;
-                        targetContainer = parent;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (sendButton) break;
-        parent = parent.parentElement;
-    }
-    
-    // Strategy 2: Find container with flex layout that contains both input and button
-    if (!sendButton) {
-        parent = inputElement.parentElement;
-        for (let i = 0; i < 30 && parent; i++) {
-            const style = window.getComputedStyle(parent);
-            if (style.display === 'flex' || style.display === 'inline-flex') {
-                const buttons = parent.querySelectorAll('button');
-                for (const btn of buttons) {
-                    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-                    const hasIcon = btn.querySelector('svg');
-                    if ((ariaLabel.includes('send') || ariaLabel.includes('submit') || hasIcon) && 
-                        btn.offsetParent !== null) {
-                        sendButton = btn;
-                        targetContainer = parent;
-                        break;
-                    }
-                }
-            }
-            if (sendButton) break;
-            parent = parent.parentElement;
-        }
-    }
-    
-    // Strategy 3: Search entire document for buttons near input (fallback)
-    if (!sendButton) {
-        const inputRect = inputElement.getBoundingClientRect();
-        const allButtons = document.querySelectorAll('button');
-        let closestButton = null;
-        let closestContainer = null;
-        let closestDistance = Infinity;
-        
-        for (const btn of allButtons) {
-            if (btn.offsetParent === null) continue;
-            const btnRect = btn.getBoundingClientRect();
-            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
-            
-            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-            const hasSendIcon = btn.querySelector('svg');
-            const isSubmit = btn.type === 'submit';
-            
-            if ((hasSendIcon || isSubmit || ariaLabel.includes('send') || ariaLabel.includes('submit')) && 
-                distance < 200) {
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestButton = btn;
-                    closestContainer = btn.parentElement;
-                }
-            }
-        }
-        
-        if (closestButton) {
-            sendButton = closestButton;
-            targetContainer = closestContainer;
-        }
-    }
-    
+    const sendButton = _findSendButton(inputElement, 'gemini');
     if (!sendButton || !sendButton.parentElement) {
+        console.warn('[Prompt Architect] Gemini: send button not found. Input found:', !!inputElement);
         throw new Error('Gemini send button not found');
     }
-    
     // Use the found container or fall back to sendButton.parentElement
-    return injectButtonNextToSend(inputElement, sendButton, targetContainer || sendButton.parentElement);
+    return injectButtonNextToSend(inputElement, sendButton, sendButton.parentElement); // targetContainer can be null, so use parent
 }
 
 /**
  * Claude-specific injection
  */
 async function injectClaude(inputElement) {
-    // Claude uses form with submit button - try multiple strategies
-    let sendButton = null;
-    
-    // Strategy 1: Find in form
-    const form = inputElement.closest('form');
-    if (form) {
-        sendButton = form.querySelector('button[type="submit"]') ||
-                    form.querySelector('button[aria-label*="Send" i]') ||
-                    form.querySelector('button[aria-label*="send" i]') ||
-                    form.querySelector('button[data-testid*="send" i]');
-    }
-    
-    // Strategy 2: Search in parent hierarchy
-    if (!sendButton) {
-        let parent = inputElement.parentElement;
-        for (let i = 0; i < 15 && parent; i++) {
-            sendButton = parent.querySelector('button[type="submit"]') ||
-                        parent.querySelector('button[aria-label*="Send" i]') ||
-                        parent.querySelector('button[aria-label*="send" i]') ||
-                        parent.querySelector('button[data-testid*="send" i]');
-            if (sendButton && sendButton.offsetParent !== null) break;
-            parent = parent.parentElement;
-        }
-    }
-    
-    // Strategy 3: Find button near input by proximity
-    if (!sendButton) {
-        const inputRect = inputElement.getBoundingClientRect();
-        const allButtons = document.querySelectorAll('button');
-        let closestButton = null;
-        let closestDistance = Infinity;
-        
-        for (const btn of allButtons) {
-            if (btn.offsetParent === null) continue;
-            const btnRect = btn.getBoundingClientRect();
-            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
-            
-            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-            const type = btn.type || '';
-            
-            if ((type === 'submit' || ariaLabel.includes('send') || ariaLabel.includes('submit')) && distance < 300) {
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestButton = btn;
-                }
-            }
-        }
-        
-        if (closestButton) {
-            sendButton = closestButton;
-        }
-    }
-    
+    const sendButton = _findSendButton(inputElement, 'claude');
     if (!sendButton || !sendButton.parentElement) {
         throw new Error('Claude send button not found');
     }
-    
     return injectButtonNextToSend(inputElement, sendButton);
 }
 
@@ -1324,69 +1232,10 @@ async function injectClaude(inputElement) {
  * Grok-specific injection
  */
 async function injectGrok(inputElement) {
-    // Grok uses Twitter's composer - find tweet button with multiple strategies
-    let sendButton = null;
-    
-    // Strategy 1: Look for tweet button by data-testid
-    sendButton = document.querySelector('[data-testid="tweetButton"]') ||
-                 document.querySelector('button[data-testid*="tweetButton"]');
-    
-    // Strategy 2: Look in the form/composer area
-    if (!sendButton) {
-        const form = inputElement.closest('form');
-        if (form) {
-            sendButton = form.querySelector('[data-testid="tweetButton"]') ||
-                         form.querySelector('button[data-testid*="tweetButton"]') ||
-                         form.querySelector('button[type="submit"]');
-        }
-    }
-    
-    // Strategy 3: Search in parent hierarchy
-    if (!sendButton) {
-        let parent = inputElement.parentElement;
-        for (let i = 0; i < 25 && parent; i++) {
-            sendButton = parent.querySelector('[data-testid="tweetButton"]') ||
-                         parent.querySelector('button[data-testid*="tweetButton"]') ||
-                         parent.querySelector('button[type="submit"]');
-            if (sendButton && sendButton.offsetParent !== null) break;
-            parent = parent.parentElement;
-        }
-    }
-    
-    // Strategy 4: Find button near input by proximity
-    if (!sendButton) {
-        const inputRect = inputElement.getBoundingClientRect();
-        const allButtons = document.querySelectorAll('button');
-        let closestButton = null;
-        let closestDistance = Infinity;
-        
-        for (const btn of allButtons) {
-            if (btn.offsetParent === null) continue;
-            const btnRect = btn.getBoundingClientRect();
-            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
-            
-            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-            const id = (btn.id || '').toLowerCase();
-            const dataTestId = (btn.getAttribute('data-testid') || '').toLowerCase();
-            
-            if ((dataTestId.includes('tweet') || ariaLabel.includes('post') || 
-                 ariaLabel.includes('tweet') || id.includes('tweet')) && distance < 300) {
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestButton = btn;
-                }
-            }
-        }
-        
-        if (closestButton) {
-            sendButton = closestButton;
-        }
-    }
-    
+    const sendButton = _findSendButton(inputElement, 'grok');
     if (!sendButton || !sendButton.parentElement) {
         throw new Error('Grok send button not found');
     }
-    
     // Make sure we're not inside the input field container
     let container = sendButton.parentElement;
     let attempts = 0;
@@ -1398,7 +1247,6 @@ async function injectGrok(inputElement) {
             break;
         }
     }
-    
     return injectButtonNextToSend(inputElement, sendButton, container);
 }
 
@@ -1406,76 +1254,376 @@ async function injectGrok(inputElement) {
  * Perplexity-specific injection
  */
 async function injectPerplexity(inputElement) {
-    // Perplexity uses search button - try multiple strategies
-    let sendButton = null;
-    
-    // Strategy 1: Look in the form containing the input
-    const form = inputElement.closest('form');
-    if (form) {
-        sendButton = form.querySelector('button[type="submit"]') ||
-                     form.querySelector('button[aria-label*="Search" i]') ||
-                     form.querySelector('button[aria-label*="Ask" i]') ||
-                     form.querySelector('button[class*="search"]') ||
-                     form.querySelector('button[class*="submit"]');
-    }
-    
-    // Strategy 2: Search in parent hierarchy
-    if (!sendButton) {
-        let parent = inputElement.parentElement;
-        for (let i = 0; i < 25 && parent; i++) {
-            sendButton = parent.querySelector('button[type="submit"]') ||
-                         parent.querySelector('button[aria-label*="Search" i]') ||
-                         parent.querySelector('button[aria-label*="Ask" i]') ||
-                         parent.querySelector('button[class*="search"]') ||
-                         parent.querySelector('button[class*="submit"]');
-            if (sendButton && sendButton.offsetParent !== null) break;
-            parent = parent.parentElement;
-        }
-    }
-    
-    // Strategy 3: Search entire document for buttons near input
-    if (!sendButton) {
-        const inputRect = inputElement.getBoundingClientRect();
-        const allButtons = document.querySelectorAll('button');
-        let closestButton = null;
-        let closestDistance = Infinity;
-        
-        for (const btn of allButtons) {
-            if (btn.offsetParent === null) continue;
-            const btnRect = btn.getBoundingClientRect();
-            const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
-            
-            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-            const className = (btn.className || '').toLowerCase();
-            const hasSearchIcon = btn.querySelector('svg');
-            const isSubmit = btn.type === 'submit';
-            
-            if ((isSubmit || ariaLabel.includes('search') || ariaLabel.includes('ask') || 
-                 className.includes('search') || className.includes('submit') || hasSearchIcon) && 
-                distance < 200) {
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestButton = btn;
-                }
-            }
-        }
-        
-        if (closestButton) {
-            sendButton = closestButton;
-        }
-    }
-    
-    // Strategy 4: Look for any submit button in the document
-    if (!sendButton) {
-        sendButton = document.querySelector('button[type="submit"]');
-    }
-    
+    const sendButton = _findSendButton(inputElement, 'perplexity');
     if (!sendButton || !sendButton.parentElement) {
         throw new Error('Perplexity send button not found');
     }
-    
     return injectButtonNextToSend(inputElement, sendButton);
 }
+
+function _findSendButton(inputElement, platform) {
+    let sendButton = null;
+
+    // Platform-specific strategies
+    switch (platform) {
+        case 'chatgpt':
+            // Strategy 1: Look in the form containing the input
+            const formChatGPT = inputElement.closest('form');
+            if (formChatGPT) {
+                sendButton = formChatGPT.querySelector('button[data-testid*="send" i]') ||
+                             formChatGPT.querySelector('button[data-testid*="submit" i]') ||
+                             formChatGPT.querySelector('button[aria-label*="Send" i]') ||
+                             formChatGPT.querySelector('button[aria-label*="Submit" i]') ||
+                             formChatGPT.querySelector('button[type="submit"]') ||
+                             formChatGPT.querySelector('button[id*="composer-submit"]') ||
+                             formChatGPT.querySelector('button[class*="composer-submit"]') ||
+                             formChatGPT.querySelector('button[class*="send"]') ||
+                             formChatGPT.querySelector('a[href="#"][role="button"] button') ||
+                             formChatGPT.querySelector('button');
+            }
+
+            // Strategy 2: Search in parent hierarchy
+            if (!sendButton) {
+                let parent = inputElement.parentElement;
+                for (let i = 0; i < 25 && parent; i++) {
+                    sendButton = parent.querySelector('button[data-testid*="send" i]') ||
+                                 parent.querySelector('button[data-testid*="submit" i]') ||
+                                 parent.querySelector('button[aria-label*="Send" i]') ||
+                                 parent.querySelector('button[aria-label*="Submit" i]') ||
+                                 parent.querySelector('button[id*="composer-submit"]') ||
+                                 parent.querySelector('button[class*="composer-submit"]') ||
+                                 parent.querySelector('button[class*="send"]') ||
+                                 parent.querySelector('button[class*="submit"]');
+                    if (sendButton && sendButton.offsetParent !== null) break;
+                    parent = parent.parentElement;
+                }
+            }
+
+            // Strategy 3: Search entire document for buttons near input
+            if (!sendButton) {
+                const inputRect = inputElement.getBoundingClientRect();
+                const allButtons = document.querySelectorAll('button');
+                let closestButton = null;
+                let closestDistance = Infinity;
+
+                for (const btn of allButtons) {
+                    if (btn.offsetParent === null) continue;
+                    const btnRect = btn.getBoundingClientRect();
+                    const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+                    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    const id = (btn.id || '').toLowerCase();
+                    const className = (btn.className || '').toLowerCase();
+                    const hasSendIcon = btn.querySelector('svg');
+                    const isSubmit = btn.type === 'submit';
+
+                    if ((isSubmit || ariaLabel.includes('send') || id.includes('submit') ||
+                         className.includes('submit') || className.includes('send') || hasSendIcon) &&
+                        distance < 200) {
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestButton = btn;
+                        }
+                    }
+                }
+                sendButton = closestButton;
+            }
+            break;
+
+        case 'gemini':
+            const geminiButtonSelectors = [
+                'button[aria-label*="Send" i]',
+                'button[aria-label*="Send message" i]',
+                'button[aria-label*="Submit" i]',
+                'button[data-testid*="send" i]',
+                'button[type="submit"]',
+                '[role="button"][aria-label*="Send" i]',
+                'button[class*="send" i]',
+                'button[class*="submit" i]',
+            ];
+
+            let parentGemini = inputElement.parentElement;
+            for (let i = 0; i < 35 && parentGemini; i++) {
+                for (const selector of geminiButtonSelectors) {
+                    const buttons = parentGemini.querySelectorAll(selector);
+                    for (const btn of buttons) {
+                        if (btn.offsetParent !== null) {
+                            sendButton = btn;
+                            break;
+                        }
+                    }
+                    if (sendButton) break;
+                }
+                if (!sendButton) {
+                    const buttons = parentGemini.querySelectorAll('button');
+                    for (const btn of buttons) {
+                        const hasIcon = btn.querySelector('svg');
+                        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                        if (hasIcon && (ariaLabel.includes('send') || ariaLabel.includes('submit') || !ariaLabel)) {
+                            if (btn.offsetParent !== null) {
+                                sendButton = btn;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (sendButton) break;
+                parentGemini = parentGemini.parentElement;
+            }
+
+            if (!sendButton) {
+                parentGemini = inputElement.parentElement;
+                for (let i = 0; i < 30 && parentGemini; i++) {
+                    const style = window.getComputedStyle(parentGemini);
+                    if (style.display === 'flex' || style.display === 'inline-flex') {
+                        const buttons = parentGemini.querySelectorAll('button');
+                        for (const btn of buttons) {
+                            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                            const hasIcon = btn.querySelector('svg');
+                            if ((ariaLabel.includes('send') || ariaLabel.includes('submit') || hasIcon) &&
+                                btn.offsetParent !== null) {
+                                sendButton = btn;
+                                break;
+                            }
+                        }
+                    }
+                    if (sendButton) break;
+                    parentGemini = parentGemini.parentElement;
+                }
+            }
+
+            if (!sendButton) {
+                const inputRect = inputElement.getBoundingClientRect();
+                const allButtons = document.querySelectorAll('button');
+                let closestButton = null;
+                let closestDistance = Infinity;
+
+                for (const btn of allButtons) {
+                    if (btn.offsetParent === null) continue;
+                    const btnRect = btn.getBoundingClientRect();
+                    const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+                    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    const hasSendIcon = btn.querySelector('svg');
+                    const isSubmit = btn.type === 'submit';
+
+                    if ((hasSendIcon || isSubmit || ariaLabel.includes('send') || ariaLabel.includes('submit')) &&
+                        distance < 200) {
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestButton = btn;
+                        }
+                    }
+                }
+                sendButton = closestButton;
+            }
+            break;
+
+        case 'perplexity':
+            const formPerplexity = inputElement.closest('form');
+            if (formPerplexity) {
+                sendButton = formPerplexity.querySelector('button[type="submit"]') ||
+                             formPerplexity.querySelector('button[aria-label*="Search" i]') ||
+                             formPerplexity.querySelector('button[aria-label*="Ask" i]') ||
+                             formPerplexity.querySelector('button[class*="search"]') ||
+                             formPerplexity.querySelector('button[class*="submit"]');
+            }
+
+            if (!sendButton) {
+                let parent = inputElement.parentElement;
+                for (let i = 0; i < 25 && parent; i++) {
+                    sendButton = parent.querySelector('button[type="submit"]') ||
+                                 parent.querySelector('button[aria-label*="Search" i]') ||
+                                 parent.querySelector('button[aria-label*="Ask" i]') ||
+                                 parent.querySelector('button[class*="search"]') ||
+                                 parent.querySelector('button[class*="submit"]');
+                    if (sendButton && sendButton.offsetParent !== null) break;
+                    parent = parent.parentElement;
+                }
+            }
+
+            if (!sendButton) {
+                const inputRect = inputElement.getBoundingClientRect();
+                const allButtons = document.querySelectorAll('button');
+                let closestButton = null;
+                let closestDistance = Infinity;
+
+                for (const btn of allButtons) {
+                    if (btn.offsetParent === null) continue;
+                    const btnRect = btn.getBoundingClientRect();
+                    const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+                    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    const className = (btn.className || '').toLowerCase();
+                    const hasSearchIcon = btn.querySelector('svg');
+                    const isSubmit = btn.type === 'submit';
+
+                    if ((isSubmit || ariaLabel.includes('search') || ariaLabel.includes('ask') ||
+                         className.includes('search') || className.includes('submit') || hasSearchIcon) &&
+                        distance < 200) {
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestButton = btn;
+                        }
+                    }
+                }
+                sendButton = closestButton;
+            }
+            break;
+        
+        case 'claude':
+            const formClaude = inputElement.closest('form');
+            if (formClaude) {
+                sendButton = formClaude.querySelector('button[type="submit"]') ||
+                             formClaude.querySelector('button[aria-label*="Send" i]') ||
+                             formClaude.querySelector('button[aria-label*="send" i]') ||
+                             formClaude.querySelector('button[data-testid*="send" i]');
+            }
+
+            if (!sendButton) {
+                let parent = inputElement.parentElement;
+                for (let i = 0; i < 15 && parent; i++) {
+                    sendButton = parent.querySelector('button[type="submit"]') ||
+                                 parent.querySelector('button[aria-label*="Send" i]') ||
+                                 parent.querySelector('button[aria-label*="send" i]') ||
+                                 parent.querySelector('button[data-testid*="send" i]');
+                    if (sendButton && sendButton.offsetParent !== null) break;
+                    parent = parent.parentElement;
+                }
+            }
+
+            if (!sendButton) {
+                const inputRect = inputElement.getBoundingClientRect();
+                const allButtons = document.querySelectorAll('button');
+                let closestButton = null;
+                let closestDistance = Infinity;
+
+                for (const btn of allButtons) {
+                    if (btn.offsetParent === null) continue;
+                    const btnRect = btn.getBoundingClientRect();
+                    const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+                    const type = btn.type || '';
+
+                    if ((type === 'submit' || ariaLabel.includes('send') || ariaLabel.includes('submit')) && distance < 300) {
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestButton = btn;
+                        }
+                    }
+                }
+                sendButton = closestButton;
+            }
+            break;
+
+        case 'grok':
+            sendButton = document.querySelector('[data-testid="tweetButton"]') ||
+                         document.querySelector('button[data-testid*="tweetButton"]');
+
+            if (!sendButton) {
+                const formGrok = inputElement.closest('form');
+                if (formGrok) {
+                    sendButton = formGrok.querySelector('[data-testid="tweetButton"]') ||
+                                 formGrok.querySelector('button[data-testid*="tweetButton"]') ||
+                                 formGrok.querySelector('button[type="submit"]');
+                }
+            }
+
+            if (!sendButton) {
+                let parent = inputElement.parentElement;
+                for (let i = 0; i < 25 && parent; i++) {
+                    sendButton = parent.querySelector('[data-testid="tweetButton"]') ||
+                                 parent.querySelector('button[data-testid*="tweetButton"]') ||
+                                 parent.querySelector('button[type="submit"]');
+                    if (sendButton && sendButton.offsetParent !== null) break;
+                    parent = parent.parentElement;
+                }
+            }
+
+            if (!sendButton) {
+                const inputRect = inputElement.getBoundingClientRect();
+                const allButtons = document.querySelectorAll('button');
+                let closestButton = null;
+                let closestDistance = Infinity;
+
+                for (const btn of allButtons) {
+                    if (btn.offsetParent === null) continue;
+                    const btnRect = btn.getBoundingClientRect();
+                    const distance = Math.abs(btnRect.top - inputRect.bottom) + Math.abs(btnRect.left - inputRect.right);
+                    const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    const id = (btn.id || '').toLowerCase();
+                    const dataTestId = (btn.getAttribute('data-testid') || '').toLowerCase();
+
+                    if ((dataTestId.includes('tweet') || ariaLabel.includes('post') ||
+                         ariaLabel.includes('tweet') || id.includes('tweet')) && distance < 300) {
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestButton = btn;
+                        }
+                    }
+                }
+                sendButton = closestButton;
+            }
+            break;
+        
+        default: // Generic fallback
+            const genericSelectors = [
+                'button[type="submit"]',
+                'button[aria-label*="Send" i]',
+                'button[aria-label*="Submit" i]',
+                'button[class*="send" i]',
+                'button[class*="submit" i]',
+                'button'
+            ];
+            let parentGeneric = inputElement.parentElement;
+            for (let i = 0; i < 40 && parentGeneric; i++) {
+                for (const sel of genericSelectors) {
+                    try {
+                        const buttons = parentGeneric.querySelectorAll(sel);
+                        for (const btn of buttons) {
+                            if (btn.offsetParent !== null && parentGeneric.contains(btn)) return btn;
+                        }
+                    } catch (_) { /* ignore */ }
+                }
+                parentGeneric = parentGeneric.parentElement;
+            }
+            break;
+    }
+    return sendButton;
+}
+
+/**
+ * Find the send button near the given input (shared logic for reattach).
+ * Used when React replaces the parent and we need to move our container to the new tree.
+ */
+function findSendButtonNearInput(inputElement) {
+    if (!inputElement || !document.body.contains(inputElement)) return null;
+    return _findSendButton(inputElement, detectPlatform());
+}
+
+/**
+ * Reattach an existing container (that was removed by React) to the current send-button parent.
+ * Avoids visible "disappear then reappear" when typing on ChatGPT/Perplexity.
+ */
+function reattachContainerToCurrentParent(enhancerDiv) {
+    const input = findPlatformSpecificInput();
+    const sendButton = input ? findSendButtonNearInput(input) : null;
+    if (!sendButton || !sendButton.parentElement) return false;
+    const insertParent = sendButton.parentElement;
+    if (!insertParent.contains(sendButton)) return false;
+    try {
+        insertParent.style.setProperty('display', 'flex', 'important');
+        insertParent.style.setProperty('flex-direction', 'row', 'important');
+        insertParent.style.setProperty('align-items', 'center', 'important');
+        insertParent.style.setProperty('flex-wrap', 'nowrap', 'important');
+        if (!insertParent.style.gap) insertParent.style.gap = '6px';
+        insertParent.insertBefore(enhancerDiv, sendButton);
+        // Re-apply placement styles so button stays in the right place on all sites
+        enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+        enhancerDiv.style.setProperty('align-self', 'center', 'important');
+        enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 
 /**
  * Common function to inject button next to send button
@@ -1490,18 +1638,17 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 return;
             }
 
-            // Check if API key is set - don't show button if no API key
-            const apiKeyExists = await hasApiKey();
-            if (!apiKeyExists) {
-                resolve(); // Resolve silently - button shouldn't be shown
-                return;
-            }
+            // Show button regardless of API key - backend proxy can handle enhancements without user key
 
-            // Check if already injected
+            // If we already have a visible container, do nothing — avoids "freaking out" on ChatGPT
             const existingContainer = document.getElementById('prompt-architect-buttons-container');
             if (existingContainer && document.body.contains(existingContainer)) {
                 resolve();
                 return;
+            }
+            // Clean up detached container only (so we don't leave orphans)
+            if (existingContainer && existingContainer.parentNode) {
+                existingContainer.remove();
             }
 
             // Find the correct container - must be one that actually contains the send button
@@ -1535,20 +1682,24 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 return;
             }
 
+            connectEnhanceStreamPagePort();
+
             // Create UI elements
             const enhancerDiv = document.createElement('div');
             enhancerDiv.id = 'prompt-architect-buttons-container';
             enhancerDiv.className = 'flex items-center';
             enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
             enhancerDiv.style.setProperty('align-items', 'center', 'important');
-            enhancerDiv.style.setProperty('gap', '6px', 'important');
-            enhancerDiv.style.setProperty('margin-right', '6px', 'important');
+            enhancerDiv.style.setProperty('gap', '8px', 'important');
+            enhancerDiv.style.setProperty('margin-right', '8px', 'important');
+            enhancerDiv.style.setProperty('margin-left', '4px', 'important');
             enhancerDiv.style.setProperty('z-index', '999999', 'important');
             enhancerDiv.style.setProperty('visibility', 'visible', 'important');
             enhancerDiv.style.setProperty('opacity', '1', 'important');
-            // Gemini-specific: ensure button is properly positioned
+            // Keep button in the same row as send on all sites (no wrap, no shrink)
             enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
             enhancerDiv.style.setProperty('position', 'relative', 'important');
+            enhancerDiv.style.setProperty('align-self', 'center', 'important');
 
             // Status area
             const statusArea = document.createElement('div');
@@ -1561,19 +1712,7 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 overflow: hidden;
             `;
             
-            const loadingSpinner = document.createElement('div');
-            loadingSpinner.className = 'spinner';
-            loadingSpinner.style.cssText = `
-                border: 2.5px solid rgba(0, 122, 255, 0.15); 
-                border-top: 2.5px solid #007AFF; 
-                border-radius: 50%; 
-                width: 18px; 
-                height: 18px; 
-                animation: spin 0.7s linear infinite; 
-                display: none;
-            `;
-            
-            // Status message element for errors
+            // Status message element for errors (no spinner; button pulse indicates loading)
             const statusMessage = document.createElement('div');
             statusMessage.id = 'prompt-architect-status';
             statusMessage.style.cssText = `
@@ -1589,40 +1728,33 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             `;
             
-            statusArea.appendChild(loadingSpinner);
             statusArea.appendChild(statusMessage);
             enhancerDiv.appendChild(statusArea);
             enhancerDiv.appendChild(createEnhanceButton(inputElement, enhancerDiv));
 
-            // Ensure container is flex
-            const containerStyle = window.getComputedStyle(targetContainer);
-            if (!containerStyle.display.includes('flex')) {
-                targetContainer.style.display = 'flex';
-                targetContainer.style.alignItems = 'center';
-                targetContainer.style.gap = '6px';
+            // Use the send button's actual parent for insertion (Gemini/SPAs can move nodes; targetContainer may be stale)
+            const insertParent = sendButton.parentElement;
+            if (!insertParent) {
+                reject(new Error('Send button has no parent'));
+                return;
             }
-
-            // Verify send button is still in the container before inserting
-            if (!targetContainer.contains(sendButton)) {
+            if (!insertParent.contains(sendButton)) {
                 reject(new Error('Send button is not in the target container'));
                 return;
             }
 
-            // For Gemini: Try to insert right before the send button
-            // If send button has a sibling before it, insert after that sibling
+            // Force horizontal row so enhance button is always directly to the left of send (never above/below)
+            insertParent.style.setProperty('display', 'flex', 'important');
+            insertParent.style.setProperty('flex-direction', 'row', 'important');
+            insertParent.style.setProperty('align-items', 'center', 'important');
+            insertParent.style.setProperty('flex-wrap', 'nowrap', 'important');
+            if (!insertParent.style.gap) insertParent.style.gap = '6px';
+
             try {
-                // Check if there's a previous sibling that might be another button or icon
-                const prevSibling = sendButton.previousElementSibling;
-                if (prevSibling && (prevSibling.tagName === 'BUTTON' || prevSibling.tagName === 'DIV')) {
-                    // Insert after the previous sibling but before send button
-                    targetContainer.insertBefore(enhancerDiv, sendButton);
-                } else {
-                    // Insert directly before send button
-                    targetContainer.insertBefore(enhancerDiv, sendButton);
-                }
+                insertParent.insertBefore(enhancerDiv, sendButton);
             } catch (e) {
-                // Fallback: insert before send button
-                targetContainer.insertBefore(enhancerDiv, sendButton);
+                reject(e);
+                return;
             }
 
             // Verify and set up protection
@@ -1638,17 +1770,13 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                     if (platform === 'gemini') {
                         const distance = Math.abs(buttonRect.top - sendButtonRect.top) + 
                                        Math.abs(buttonRect.right - sendButtonRect.left);
-                        // If button is too far from send button, try to fix positioning
-                        if (distance > 100) {
-                            // Re-verify container and reposition if needed
-                            if (targetContainer.contains(sendButton) && targetContainer.contains(enhancerDiv)) {
-                                // Button is in correct container, just might need layout adjustment
-                                enhancerDiv.style.setProperty('order', '-1', 'important');
-                            }
+                        if (distance > 100 && insertParent.contains(enhancerDiv)) {
+                            enhancerDiv.style.setProperty('order', '-1', 'important');
                         }
                     }
                     
                     setupButtonProtection(enhancerDiv, inputElement);
+                    console.log('[Prompt Architect] Improve button added on', window.location.hostname);
                     resolve();
                 } else {
                     reject(new Error('Button not found after injection'));
@@ -1658,6 +1786,22 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
             console.error('[Prompt Architect] Injection error:', error);
             reject(error);
         }
+    });
+}
+
+/** Storage key for persisted Firebase user (must match popup.js); when set, user is signed in */
+const STORAGE_FIREBASE_USER = 'pa_firebase_user';
+
+/**
+ * Checks if the user is signed in (Firebase auth persisted in chrome.storage by popup).
+ * In-chat Improve button is shown only when signed in for a consistent experience.
+ */
+async function isUserSignedIn() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_FIREBASE_USER], (result) => {
+            const user = result[STORAGE_FIREBASE_USER];
+            resolve(!!(user && user.uid));
+        });
     });
 }
 
@@ -1674,113 +1818,89 @@ async function isInjectButtonEnabled() {
 }
 
 /**
+ * True only when we should show the in-chat Improve button: preference on, platform supported, and user signed in.
+ */
+async function shouldShowEnhanceButton() {
+    const [platformEnabled, buttonEnabled, signedIn] = await Promise.all([
+        isPlatformEnabled(),
+        isInjectButtonEnabled(),
+        isUserSignedIn()
+    ]);
+    return platformEnabled && buttonEnabled && signedIn;
+}
+
+/**
  * Checks if any API key is configured
  */
 async function hasApiKey() {
     return new Promise((resolve) => {
-        chrome.storage.local.get(['userGeminiApiKey'], (result) => {
-            const hasKey = !!result.userGeminiApiKey;
+        chrome.storage.local.get(['userGeminiApiKey', 'defaultGeminiApiKey'], (result) => {
+            const hasKey = !!(result.userGeminiApiKey || result.defaultGeminiApiKey);
             resolve(hasKey);
         });
     });
 }
 
-/**
- * Listen for storage changes to immediately update button visibility
- */
+/** Remove all in-chat Improve button UI (used when user disables button or signs out) */
+function removeInjectedButtonUI() {
+    requestAnimationFrame(() => {
+        const existingUI = document.getElementById('prompt-architect-buttons-container');
+        if (existingUI) existingUI.remove();
+        const button = document.getElementById('main-enhance-button');
+        if (button) {
+            const container = button.closest('#prompt-architect-buttons-container');
+            if (container) container.remove();
+            else if (button.parentElement) button.remove();
+        }
+        const statusArea = document.getElementById('prompt-architect-status-area');
+        if (statusArea) statusArea.remove();
+        document.querySelectorAll('button#main-enhance-button').forEach(btn => {
+            const p = btn.parentElement;
+            if (p && p.id === 'prompt-architect-buttons-container') p.remove();
+            else btn.remove();
+        });
+    });
+}
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local') {
-        // Handle injectButtonEnabled changes
         if (changes.injectButtonEnabled) {
             const buttonEnabled = changes.injectButtonEnabled.newValue !== false;
-            
             if (!buttonEnabled) {
-                // Aggressively remove all button-related UI
-                // Use requestAnimationFrame to ensure DOM is ready
-                requestAnimationFrame(() => {
-                    // Remove container (this should remove everything inside)
-                    const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    if (existingUI) {
-                        existingUI.remove();
-                    }
-                    
-                    // Also remove button directly if it exists separately
-                    const button = document.getElementById('main-enhance-button');
-                    if (button) {
-                        // Remove the button's parent container if it's a direct child
-                        const container = button.closest('#prompt-architect-buttons-container');
-                        if (container) {
-                            container.remove();
-                        } else if (button.parentElement) {
-                            // If no container, remove the button itself
-                            button.remove();
-                        }
-                    }
-                    
-                    // Remove status area
-                    const statusArea = document.getElementById('prompt-architect-status-area');
-                    if (statusArea) {
-                        statusArea.remove();
-                    }
-                    
-                    // Also search for any buttons with "Improve" text that might be ours
-                    const allButtons = document.querySelectorAll('button');
-                    allButtons.forEach(btn => {
-                        if (btn.id === 'main-enhance-button') {
-                            const parent = btn.parentElement;
-                            if (parent && parent.id === 'prompt-architect-buttons-container') {
-                                parent.remove();
-                            } else {
-                                btn.remove();
-                            }
-                        }
-                    });
-                });
+                removeInjectedButtonUI();
             } else {
-                // Re-inject button if enabled, platform is enabled, API key exists, and input exists
                 (async () => {
-                    const platformEnabled = await isPlatformEnabled();
-                    if (!platformEnabled) {
-                        return; // Don't inject if platform is disabled
-                    }
-                    
-                    const apiKeyExists = await hasApiKey();
-                    if (!apiKeyExists) {
-                        return; // Don't inject if no API key
-                    }
-                    
+                    if (!(await shouldShowEnhanceButton())) return;
                     const existingUI = document.getElementById('prompt-architect-buttons-container');
                     const input = findPlatformSpecificInput();
                     if (input && (!existingUI || !document.body.contains(existingUI))) {
-                        injectUI(input).catch(err => {
-                            // Silent injection failure
-                        });
+                        injectUI(input).catch(() => {});
                     }
                 })();
             }
         }
-        
-        // Handle API key changes
-        const apiKeyChanged = changes.userGeminiApiKey;
+        if (changes[STORAGE_FIREBASE_USER]) {
+            const user = changes[STORAGE_FIREBASE_USER].newValue;
+            const signedIn = !!(user && user.uid);
+            if (!signedIn) removeInjectedButtonUI();
+            else {
+                (async () => {
+                    if (!(await shouldShowEnhanceButton())) return;
+                    const existingUI = document.getElementById('prompt-architect-buttons-container');
+                    const input = findPlatformSpecificInput();
+                    if (input && (!existingUI || !document.body.contains(existingUI))) {
+                        injectUI(input).catch(() => {});
+                    }
+                })();
+            }
+        }
+        const apiKeyChanged = changes.userGeminiApiKey || changes.defaultGeminiApiKey;
         if (apiKeyChanged) {
             (async () => {
-                const apiKeyExists = await hasApiKey();
                 const existingUI = document.getElementById('prompt-architect-buttons-container');
-                const buttonEnabled = await isInjectButtonEnabled();
-                const platformEnabled = await isPlatformEnabled();
-                
-                if (!apiKeyExists && existingUI) {
-                    // Hide button if API key was removed
-                    existingUI.remove();
-                } else if (apiKeyExists && buttonEnabled && platformEnabled && !existingUI) {
-                    // Show button if API key was added
-                    const input = findPlatformSpecificInput();
-                    if (input) {
-                        injectUI(input).catch(err => {
-                            // Silent injection failure
-                        });
-                    }
-                }
+                if (!(await shouldShowEnhanceButton()) || existingUI) return;
+                const input = findPlatformSpecificInput();
+                if (input) injectUI(input).catch(() => {});
             })();
         }
     }
@@ -1804,13 +1924,13 @@ async function injectUI(inputElement) {
         throw new Error('Injected button disabled by user');
     }
     
-    // Check if API key is configured - don't inject if no API key
-    const apiKeyExists = await hasApiKey();
-    if (!apiKeyExists) {
-        throw new Error('API key not configured');
+    // Show in-chat button only when signed in (consistent with popup)
+    const signedIn = await isUserSignedIn();
+    if (!signedIn) {
+        throw new Error('Sign in required');
     }
-    
-    // Route to platform-specific injection
+
+    // Route to platform-specific injection (backend proxy works without user API key)
     switch (platform) {
         case 'chatgpt':
             return injectChatGPT(inputElement);
@@ -2161,6 +2281,21 @@ function showStatus(message, color, bgColor) {
  * Handles the button click, sends message to the background script, and updates the input.
  */
 async function handleButtonClick(inputElement, enhancementType, statusContainer) {
+    // Persistent container (ChatGPT) may pass null; resolve current input at click time so button never flickers
+    if (!inputElement) inputElement = findPlatformSpecificInput();
+    // Show loading spinner immediately for the entire process (import, extraction, request, streaming)
+    const btnForLoading = document.getElementById('main-enhance-button');
+    if (btnForLoading) {
+        btnForLoading.disabled = true;
+        btnForLoading.style.cursor = 'wait';
+        const iconEl = btnForLoading.querySelector('.pa-enhance-button-icon');
+        const spinnerEl = btnForLoading.querySelector('.pa-enhance-spinner');
+        if (iconEl) iconEl.style.display = 'none';
+        if (spinnerEl) spinnerEl.style.display = 'flex';
+    }
+    // Ensure port is connected so first click works (avoids "Stream not connected" / having to click twice)
+    connectEnhanceStreamPagePort();
+
     // Strategy 1: Try to read from the passed inputElement first (most reliable)
     let rawPrompt = '';
     let currentInputElement = inputElement;
@@ -2180,71 +2315,44 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
         // Strategy 2: Check if it's a contenteditable div
         if (element.contentEditable === 'true' || element.hasAttribute('contenteditable') || 
             element.getAttribute('contenteditable') === 'true') {
-            // Try textContent first (includes hidden text)
+            // Fast path: textContent / innerText (covers most ChatGPT/Gemini cases)
             let text = (element.textContent || '').trim();
-            if (text) {
-                return text;
-            }
-            // Fallback to innerText
+            if (text) return text;
             text = (element.innerText || '').trim();
-            if (text) {
-                return text;
+            if (text) return text;
+            // Cheap fallbacks before expensive recursive walk
+            const nestedContentEditable = element.querySelector('[contenteditable="true"], [contenteditable=""]');
+            if (nestedContentEditable && nestedContentEditable !== element) {
+                text = (nestedContentEditable.textContent || nestedContentEditable.innerText || '').trim();
+                if (text) return text;
             }
-            // For Perplexity and similar: extract text from all child nodes recursively
+            const dataText = element.getAttribute('data-text') || element.getAttribute('data-value') || element.getAttribute('data-content');
+            if (dataText) return dataText.trim();
+            // Last resort: recursive walk (skip getComputedStyle for script/style to reduce delay)
             const extractFromNodes = (node) => {
                 let result = '';
                 if (node.nodeType === Node.TEXT_NODE) {
                     result = (node.textContent || '').trim();
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
-                    // Skip script, style, and hidden elements
                     const tagName = node.tagName?.toLowerCase();
+                    if (tagName === 'script' || tagName === 'style') return '';
                     const style = window.getComputedStyle(node);
-                    if (tagName !== 'script' && tagName !== 'style' && 
-                        style.display !== 'none' && style.visibility !== 'hidden') {
-                        // Get direct text content
-                        result = (node.textContent || node.innerText || '').trim();
-                        // If no direct text, check children
-                        if (!result) {
-                            for (const child of node.childNodes) {
-                                const childText = extractFromNodes(child);
-                                if (childText) {
-                                    result += (result ? ' ' : '') + childText;
-                                }
-                            }
+                    if (style.display === 'none' || style.visibility === 'hidden') return '';
+                    result = (node.textContent || node.innerText || '').trim();
+                    if (!result) {
+                        for (const child of node.childNodes) {
+                            const childText = extractFromNodes(child);
+                            if (childText) result += (result ? ' ' : '') + childText;
                         }
                     }
                 }
                 return result.trim();
             };
-            
-            // Try extracting from all child nodes
             for (const child of element.childNodes) {
                 const childText = extractFromNodes(child);
-                if (childText) {
-                    text = (text ? text + ' ' : '') + childText;
-                }
+                if (childText) text = (text ? text + ' ' : '') + childText;
             }
-            if (text) {
-                return text;
-            }
-            
-            // For nested contenteditable structures, try finding the deepest contenteditable child
-            const nestedContentEditable = element.querySelector('[contenteditable="true"], [contenteditable=""]');
-            if (nestedContentEditable && nestedContentEditable !== element) {
-                text = (nestedContentEditable.textContent || nestedContentEditable.innerText || '').trim();
-                if (text) {
-                    return text;
-                }
-            }
-            
-            // Last resort: try getting text from data attributes or React state (if accessible)
-            // Some React apps store text in data attributes
-            const dataText = element.getAttribute('data-text') || 
-                           element.getAttribute('data-value') ||
-                           element.getAttribute('data-content');
-            if (dataText) {
-                return dataText.trim();
-            }
+            if (text) return text;
         }
         
         // Strategy 3: Try textContent (works for most elements, includes all text)
@@ -2360,7 +2468,6 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
     }
     
     const statusEl = document.querySelector('#prompt-architect-status');
-    const spinnerEl = statusContainer.querySelector('.spinner');
     const enhanceButton = document.getElementById('main-enhance-button');
     
     // Store original text to preserve it on error
@@ -2402,7 +2509,7 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
             passedElementTextContent: inputElement?.textContent?.substring(0, 50)
         });
         
-        // Show user-friendly message if no text found
+        // Show user-friendly message if no text found and re-enable button
         const statusArea = document.getElementById('prompt-architect-status-area');
         const statusEl = document.querySelector('#prompt-architect-status');
         if (statusArea && statusEl) {
@@ -2419,7 +2526,14 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
                 if (statusEl) statusEl.style.display = 'none';
             }, 3000);
         }
-        
+        if (enhanceButton) {
+            enhanceButton.disabled = false;
+            enhanceButton.style.cursor = '';
+            const iconEl = enhanceButton.querySelector('.pa-enhance-button-icon');
+            const spinnerEl = document.getElementById('pa-enhance-button-spinner');
+            if (iconEl) iconEl.style.display = '';
+            if (spinnerEl) spinnerEl.style.display = 'none';
+        }
         return;
     }
     
@@ -2428,29 +2542,93 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
 
     // Use the provided enhancementType directly (no auto-detection)
     let finalEnhancementType = enhancementType;
+    let didSucceed = false;
 
     // 1. Disable controls and show loading with refined visual feedback
     enhanceButton.disabled = true;
     const platform = detectPlatform();
     const design = getPlatformDesign(platform);
-    
-    // Subtle loading state - keep color but reduce opacity
-    enhanceButton.style.background = design.primary;
-    enhanceButton.style.transition = 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    enhanceButton.style.opacity = '0.7';
-    enhanceButton.style.cursor = 'wait';
-    
-    // Show spinner and status area only when processing
-    const statusArea = document.getElementById('prompt-architect-status-area');
-    if (statusArea) {
-        statusArea.style.display = 'inline-flex';
-        statusArea.style.width = 'auto';
+
+    // Inject keyframes once for button animations
+    if (!document.getElementById('pa-button-animations')) {
+        const style = document.createElement('style');
+        style.id = 'pa-button-animations';
+        style.textContent = `
+            @keyframes pa-loading-pulse {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.75; transform: scale(0.96); }
+            }
+            @keyframes pa-spinner-rotate {
+                to { transform: rotate(360deg); }
+            }
+            @keyframes pa-success-pop {
+                0% { transform: scale(1); }
+                40% { transform: scale(1.12); }
+                70% { transform: scale(0.98); }
+                100% { transform: scale(1); }
+            }
+        `;
+        document.head.appendChild(style);
     }
-    spinnerEl.style.display = 'inline-block';
+
+    // Loading state: keep spinner visible (re-apply in case button was re-created by page)
+    enhanceButton.style.background = design.primary;
+    enhanceButton.style.transition = 'box-shadow 0.2s ease, background 0.2s ease';
+    enhanceButton.style.animation = '';
+    enhanceButton.style.cursor = 'wait';
+    const iconEl = enhanceButton.querySelector('.pa-enhance-button-icon');
+    const spinnerEl = enhanceButton.querySelector('.pa-enhance-spinner');
+    if (iconEl) iconEl.style.display = 'none';
+    if (spinnerEl) spinnerEl.style.display = 'flex';
 
     try {
-        // 2. Send message to the Service Worker (background.js)
-        // Injected button always uses default style (forceDefaultStyle: true)
+        // 2. Prefer streaming when port is available (ChatGPT, Gemini, etc.)
+        let elementToUpdate = currentInputElement;
+        if (platform === 'perplexity' && (!elementToUpdate || !document.body.contains(elementToUpdate))) {
+            const perplexityInput = findPlatformSpecificInput();
+            if (perplexityInput) elementToUpdate = perplexityInput;
+        }
+        if (enhanceStreamPagePort) {
+            streamingContext = {
+                currentInputElement,
+                elementToUpdate,
+                enhanceButton,
+                statusEl,
+                statusArea: document.getElementById('prompt-architect-status-area'),
+                design,
+                platform,
+                accumulated: ''
+            };
+            const streamResponse = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: 'enhancePromptStream',
+                    prompt: rawPrompt,
+                    enhancementType: finalEnhancementType,
+                    forceDefaultStyle: true,
+                }, (r) => {
+                    if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+                    else resolve(r);
+                });
+            });
+            if (streamResponse?.ok) {
+                // Backend TTFB is 8–13s; show status so user knows we're waiting for first chunk
+                const area = document.getElementById('prompt-architect-status-area');
+                const el = document.querySelector('#prompt-architect-status');
+                if (area && el) {
+                    area.style.display = 'inline-flex';
+                    area.style.width = 'auto';
+                    el.textContent = 'Enhancing…';
+                    el.style.color = 'inherit';
+                    el.style.background = 'rgba(255,255,255,0.08)';
+                    el.style.border = '0.5px solid rgba(255,255,255,0.12)';
+                    el.style.display = 'inline-flex';
+                }
+                return; // Chunk/done/error handled by port listener
+            }
+            streamingContext = null;
+        }
+
+        // 3. Non-streaming path (or fallback)
         const response = await chrome.runtime.sendMessage({
             action: 'enhancePrompt',
             prompt: rawPrompt,
@@ -2460,7 +2638,7 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
         
         const improvedPrompt = response?.enhancedPrompt || "Error: Failed to receive improved prompt.";
 
-        // 3. Update the input field using the currentInputElement we found
+        // 4. Update the input field using the currentInputElement we found
         if (improvedPrompt.startsWith("Error:")) {
             // Show error in status area, preserve user's original text
             const errorMessage = improvedPrompt.replace("Error: ", "");
@@ -2508,13 +2686,17 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
             enhanceButton.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
             setTimeout(() => {
                 if (enhanceButton) {
-                    enhanceButton.style.background = design.primary;
-                    enhanceButton.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+                    const hex = design.primary.replace('#', '');
+                    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                    const glow = `rgba(${r},${g},${b},0.4)`;
+                    enhanceButton.style.background = `linear-gradient(180deg, ${design.primaryHover || design.primary} 0%, ${design.primary} 100%)`;
+                    enhanceButton.style.boxShadow = `0 2px 10px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.15) inset, 0 0 20px ${glow}`;
                 }
             }, 2000);
             
             // Error case - show error feedback
         } else {
+            didSucceed = true;
             // Replace user's text with improved prompt
             // For Perplexity, ensure we have the correct input element
             let elementToUpdate = currentInputElement;
@@ -2572,24 +2754,40 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
         enhanceButton.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
         setTimeout(() => {
             if (enhanceButton) {
-                enhanceButton.style.background = design.primary;
-                enhanceButton.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+                const hex = design.primary.replace('#', '');
+                const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                const glow = `rgba(${r},${g},${b},0.4)`;
+                enhanceButton.style.background = `linear-gradient(180deg, ${design.primaryHover || design.primary} 0%, ${design.primary} 100%)`;
+                enhanceButton.style.boxShadow = `0 2px 10px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.15) inset, 0 0 20px ${glow}`;
             }
         }, 2000);
     } finally {
-        // 4. Re-enable controls and hide loading
-        spinnerEl.style.display = 'none';
+        // 4. Re-enable controls, show icon and hide loading spinner
         enhanceButton.disabled = false;
-        
-        // Restore button state with smooth transition
+        enhanceButton.style.animation = '';
+        const iconEl = enhanceButton.querySelector('.pa-enhance-button-icon');
+        const spinnerEl = enhanceButton.querySelector('.pa-enhance-spinner');
+        if (iconEl) iconEl.style.display = 'flex';
+        if (spinnerEl) spinnerEl.style.display = 'none';
+
         const platform = detectPlatform();
         const design = getPlatformDesign(platform);
-        enhanceButton.style.background = design.primary;
-        enhanceButton.style.transition = 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-        enhanceButton.style.opacity = '1';
+        enhanceButton.style.background = `linear-gradient(180deg, ${design.primaryHover || design.primary} 0%, ${design.primary} 100%)`;
         enhanceButton.style.cursor = 'pointer';
-        enhanceButton.style.transform = 'translateY(0) scale(1)';
-        
+
+        if (didSucceed) {
+            // Brief success animation: small pop then settle
+            enhanceButton.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease';
+            enhanceButton.style.animation = 'pa-success-pop 0.4s ease-out forwards';
+            setTimeout(() => {
+                enhanceButton.style.animation = '';
+                enhanceButton.style.transition = 'box-shadow 0.2s ease, background 0.2s ease, transform 0.15s ease';
+                enhanceButton.style.transform = '';
+            }, 420);
+        } else {
+            enhanceButton.style.transition = 'box-shadow 0.2s ease, background 0.2s ease';
+        }
+
         // Hide status area completely when done (no text messages shown)
         const statusArea = document.getElementById('prompt-architect-status-area');
         if (statusArea) {
@@ -2689,8 +2887,61 @@ function findPlatformSpecificInput() {
     }
     
     let input = null;
-    
-    if (platform === 'gemini') {
+
+    if (platform === 'chatgpt') {
+        // ChatGPT: textarea-based input (chat.openai.com, chatgpt.com)
+        const chatgptSelectors = [
+            'textarea[placeholder="Message ChatGPT"]',
+            'textarea[placeholder*="Message"]',
+            'textarea[placeholder*="message"]',
+            'textarea[id^="prompt-textarea"]',
+            'textarea[id*="prompt"]',
+            'textarea[data-id*="composer"]',
+            'textarea[aria-label*="Message" i]',
+            'textarea[aria-label*="prompt" i]',
+            'form textarea:not([readonly])',
+            '[data-testid="composer-textarea"]',
+            '[contenteditable="true"][data-placeholder*="Message" i]',
+            '[contenteditable="true"][aria-label*="Message" i]',
+            'textarea',
+        ];
+        for (const selector of chatgptSelectors) {
+            try {
+                const elements = document.querySelectorAll(selector);
+                for (const elem of elements) {
+                    const rect = elem.getBoundingClientRect();
+                    const style = window.getComputedStyle(elem);
+                    if (rect.width > 50 && rect.height > 20 &&
+                        style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        elem.offsetParent !== null) {
+                        input = elem;
+                        break;
+                    }
+                }
+                if (input) break;
+            } catch (e) {
+                continue;
+            }
+        }
+        // Prefer main composer: avoid sidebar — pick the one closest to viewport center (not the largest, which can be a sidebar)
+        if (input && document.querySelectorAll('textarea').length > 1) {
+            const textareas = Array.from(document.querySelectorAll('textarea')).filter(t => {
+                const r = t.getBoundingClientRect();
+                const s = window.getComputedStyle(t);
+                return r.width > 50 && r.height > 20 && s.display !== 'none' && t.offsetParent !== null;
+            });
+            if (textareas.length > 0) {
+                const viewportCenterX = window.innerWidth / 2;
+                const closestToCenter = textareas.reduce((a, b) => {
+                    const ax = a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2;
+                    const bx = b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2;
+                    return Math.abs(ax - viewportCenterX) <= Math.abs(bx - viewportCenterX) ? a : b;
+                });
+                input = closestToCenter;
+            }
+        }
+    } else if (platform === 'gemini') {
         // Gemini uses contenteditable divs, try multiple strategies in order of specificity
         const geminiSelectors = [
             // Most specific - aria labels
@@ -2744,30 +2995,33 @@ function findPlatformSpecificInput() {
             }
         }
         
-        // Fallback 1: find largest visible contenteditable
+        // Fallback 1: find largest visible contenteditable, prefer one in bottom half (chat input area)
         if (!input) {
             const allContentEditables = document.querySelectorAll('[contenteditable="true"]:not([contenteditable="false"])');
-            let largestElement = null;
-            let largestArea = 0;
-            
+            let bestElement = null;
+            let bestScore = -1;
+            const viewportMid = window.innerHeight * 0.5;
+
             for (const elem of allContentEditables) {
                 const rect = elem.getBoundingClientRect();
                 const style = window.getComputedStyle(elem);
-                if (rect.width > 20 && rect.height > 5 && 
-                    style.display !== 'none' && 
+                if (rect.width > 20 && rect.height > 5 &&
+                    style.display !== 'none' &&
                     style.visibility !== 'hidden' &&
                     elem.offsetParent !== null &&
                     rect.top >= 0 && rect.left >= 0) {
                     const area = rect.width * rect.height;
-                    if (area > largestArea) {
-                        largestArea = area;
-                        largestElement = elem;
+                    const isBottomHalf = rect.top >= viewportMid;
+                    const score = area * (isBottomHalf ? 2 : 1);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestElement = elem;
                     }
                 }
             }
-            
-            if (largestElement) {
-                input = largestElement;
+
+            if (bestElement) {
+                input = bestElement;
             }
         }
         
@@ -3088,9 +3342,8 @@ function findPlatformSpecificInput() {
     }
     
     if (!input) {
-        console.warn('[Prompt Architect] No input element found after all search strategies');
+        console.warn('[Prompt Architect] No input element found on', window.location.hostname, '- page may still be loading. Try refreshing.');
     }
-    
     return input;
 }
 
@@ -3099,6 +3352,7 @@ function findPlatformSpecificInput() {
  * Enhanced to stay active for ChatGPT's dynamic interface and prevent excessive re-injections.
  */
 let injectionDebounceTimer = null;
+let chatgptReinjectInterval = null;
 let lastInjectedInput = null;
 
 /**
@@ -3124,33 +3378,27 @@ function retryInjection() {
     
     
     const timeoutId = setTimeout(() => {
-        Promise.all([isPlatformEnabled(), isInjectButtonEnabled()]).then(([platformEnabled, buttonEnabled]) => {
-            if (!platformEnabled || !buttonEnabled) {
+        shouldShowEnhanceButton().then((show) => {
+            if (!show) {
                 if (retryMutationObserver) {
                     retryMutationObserver.disconnect();
                     retryMutationObserver = null;
                 }
                 retryCount = 0;
-                // Remove button if it exists but is disabled
-                if (!buttonEnabled) {
-                    const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    if (existingUI && document.body.contains(existingUI)) {
-                        existingUI.remove();
-                    }
-                }
+                const existingUI = document.getElementById('prompt-architect-buttons-container');
+                if (existingUI && document.body.contains(existingUI)) existingUI.remove();
                 return;
             }
             
             const existingUI = document.getElementById('prompt-architect-buttons-container');
             if (existingUI && document.body.contains(existingUI)) {
-                retryCount = 0; // Reset for future attempts
+                retryCount = 0;
                 if (retryMutationObserver) {
                     retryMutationObserver.disconnect();
                     retryMutationObserver = null;
                 }
                 return;
             }
-            
             const input = findPlatformSpecificInput();
             if (input) {
                 injectUI(input).then(() => {
@@ -3219,95 +3467,84 @@ function retryInjection() {
 }
 
 async function observeDOM() {
-    // Check if button is enabled before attempting any injection
-    const buttonEnabled = await isInjectButtonEnabled();
-    if (!buttonEnabled) {
-        // Remove button if it exists
+    if (!(await shouldShowEnhanceButton())) {
         const existingUI = document.getElementById('prompt-architect-buttons-container');
-        if (existingUI && document.body.contains(existingUI)) {
-            existingUI.remove();
-        }
-        return; // Don't proceed with injection
+        if (existingUI && document.body.contains(existingUI)) existingUI.remove();
+        const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+        if (wrapper) wrapper.style.display = 'none';
+        return;
     }
     
-    // Try immediate injection with platform-specific finder
-    let input = findPlatformSpecificInput();
-    if (input) {
-        injectUI(input).then(() => {
-            lastInjectedInput = input;
-            retryCount = 0; // Reset retry count on success
-        }).catch(err => {
-            // Silent failure - will retry
+    // Inject after a short delay so the composer is stable (avoids button jumping on ChatGPT)
+    const initialDelay = detectPlatform() === 'chatgpt' ? 600 : 200;
+    const tryInject = () => {
+        const input = findPlatformSpecificInput();
+        if (input) {
+            injectUI(input).then(() => {
+                lastInjectedInput = input;
+                retryCount = 0; // Reset retry count on success
+            }).catch(() => {
+                retryInjection(); // Start retry sequence
+            });
+        } else {
             retryInjection(); // Start retry sequence
-        });
-    } else {
-        retryInjection(); // Start retry sequence
+        }
+    };
+    setTimeout(tryInject, initialDelay);
+
+    function mutationRemovedOurUI(mutationsList) {
+        for (const mutation of mutationsList) {
+            if (mutation.type !== 'childList' || !mutation.removedNodes.length) continue;
+            for (const node of mutation.removedNodes) {
+                if (node.nodeType !== 1) continue;
+                const our = node.id === 'prompt-architect-buttons-container' || node.id === 'main-enhance-button' ||
+                    (node.querySelector && (node.querySelector('#prompt-architect-buttons-container') || node.querySelector('#main-enhance-button')));
+                if (our) return true;
+            }
+        }
+        return false;
     }
 
-    // Keep observer active - don't disconnect (ChatGPT recreates elements dynamically)
-    const observer = new MutationObserver((mutationsList, observer) => {
-        // Debounce to prevent excessive re-injections
-        if (injectionDebounceTimer) {
-            clearTimeout(injectionDebounceTimer);
+    const observer = new MutationObserver((mutationsList) => {
+        if (!mutationRemovedOurUI(mutationsList)) return;
+        const container = document.getElementById('prompt-architect-buttons-container');
+        if (container && !document.body.contains(container) && reattachContainerToCurrentParent(container)) {
+            const currentInput = findPlatformSpecificInput();
+            if (currentInput) setupButtonProtection(container, currentInput);
+            return;
         }
-        
+        if (injectionDebounceTimer) clearTimeout(injectionDebounceTimer);
+        // Zero debounce for ChatGPT/Perplexity so button reappears immediately when composer re-renders (no visible disappear)
+        const platform = detectPlatform();
+        const debounceMs = (platform === 'chatgpt' || platform === 'perplexity') ? 0 : 500;
         injectionDebounceTimer = setTimeout(() => {
-            // Check if platform is enabled
-            isPlatformEnabled().then(async enabled => {
-                if (!enabled) {
-                    // Remove UI if platform was disabled
+            injectionDebounceTimer = null;
+            shouldShowEnhanceButton().then(async (show) => {
+                if (!show) {
                     const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    if (existingUI && document.body.contains(existingUI)) {
-                        existingUI.remove();
-                    }
+                    if (existingUI && document.body.contains(existingUI)) existingUI.remove();
+                    const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+                    if (wrapper) wrapper.style.display = 'none';
                     retryCount = 0;
                     return;
                 }
-                
-                // Check if injected button is enabled by user preference
-                const buttonEnabled = await isInjectButtonEnabled();
-                if (!buttonEnabled) {
-                    // Remove UI if button was disabled
-                    const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    if (existingUI && document.body.contains(existingUI)) {
-                        existingUI.remove();
-                    }
-                    retryCount = 0;
-                    return;
-                }
-                
                 const currentInput = findPlatformSpecificInput();
-                
                 if (currentInput) {
-                    // Only re-inject if:
-                    // 1. We haven't injected before, OR
-                    // 2. The input element changed, OR
-                    // 3. The UI container is missing from DOM
                     const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    const needsInjection = !existingUI || 
-                                          !document.body.contains(existingUI) ||
-                                          currentInput !== lastInjectedInput;
-                    
-                    if (needsInjection) {
+                    const containerMissing = !existingUI || !document.body.contains(existingUI);
+                    if (containerMissing) {
                         lastInjectedInput = currentInput;
-                        retryCount = 0; // Reset retry count
-                        injectUI(currentInput).then(() => {
-                            retryCount = 0;
-                        }).catch(err => {
-                            // Silent re-injection failure
-                        });
+                        retryCount = 0;
+                        injectUI(currentInput).then(() => { retryCount = 0; }).catch(() => {});
                     }
                 } else {
-                    // Input disappeared, might need to retry
                     const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    if (!existingUI || !document.body.contains(existingUI)) {
-                        if (retryCount < MAX_RETRIES) {
-                            retryInjection();
-                        }
+                    if ((!existingUI || !document.body.contains(existingUI)) && retryCount < MAX_RETRIES) {
+                        retryInjection();
                     }
                 }
             });
-        }, 500); // Increased debounce to 500ms
+        }, debounceMs);
     });
 
     // Observe with comprehensive options for dynamic interfaces
@@ -3317,7 +3554,70 @@ async function observeDOM() {
         attributes: false,
         attributeOldValue: false
     });
-    
+
+    // ChatGPT: only update position of persistent container (no re-inject = no flicker). Perplexity: re-inject if missing.
+    const platform = detectPlatform();
+    if (platform === 'chatgpt' || platform === 'perplexity') {
+        if (chatgptReinjectInterval) clearInterval(chatgptReinjectInterval);
+        chatgptReinjectInterval = setInterval(async () => {
+            if (!(await shouldShowEnhanceButton())) {
+                const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+                if (wrapper) wrapper.style.display = 'none';
+                return;
+            }
+            if (platform === 'chatgpt') {
+                const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+                if (wrapper && wrapper.firstElementChild) {
+                    wrapper.style.display = '';
+                    updateChatGPTPersistentPosition();
+                    return;
+                }
+            }
+            const existingUI = document.getElementById('prompt-architect-buttons-container');
+            if (existingUI && document.body.contains(existingUI)) return;
+            const input = findPlatformSpecificInput();
+            if (input) injectUI(input).catch(() => {});
+        }, platform === 'chatgpt' ? 150 : 1500);
+    }
+
+    // Keep Improve button visible when typing: re-inject immediately when user focuses or types in composer and button is missing
+    let composerReinjectTimer = null;
+    let lastComposerCheck = 0;
+    const platformForComposer = detectPlatform();
+    const COMPOSER_CHECK_THROTTLE_MS = platformForComposer === 'chatgpt' ? 50 : 150;
+    const COMPOSER_REINJECT_DELAY_MS = (platformForComposer === 'chatgpt' || platformForComposer === 'perplexity') ? 0 : 80;
+    function scheduleComposerReinject() {
+        if (composerReinjectTimer) return;
+        composerReinjectTimer = setTimeout(async () => {
+            composerReinjectTimer = null;
+            if (!(await shouldShowEnhanceButton())) return;
+            if (platformForComposer === 'chatgpt') {
+                const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+                if (wrapper && wrapper.firstElementChild) {
+                    updateChatGPTPersistentPosition();
+                    return;
+                }
+            }
+            const existingUI = document.getElementById('prompt-architect-buttons-container');
+            if (existingUI && document.body.contains(existingUI)) return;
+            const input = findPlatformSpecificInput();
+            if (input) injectUI(input).catch(() => {});
+        }, COMPOSER_REINJECT_DELAY_MS);
+    }
+    function onComposerInteraction(e) {
+        const target = e.target;
+        if (!target || !target.closest) return;
+        const now = Date.now();
+        if (now - lastComposerCheck < COMPOSER_CHECK_THROTTLE_MS) return;
+        lastComposerCheck = now;
+        const input = findPlatformSpecificInput();
+        if (!input) return;
+        const isComposer = target === input || input.contains(target);
+        if (!isComposer) return;
+        scheduleComposerReinject();
+    }
+    document.addEventListener('focusin', onComposerInteraction, { passive: true, capture: true });
+    document.addEventListener('input', onComposerInteraction, { passive: true, capture: true });
 }
 
 // Initialization - only on supported platforms
@@ -3331,15 +3631,13 @@ async function observeDOM() {
             return;
         }
         
-        // Check if button is enabled - remove existing button if disabled and don't initialize
         (async () => {
-            const buttonEnabled = await isInjectButtonEnabled();
-            if (!buttonEnabled) {
+            if (!(await shouldShowEnhanceButton())) {
                 const existingUI = document.getElementById('prompt-architect-buttons-container');
-                if (existingUI && document.body.contains(existingUI)) {
-                    existingUI.remove();
-                }
-                return; // Don't initialize if button is disabled
+                if (existingUI && document.body.contains(existingUI)) existingUI.remove();
+                const wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+                if (wrapper) wrapper.style.display = 'none';
+                return;
             }
             
             // Start the detection process immediately
@@ -3360,29 +3658,16 @@ async function observeDOM() {
                 }
             }
             
-            // Also try after a short delay to catch late-loading pages
-            setTimeout(async () => {
-                // Check if button is enabled before attempting injection
-                const buttonEnabled = await isInjectButtonEnabled();
-                if (!buttonEnabled) {
-                    // Remove button if it exists and preference is disabled
+            // Delayed attempts to catch late-loading composers (ChatGPT/Gemini often load after 2–8s)
+            [2000, 5000, 8000, 12000].forEach((delayMs) => {
+                setTimeout(async () => {
                     const existingUI = document.getElementById('prompt-architect-buttons-container');
-                    if (existingUI && document.body.contains(existingUI)) {
-                        existingUI.remove();
-                    }
-                    return;
-                }
-                
-                const existingUI = document.getElementById('prompt-architect-buttons-container');
-                if (!existingUI || !document.body.contains(existingUI)) {
+                    if (existingUI && document.body.contains(existingUI)) return;
+                    if (!(await shouldShowEnhanceButton())) return;
                     const input = findPlatformSpecificInput();
-                    if (input) {
-                        injectUI(input).catch(err => {
-                            // Silent delayed injection failure
-                        });
-                    }
-                }
-            }, 2000);
+                    if (input) injectUI(input).catch(() => {});
+                }, delayMs);
+            });
         })();
         
     } catch (error) {

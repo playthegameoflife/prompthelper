@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment Successful — Prompt Helper</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #f5f5f7 0%, #fff 100%);
+      color: #1d1d1f;
+    }
+    .card {
+      max-width: 420px;
+      text-align: center;
+      padding: 2.5rem;
+      background: rgba(255,255,255,0.9);
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .icon { font-size: 64px; margin-bottom: 1rem; }
+    h1 { font-size: 1.5rem; margin: 0 0 0.5rem; font-weight: 700; }
+    p { margin: 0 0 1.5rem; color: #666; line-height: 1.5; }
+    .note { font-size: 0.875rem; color: #888; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✓</div>
+    <h1>Payment successful</h1>
+    <p>Your subscription is active. You can close this tab and open the <strong>Prompt Helper</strong> extension to use Premium.</p>
+    <p class="note" id="note">If the extension doesn’t show Premium yet, open the Premium tab in the popup — it will refresh automatically.</p>
+    <p id="sync-row" style="display: none; margin-top: 1rem;"><a href="#" id="sync-link" style="color: #007AFF; font-weight: 600;">Sync my subscription</a></p>
+    <p id="synced-msg" style="display: none; color: #30D158; font-weight: 600;">Subscription synced. Open the extension and check the Premium tab.</p>
+  </div>
+  <script>
+    (function() {
+      var params = new URLSearchParams(location.search);
+      var sessionId = params.get('session_id');
+      var synced = params.get('synced');
+      var syncRow = document.getElementById('sync-row');
+      var syncLink = document.getElementById('sync-link');
+      var syncedMsg = document.getElementById('synced-msg');
+      var note = document.getElementById('note');
+      if (synced === '1') {
+        note.style.display = 'none';
+        syncedMsg.style.display = 'block';
+      } else if (sessionId) {
+        syncLink.href = 'https://api-clyep56cdq-uc.a.run.app/sync-subscription?session_id=' + encodeURIComponent(sessionId);
+        syncRow.style.display = 'block';
+      }
+    })();
+  </script>
+</body>
+</html>

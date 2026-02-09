@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Debug</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://www.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
+</head>
+<body>
+    <h1>Firebase Debug Test</h1>
+    <div id="output"></div>
+
+    <!-- Firebase SDKs -->
+    <script src="libs/firebase-app-compat.js"></script>
+    <script src="libs/firebase-auth-compat.js"></script>
+
+    <script>
+        const output = document.getElementById('output');
+        function log(message) {
+            console.log(message);
+            output.innerHTML += '<div>' + message + '</div>';
+        }
+
+        log('Starting Firebase debug test...');
+
+        // Check if Firebase loaded
+        log('Firebase object exists: ' + (typeof firebase !== 'undefined'));
+
+        if (typeof firebase !== 'undefined') {
+            log('Firebase SDK_VERSION: ' + (firebase.SDK_VERSION || 'undefined'));
+            log('Firebase.initializeApp exists: ' + (typeof firebase.initializeApp === 'function'));
+            log('Firebase.auth exists: ' + (typeof firebase.auth === 'function'));
+
+            // Try to initialize Firebase
+            try {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM",
+                    authDomain: "prompt-enhancer-ai.firebaseapp.com",
+                    projectId: "prompt-enhancer-ai",
+                    storageBucket: "prompt-enhancer-ai.firebasestorage.app",
+                    messagingSenderId: "1097186279139",
+                    appId: "1:1097186279139:web:4578ddc11ca5c5283f4fd6"
+                };
+
+                const app = firebase.initializeApp(firebaseConfig);
+                log('Firebase app initialized successfully');
+
+                const auth = firebase.auth();
+                log('Firebase auth initialized successfully');
+
+                const provider = new firebase.auth.GoogleAuthProvider();
+                log('Firebase provider created successfully');
+
+                // Set globals
+                window.auth = auth;
+                window.provider = provider;
+                window.signInWithPopup = auth.signInWithPopup.bind(auth);
+                window.signOut = auth.signOut.bind(auth);
+                window.onAuthStateChanged = auth.onAuthStateChanged.bind(auth);
+
+                log('All Firebase globals set successfully');
+
+            } catch (error) {
+                log('Firebase initialization error: ' + error.message);
+                console.error(error);
+            }
+        } else {
+            log('Firebase object not found');
+        }
+    </script>
+</body>
+</html>

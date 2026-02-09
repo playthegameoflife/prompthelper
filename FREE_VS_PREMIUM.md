@@ -6,10 +6,10 @@
 
 ### Features:
 - ✅ **10 prompt enhancements per week**
-- ✅ **5 "Ask" questions per day**
+- ✅ **5 "Ask" questions per week**
 - ✅ Basic style templates (default, concise, detailed)
-- ✅ View last 20 history items
-- ✅ "Improve" button in AI chats
+- ✅ View last 1 history item
+- ✅ ✨ button in AI chats
 - ✅ Keyboard shortcuts (`Ctrl+Shift+E`)
 - ✅ Community support
 
@@ -56,8 +56,8 @@
 
 ### Free User Usage:
 - 10 enhancements/week × 4.3 weeks = 43/month
-- 5 questions/day × 30 days = 150/month
-- **Total cost: ~$0.02/month**
+- 5 questions/week × 4.3 weeks = 22/month
+- **Total cost: ~$0.007/month**
 
 ### Premium User Usage (Average):
 - 50 enhancements/month
@@ -69,10 +69,10 @@
 
 | Tier | Price | Your Cost | Your Profit |
 |------|-------|-----------|-------------|
-| **Free** | $0 | ~$0.02/month | -$0.02/month |
+| **Free** | $0 | ~$0.007/month | -$0.007/month |
 | **Premium** | $19.99 | ~$1.00/month | **+$18.41/month** |
 
 **Bottom Line:**
-- Free users cost you almost nothing (~10 cents/month)
+- Free users cost you almost nothing (~7 cents/month)
 - Premium users are highly profitable (~$18.41 profit/month)
 - Very sustainable business model! ✅

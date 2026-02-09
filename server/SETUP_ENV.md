@@ -10,8 +10,11 @@ Create a file called `.env` in the `server` folder with this content:
 STRIPE_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 STRIPE_WEBHOOK_SECRET=whsec_YOUR_WEBHOOK_SECRET_HERE
+GEMINI_API_KEY=AIzaSy_YOUR_GEMINI_KEY
 PORT=3000
 ```
+
+**Important:** The `GEMINI_API_KEY` is your Google Gemini API key. This will be used by the backend proxy to make API calls on behalf of users, keeping the key secure and hidden from the extension.
 
 ## Step 2: Get your webhook secret
 

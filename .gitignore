@@ -5,3 +5,7 @@ dist/
 .DS_Store
 .env
 server/.env
+config.local.js
+.firebase/
+*.zip
+functions/.runtimeconfig.json

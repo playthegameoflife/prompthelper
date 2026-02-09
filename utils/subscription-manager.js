@@ -3,9 +3,12 @@
  * Handles subscription status checking and feature gating
  */
 
-// Configuration - Update with your server URL
-const PAYMENT_SERVER_URL = process.env.PAYMENT_SERVER_URL || 'http://localhost:3000';
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_51SpzA8GqilA1wQCPwzbv9wMwZEQlZr223zliFRUlUPvC4wLkbYKhR3gq7kU3aFkKKAAB4dNUdnQ99SBSzbNiT1n300hZItRPye';
+// Configuration - Keep in sync with config.js and background.js when changing server URL
+const PAYMENT_SERVER_URL = 'https://api-clyep56cdq-uc.a.run.app';
+// Fallback when create-portal-session fails: Stripe customer portal login (Dashboard → Billing → Customer portal)
+const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/bJe28racM6RSgzC1cT7AI00';
+// Publishable key only - safe in client. Use pk_live_... for production.
+const STRIPE_PUBLISHABLE_KEY = ''; // optional: pk_live_... from Stripe Dashboard
 
 // Storage keys
 const STORAGE_USER_ID = 'userId';
@@ -36,24 +39,45 @@ async function getUserId() {
  * Get subscription status from cache or server
  */
 async function getSubscriptionStatus(forceRefresh = false) {
-  return new Promise(async (resolve) => {
+  try {
     // Check cache first
     if (!forceRefresh) {
-      chrome.storage.local.get([STORAGE_SUBSCRIPTION_CACHE], (result) => {
-        const cached = result[STORAGE_SUBSCRIPTION_CACHE];
-        if (cached && cached.expiresAt > Date.now()) {
-          resolve(cached.status);
-          return;
-        }
-        
-        // Cache expired, fetch from server
-        fetchSubscriptionStatus().then(resolve);
+      return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_SUBSCRIPTION_CACHE], async (result) => {
+          const cached = result[STORAGE_SUBSCRIPTION_CACHE];
+          if (cached && cached.expiresAt > Date.now()) {
+            resolve(cached.status);
+            return;
+          }
+          
+          // Cache expired, fetch from server
+          try {
+            const status = await fetchSubscriptionStatus();
+            resolve(status);
+          } catch (error) {
+            console.error('Error fetching subscription status:', error);
+            resolve({
+              active: false,
+              plan: null,
+              status: 'inactive',
+              expiresAt: null
+            });
+          }
+        });
       });
     } else {
       // Force refresh
-      fetchSubscriptionStatus().then(resolve);
+      return await fetchSubscriptionStatus();
     }
-  });
+  } catch (error) {
+    console.error('Error in getSubscriptionStatus:', error);
+    return {
+      active: false,
+      plan: null,
+      status: 'inactive',
+      expiresAt: null
+    };
+  }
 }
 
 /**
@@ -62,7 +86,20 @@ async function getSubscriptionStatus(forceRefresh = false) {
 async function fetchSubscriptionStatus() {
   try {
     const userId = await getUserId();
-    const response = await fetch(`${PAYMENT_SERVER_URL}/api/subscription-status/${userId}`);
+    
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(`${PAYMENT_SERVER_URL}/subscription-status/${userId}`, {
+      signal: controller.signal,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -114,7 +151,7 @@ async function hasPlan(planId) {
 async function createCheckoutSession(priceId, successUrl, cancelUrl) {
   try {
     const userId = await getUserId();
-    const response = await fetch(`${PAYMENT_SERVER_URL}/api/create-checkout-session`, {
+    const response = await fetch(`${PAYMENT_SERVER_URL}/create-checkout-session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -166,39 +203,44 @@ async function openCheckout(priceId) {
 }
 
 /**
- * Create Customer Portal Session (for managing subscriptions)
+ * Create Customer Portal Session (for managing subscriptions).
+ * On API failure, opens Stripe customer portal login as fallback.
  */
 async function openCustomerPortal() {
   try {
     const userId = await getUserId();
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const returnUrl = chrome.runtime.getURL('popup.html');
-    
-    // In production, you'd retrieve customerId from your database
-    // For now, you'll need to store it when subscription is created
-    const response = await fetch(`${PAYMENT_SERVER_URL}/api/create-portal-session`, {
+    const returnUrl = chrome.runtime.getURL('popup-extension.html');
+    const result = await new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_SUBSCRIPTION_STATUS], resolve);
+    });
+    const status = result[STORAGE_SUBSCRIPTION_STATUS];
+
+    const response = await fetch(`${PAYMENT_SERVER_URL}/create-portal-session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId: userId,
-        returnUrl: returnUrl,
-        // customerId: await getCustomerId(userId), // Implement this
+        userId,
+        returnUrl,
+        customerId: status?.customerId || null,
       }),
     });
-    
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to create portal session');
+      const errBody = await response.json().catch(() => ({}));
+      throw new Error(errBody.error || 'Failed to create portal session');
     }
-    
+
     const data = await response.json();
-    chrome.tabs.create({ url: data.url });
-    
-    return data;
+    if (data.url) {
+      chrome.tabs.create({ url: data.url });
+      return data;
+    }
+    throw new Error('No portal URL returned');
   } catch (error) {
     console.error('Error opening customer portal:', error);
+    chrome.tabs.create({ url: STRIPE_CUSTOMER_PORTAL_URL });
     throw error;
   }
 }

@@ -2,15 +2,22 @@
   "manifest_version": 3,
   "name": "Prompt Helper Gemini",
   "short_name": "Prompt Helper Gemini",
-  "version": "2.3.0",
-  "description": "Intelligent prompt refinement powered by Gemini 2.5 Flash Lite. Enhance Text, Code, Image, and Video prompts with AI.",
-  "homepage_url": "https://github.com/yourusername/prompt-architect",
+  "version": "2.3.1",
+  "description": "Intelligent prompt refinement for AI chats. Enhance Text, Code, Image, and Video prompts with one click.",
   "permissions": [
     "activeTab",
+    "tabs",
     "contextMenus",
     "storage",
     "identity"
   ],
+  "oauth2": {
+    "client_id": "1097186279139-00aqbna3di7fch3m5mbvov2824lri3bq.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  },
   "host_permissions": [
     "https://chat.openai.com/*",
     "https://chatgpt.com/*",
@@ -29,10 +36,12 @@
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
     "https://api.x.ai/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://api-clyep56cdq-uc.a.run.app/*",
+    "https://identitytoolkit.googleapis.com/*"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "popup-extension.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -62,9 +71,12 @@
         "https://www.perplexity.ai/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -74,7 +86,7 @@
         "default": "Ctrl+Shift+E",
         "mac": "Command+Shift+E"
       },
-      "description": "Improve current prompt"
+      "description": "Enhance current prompt"
     }
   }
 }

@@ -7,10 +7,10 @@
 
 **Features:**
 - ✅ 10 prompt enhancements per week
-- ✅ 5 "Ask" questions per day
+- ✅ 5 "Ask" questions per week
 - ✅ Basic style templates (default, concise, detailed)
-- ✅ View last 20 history items
-- ✅ "Improve" button in AI chats
+- ✅ View last 1 history item
+- ✅ ✨ button in AI chats
 - ✅ Keyboard shortcuts
 - ✅ Community support
 
@@ -19,7 +19,7 @@
 - 10 enhancements/week × 4.3 weeks = 43 enhancements/month
 - Cost per enhancement: ~$0.00012 (130 × $0.10/1M + 260 × $0.40/1M)
 - **Monthly cost per free user: ~$0.005** (0.5 cents)
-- With 5 questions/day: +$0.018 = **~$0.02/month per free user**
+- With 5 questions/week: +$0.004 = **~$0.009/month per free user**
 
 **Realistic estimate with overhead: $0.00 - $0.10/month per free user**
 - Most users stay within free tier limits

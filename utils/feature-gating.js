@@ -37,13 +37,9 @@ async function isFeatureAvailable(featureName) {
     return false;
   }
   
-  // Check plan level
-  if (requiredPlan === 'pro') {
-    // Premium plan has access
-    return status.plan === 'price_1SpzCbGqilA1wQCPH91vAF6R';
-  } else if (requiredPlan === 'premium') {
-    // Only Premium plan has access
-    return status.plan === 'price_1SpzCbGqilA1wQCPH91vAF6R';
+  // Check plan level (any active subscription with a plan is pro/premium)
+  if (requiredPlan === 'pro' || requiredPlan === 'premium') {
+    return !!status.plan;
   }
   
   return false;

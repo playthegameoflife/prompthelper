@@ -1,16 +1,19 @@
 {
   "name": "prompt-helper-gemini",
   "version": "1.6.0",
-  "description": "Intelligent prompt refinement for Text, Code, Image, and Video generation",
+  "description": "Intelligent prompt refinement for AI chats. Enhance Text, Code, Image, and Video prompts with one click.",
   "scripts": {
     "build": "node build.js",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "pack": "npm run build && echo '\n>>> Zip for store: cd dist && zip -r ../extension-for-store.zip .\n>>> Upload extension-for-store.zip (never zip from project root).'"
   },
   "devDependencies": {
+    "fs-extra": "^11.2.0",
     "javascript-obfuscator": "^4.1.0",
-    "terser": "^5.26.0",
-    "fs-extra": "^11.2.0"
+    "terser": "^5.26.0"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "firebase": "^12.8.0"
+  }
 }
-

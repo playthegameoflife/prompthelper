@@ -5,6 +5,353 @@
  * sub-actions (Enhance, Expand, Polish) for the context menu.
  */
 
+// Inline usage tracker (since require() doesn't work in Chrome extensions)
+let usageTracker = {
+  // Storage keys
+  STORAGE_DAILY_USAGE: 'dailyUsage',
+  STORAGE_WEEKLY_USAGE: 'weeklyUsage',
+  STORAGE_FREE_HISTORY: 'freeHistory',
+
+  // Free tier limits
+  FREE_TIER_LIMITS: {
+    enhancements_per_week: 10,
+    ask_questions_per_week: 5,
+    history_items: 1
+  },
+
+  // Subscription checker (will be set later)
+  hasActiveSubscription: () => Promise.resolve(false),
+
+  // Set subscription checker
+  setSubscriptionChecker: function(fn) {
+    this.hasActiveSubscription = fn;
+  },
+
+  /**
+   * Get current daily usage
+   */
+  getDailyUsage: function() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([this.STORAGE_DAILY_USAGE], (result) => {
+        let usage = result[this.STORAGE_DAILY_USAGE] || {
+          date: new Date().toDateString(),
+          enhancements: 0,
+          questions: 0
+        };
+
+        // Reset if it's a new day
+        const today = new Date().toDateString();
+        if (usage.date !== today) {
+          usage = {
+            date: today,
+            enhancements: 0,
+            questions: 0
+          };
+        }
+
+        resolve(usage);
+      });
+    });
+  },
+
+  /**
+   * Get current weekly usage
+   */
+  getWeeklyUsage: function() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([this.STORAGE_WEEKLY_USAGE], (result) => {
+        let usage = result[this.STORAGE_WEEKLY_USAGE] || {
+          weekStart: this.getWeekStart(),
+          enhancements: 0,
+          questions: 0
+        };
+
+        // Reset if it's a new week
+        const currentWeekStart = this.getWeekStart();
+        if (usage.weekStart !== currentWeekStart) {
+          usage = {
+            weekStart: currentWeekStart,
+            enhancements: 0,
+            questions: 0
+          };
+        }
+
+        resolve(usage);
+      });
+    });
+  },
+
+  /**
+   * Get the start of the current week (Monday)
+   */
+  getWeekStart: function() {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), diff);
+    return weekStart.toDateString();
+  },
+
+  // Map feature name to FREE_TIER_LIMITS key
+  _limitKeyForFeature: function(feature) {
+    const map = { enhancements: 'enhancements_per_week', questions: 'ask_questions_per_week', history: 'history_items' };
+    return map[feature] || feature;
+  },
+
+  /**
+   * Check if user can use a feature (within free limits)
+   */
+  canUseFeature: async function(feature) {
+    // Check if user has premium subscription first
+    const hasPremium = await this.hasActiveSubscription();
+    if (hasPremium) {
+      return { allowed: true, isPremium: true };
+    }
+
+    const isWeekly = feature === 'enhancements' || feature === 'questions';
+    const usage = isWeekly ? await this.getWeeklyUsage() : await this.getDailyUsage();
+    const limitKey = this._limitKeyForFeature(feature);
+    const limit = this.FREE_TIER_LIMITS[limitKey];
+    const current = typeof usage[feature] === 'number' ? usage[feature] : 0;
+
+    const withinLimit = limit != null && current < limit;
+    const remaining = limit != null ? Math.max(0, limit - current) : 0;
+
+    return {
+      allowed: withinLimit,
+      isPremium: false,
+      current: current,
+      limit: limit,
+      remaining: remaining
+    };
+  },
+
+  /**
+   * Track usage for a feature
+   */
+  trackUsage: async function(feature) {
+    const isWeekly = feature === 'enhancements' || feature === 'questions';
+
+    if (isWeekly) {
+      const usage = await this.getWeeklyUsage();
+      usage[feature]++;
+      await new Promise((resolve) => {
+        chrome.storage.local.set({ [this.STORAGE_WEEKLY_USAGE]: usage }, resolve);
+      });
+      return usage;
+    } else {
+      const usage = await this.getDailyUsage();
+      usage[feature]++;
+      await new Promise((resolve) => {
+        chrome.storage.local.set({ [this.STORAGE_DAILY_USAGE]: usage }, resolve);
+      });
+      return usage;
+    }
+  },
+
+  /**
+   * Get usage summary for UI display
+   */
+  getUsageSummary: async function() {
+    const hasPremium = await this.hasActiveSubscription();
+
+    if (hasPremium) {
+      return {
+        isPremium: true,
+        enhancements: { current: 0, limit: 'unlimited', remaining: 'unlimited' },
+        questions: { current: 0, limit: 'unlimited', remaining: 'unlimited' },
+        history: { current: 0, limit: 'unlimited', remaining: 'unlimited' }
+      };
+    }
+
+    const weeklyUsage = await this.getWeeklyUsage();
+    const dailyUsage = await this.getDailyUsage();
+
+    return {
+      isPremium: false,
+      enhancements: {
+        current: weeklyUsage.enhancements,
+        limit: this.FREE_TIER_LIMITS.enhancements_per_week,
+        remaining: Math.max(0, this.FREE_TIER_LIMITS.enhancements_per_week - weeklyUsage.enhancements)
+      },
+      questions: {
+        current: weeklyUsage.questions,
+        limit: this.FREE_TIER_LIMITS.ask_questions_per_week,
+        remaining: Math.max(0, this.FREE_TIER_LIMITS.ask_questions_per_week - weeklyUsage.questions)
+      },
+      history: {
+        current: 0, // We'll calculate this from actual history
+        limit: this.FREE_TIER_LIMITS.history_items,
+        remaining: this.FREE_TIER_LIMITS.history_items
+      }
+    };
+  },
+
+  /**
+   * Manage free tier history (limit to 1 item)
+   */
+  manageFreeHistory: async function(newItem) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([this.STORAGE_FREE_HISTORY], async (result) => {
+        let history = result[this.STORAGE_FREE_HISTORY] || [];
+
+        // Add new item at the beginning
+        history.unshift(newItem);
+
+        // Keep only the most recent item for free users
+        const hasPremium = await this.hasActiveSubscription();
+        if (!hasPremium) {
+          history = history.slice(0, this.FREE_TIER_LIMITS.history_items);
+        } else {
+          // Premium users can keep more (we'll limit this elsewhere if needed)
+          history = history.slice(0, 50); // Keep last 50 for premium
+        }
+
+        chrome.storage.local.set({ [this.STORAGE_FREE_HISTORY]: history }, () => {
+          resolve(history);
+        });
+      });
+    });
+  },
+
+  /**
+   * Get history items (respecting free tier limits)
+   * Merges freeHistory (enhancements from Build/Enhance tab and in-chat) with promptHistory (Ask answers, legacy).
+   */
+  getLimitedHistory: async function() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([this.STORAGE_FREE_HISTORY, 'promptHistory'], async (result) => {
+        const hasPremium = await this.hasActiveSubscription();
+        const freeHistory = result[this.STORAGE_FREE_HISTORY] || [];
+        const promptHistory = result.promptHistory || [];
+        const merged = [...freeHistory, ...promptHistory].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const limit = hasPremium ? 50 : this.FREE_TIER_LIMITS.history_items;
+        resolve(merged.slice(0, limit));
+      });
+    });
+  }
+};
+
+// Inline subscription manager functions (same server as BACKEND_API_URL)
+const subscriptionManager = {
+  get PAYMENT_SERVER_URL() { return BACKEND_API_URL; },
+  STORAGE_USER_ID: 'userId',
+  STORAGE_SUBSCRIPTION_STATUS: 'subscriptionStatus',
+  STORAGE_SUBSCRIPTION_CACHE: 'subscriptionCache',
+  CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
+
+  getUserId: function() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([this.STORAGE_USER_ID], (result) => {
+        if (result[this.STORAGE_USER_ID]) {
+          resolve(result[this.STORAGE_USER_ID]);
+        } else {
+          // Generate a unique ID (in production, use a more robust method)
+          const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          chrome.storage.local.set({ [this.STORAGE_USER_ID]: userId }, () => {
+            resolve(userId);
+          });
+        }
+      });
+    });
+  },
+
+  getSubscriptionStatus: async function(forceRefresh = false) {
+    try {
+      // Check cache first
+      if (!forceRefresh) {
+        return new Promise((resolve) => {
+          chrome.storage.local.get([this.STORAGE_SUBSCRIPTION_CACHE], async (result) => {
+            const cached = result[this.STORAGE_SUBSCRIPTION_CACHE];
+            if (cached && cached.expiresAt > Date.now()) {
+              resolve(cached.status);
+              return;
+            }
+
+            // Cache expired, fetch from server
+            try {
+              const status = await this.fetchSubscriptionStatus();
+              resolve(status);
+            } catch (error) {
+              console.error('Error fetching subscription status:', error);
+              resolve({
+                active: false,
+                plan: null,
+                status: 'inactive',
+                expiresAt: null
+              });
+            }
+          });
+        });
+      } else {
+        // Force refresh
+        return await this.fetchSubscriptionStatus();
+      }
+    } catch (error) {
+      console.error('Error in getSubscriptionStatus:', error);
+      return {
+        active: false,
+        plan: null,
+        status: 'inactive',
+        expiresAt: null
+      };
+    }
+  },
+
+  fetchSubscriptionStatus: async function() {
+    try {
+      const userId = await this.getUserId();
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(`${this.PAYMENT_SERVER_URL}/subscription-status/${userId}`, {
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const status = await response.json();
+
+      // Cache the result
+      chrome.storage.local.set({
+        [this.STORAGE_SUBSCRIPTION_CACHE]: {
+          status: status,
+          expiresAt: Date.now() + this.CACHE_DURATION
+        },
+        [this.STORAGE_SUBSCRIPTION_STATUS]: status
+      });
+
+      return status;
+    } catch (error) {
+      console.error('Error fetching subscription status:', error);
+      // Return default inactive status on error
+      return {
+        active: false,
+        plan: null,
+        status: 'inactive',
+        expiresAt: null
+      };
+    }
+  }
+};
+
+// Set up subscription checker for usage tracker
+const hasActiveSubscription = async () => {
+  const status = await subscriptionManager.getSubscriptionStatus();
+  return status.active === true && status.status === 'active';
+};
+usageTracker.setSubscriptionChecker(hasActiveSubscription);
+
 // --- Constants ---
 
 // Debug mode flag - set to false for production
@@ -27,6 +374,19 @@ const STORAGE_GEMINI_API_KEY = 'userGeminiApiKey';
 const STORAGE_SELECTED_MODELS = 'selectedModels'; // { provider: modelId }
 const STORAGE_PROMPT_HISTORY = 'promptHistory';
 const MAX_HISTORY_ITEMS = 50;
+
+// Storage keys per provider (used by API_CONFIGS)
+const STORAGE_KEYS = {
+    gemini: 'userGeminiApiKey',
+    openai: 'userOpenAiApiKey',
+    anthropic: 'userAnthropicApiKey',
+    grok: 'userGrokApiKey',
+    deepseek: 'userDeepSeekApiKey'
+};
+
+// Backend proxy configuration (keep in sync with config.js for popup)
+const BACKEND_API_URL = 'https://api-clyep56cdq-uc.a.run.app';
+const USE_BACKEND_PROXY = true; // Set to false to use direct API (requires user's own key)
 
 // ============================================================================
 // ERROR HANDLING
@@ -222,25 +582,44 @@ function cacheEnhancement(prompt, enhancementType, provider, result, styleKey = 
  * Saves enhancement to history
  */
 async function saveToHistory(original, enhanced, enhancementType, provider) {
+    // Use usage tracker for history management if available
+    if (usageTracker && enhancementType !== 'ASK_QUESTION') {
+        try {
+            const historyItem = {
+                original: original.substring(0, 4000), // Question/prompt (was 500, caused Ask copy to cut off)
+                enhanced: enhanced.substring(0, 32000), // Answer/refined (was 8000)
+                mode: enhancementType,
+                provider: provider,
+                timestamp: Date.now(),
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+            };
+            await usageTracker.manageFreeHistory(historyItem);
+            return;
+        } catch (error) {
+            debug.warn('Usage tracker history management failed, falling back:', error);
+        }
+    }
+
+    // Fallback to original method
     return new Promise((resolve) => {
         chrome.storage.local.get([STORAGE_PROMPT_HISTORY], (result) => {
             const history = result[STORAGE_PROMPT_HISTORY] || [];
-            
+
             // Add new entry at the beginning
             history.unshift({
-                original: original.substring(0, 500), // Limit length
-                enhanced: enhanced.substring(0, 2000), // Limit length
+                original: original.substring(0, 4000), // Question/prompt (was 500, caused Ask copy to cut off)
+                enhanced: enhanced.substring(0, 32000), // Answer/refined (was 8000)
                 mode: enhancementType,
                 provider: provider,
                 timestamp: Date.now(),
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
             });
-            
+
             // Keep only last MAX_HISTORY_ITEMS
             if (history.length > MAX_HISTORY_ITEMS) {
                 history.splice(MAX_HISTORY_ITEMS);
             }
-            
+
             chrome.storage.local.set({ [STORAGE_PROMPT_HISTORY]: history }, () => {
                 resolve();
             });
@@ -267,8 +646,9 @@ const AVAILABLE_MODELS = {
         { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
     ],
     gemini: [
-        // Current Available Models (as of Jan 2025)
-        { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', recommended: true }, // Default: Fast, cheap, efficient
+        // Default: Gemma 3 4B
+        { id: 'gemma-3-4b-it', name: 'Gemma 3 4B', recommended: true },
+        { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite' },
         { id: 'gemini-1.5-flash-002', name: 'Gemini 1.5 Flash' },
         { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', recommended: true },
@@ -284,7 +664,6 @@ const AVAILABLE_MODELS = {
         // Gemma Models
         { id: 'gemma-3-27b-it', name: 'Gemma 3 27B' },
         { id: 'gemma-3-12b-it', name: 'Gemma 3 12B' },
-        { id: 'gemma-3-4b-it', name: 'Gemma 3 4B', recommended: true },
         { id: 'gemma-3-1b-it', name: 'Gemma 3 1B' },
         { id: 'gemma-3-270m-it', name: 'Gemma 3 270M' },
         // Legacy/Alternative IDs (for backward compatibility)
@@ -325,7 +704,7 @@ const AVAILABLE_MODELS = {
 const API_CONFIGS = {
     gemini: {
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models/',
-        defaultModel: 'gemini-2.5-flash-lite', // Fast, cheap, and efficient
+        defaultModel: 'gemma-3-4b-it', // Gemma 3 4B instruction-tuned
         action: ':generateContent',
         storageKey: STORAGE_KEYS.gemini,
         getModelId: (modelId) => {
@@ -767,17 +1146,23 @@ async function getActiveStyle(enhancementType) {
 
 // --- Helper Functions (Same as previous version, adapted for multiple modes) ---
 
+// Store default API key in memory (set by popup.js)
+let defaultApiKey = null;
+
 /**
  * Retrieves the Gemini API key from chrome.storage.local.
+ * Falls back to default key if user hasn't set their own.
  */
 const getApiKey = () => {
     return new Promise((resolve) => {
-        chrome.storage.local.get([STORAGE_GEMINI_API_KEY], (result) => {
+        chrome.storage.local.get([STORAGE_GEMINI_API_KEY, 'defaultGeminiApiKey'], (result) => {
             if (chrome.runtime.lastError) {
                 debug.error("Error retrieving API key in background:", chrome.runtime.lastError);
                 resolve(null);
             } else {
-                resolve(result[STORAGE_GEMINI_API_KEY] || null);
+                // Use user's key if set, otherwise use default
+                const apiKey = result[STORAGE_GEMINI_API_KEY] || result['defaultGeminiApiKey'] || defaultApiKey;
+                resolve(apiKey || null);
             }
         });
     });
@@ -812,8 +1197,8 @@ function isValidModel(provider, modelId) {
  * @returns {Promise<string>} The model ID to use
  */
 async function getSelectedModel() {
-    // Always use Gemini 2.5 Flash Lite
-    return Promise.resolve('gemini-2.5-flash-lite');
+    // Always use Gemma 3 4B
+    return Promise.resolve('gemma-3-4b-it');
 }
 
 /**
@@ -867,10 +1252,10 @@ const extractImprovedPrompt = (data) => {
  * Structures the request body for Gemini API.
  * @param {string} prompt - The user prompt
  * @param {string} systemInstruction - The system instruction
- * @param {string} modelId - The model ID to use (always gemini-2.5-flash-lite)
+ * @param {string} modelId - The model ID to use (gemma-3-4b-it)
  * @returns {string} The request body as JSON string
  */
-const getRequestBody = (prompt, systemInstruction, modelId = 'gemini-2.5-flash-lite') => {
+const getRequestBody = (prompt, systemInstruction, modelId = 'gemma-3-4b-it') => {
     const fullInstruction = `${systemInstruction}\n\nUser's raw text:\n"${prompt}"\n\nImproved Output:`;
     
     // Always use Gemini format
@@ -882,11 +1267,200 @@ const getRequestBody = (prompt, systemInstruction, modelId = 'gemini-2.5-flash-l
         }],
         generationConfig: {
             temperature: 0.6,
-            maxOutputTokens: 8000,
+            maxOutputTokens: 8192,
             topP: 0.9,
         }
     });
 };
+
+/** Port for streaming enhanced prompt chunks to popup (set when popup connects) */
+let enhanceStreamPort = null;
+/** Ports for streaming to content script per tab (ChatGPT, Gemini, etc.) */
+const enhanceStreamPagePorts = new Map();
+
+/**
+ * Resolves the system instruction for an enhancement type (same logic as executeEnhancement).
+ * @param {string} enhancementType - The key from SYSTEM_INSTRUCTIONS
+ * @param {boolean} forceDefaultStyle - If true, use default style only
+ * @returns {Promise<string>} The system instruction text
+ */
+async function getSystemInstructionForEnhancement(enhancementType, forceDefaultStyle = false) {
+    const activeStyleKey = forceDefaultStyle ? null : await getActiveStyle(enhancementType);
+    let systemInstruction = null;
+    if (!forceDefaultStyle && activeStyleKey) {
+        if (activeStyleKey === 'default') {
+            systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+        } else if (activeStyleKey.startsWith('template:')) {
+            const templateKey = activeStyleKey.replace('template:', '');
+            const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
+            systemInstruction = templates[templateKey] || SYSTEM_INSTRUCTIONS[enhancementType];
+        } else if (activeStyleKey.startsWith('custom:')) {
+            const styleName = activeStyleKey.replace('custom:', '');
+            const namedStyles = await getNamedCustomStyles(enhancementType);
+            systemInstruction = namedStyles[styleName] || null;
+        }
+    }
+    if (!systemInstruction) systemInstruction = await getCustomInstruction(enhancementType);
+    if (!systemInstruction) systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+    return systemInstruction || '';
+}
+
+/** Safely post to a port (no throw if disconnected). */
+function safePortPost(port, msg) {
+    try {
+        if (port) port.postMessage(msg);
+    } catch (e) {
+        debug.warn('Port postMessage failed (port may be disconnected):', e?.message || e);
+    }
+}
+
+/**
+ * Calls the backend streaming endpoint and forwards SSE chunks to the given port.
+ * @param {string} userText - The text to enhance
+ * @param {string} systemInstruction - The system instruction
+ * @param {string} enhancementType - The enhancement type
+ * @param {chrome.runtime.Port} port - Port to postMessage({ chunk }) and ({ done, fullText }) or ({ error })
+ */
+async function callBackendEnhanceStream(userText, systemInstruction, enhancementType, port) {
+    const controller = new AbortController();
+    const timeoutMs = 65000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    function cleanup() {
+        clearTimeout(timeoutId);
+    }
+
+    try {
+        const response = await fetch(`${BACKEND_API_URL}/enhance-stream`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: userText, systemInstruction }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            cleanup();
+            const errText = await response.text();
+            let errData;
+            try { errData = JSON.parse(errText); } catch (e) { errData = { error: errText }; }
+            safePortPost(port, { error: errData.error || `Request failed (${response.status})` });
+            return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const jsonStr = line.slice(6).trim();
+                    if (jsonStr === '[DONE]' || jsonStr === '') continue;
+                    try {
+                        const data = JSON.parse(jsonStr);
+                        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                        if (text) {
+                            fullText += text;
+                            safePortPost(port, { chunk: text });
+                        }
+                    } catch (e) { /* skip malformed chunk */ }
+                }
+            }
+        }
+        // Flush any remaining in buffer
+        if (buffer.trim() && buffer.startsWith('data: ')) {
+            try {
+                const data = JSON.parse(buffer.slice(6).trim());
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (text) {
+                    fullText += text;
+                    safePortPost(port, { chunk: text });
+                }
+            } catch (e) { /* skip */ }
+        }
+
+        cleanup();
+        let result = fullText.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
+        if (!result) {
+            safePortPost(port, { error: 'Empty response from server' });
+            return;
+        }
+        safePortPost(port, { done: true, fullText: result });
+
+        if (usageTracker) {
+            try { await usageTracker.trackUsage('enhancements'); } catch (e) { debug.warn('Usage tracking failed:', e); }
+        }
+        saveToHistory(userText, result, enhancementType, 'gemini');
+    } catch (err) {
+        cleanup();
+        if (err.name === 'AbortError') safePortPost(port, { error: 'Request timed out. The server may be slow or unavailable. Please try again.' });
+        else safePortPost(port, { error: err.message || 'Stream failed' });
+    }
+}
+
+/**
+ * Calls the backend proxy to enhance a prompt
+ * @param {string} userText - The text to enhance
+ * @param {string} systemInstruction - The system instruction
+ * @param {string} enhancementType - The enhancement type
+ * @returns {Promise<string>} The enhanced prompt
+ */
+async function callBackendEnhance(userText, systemInstruction, enhancementType) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s so popup 45s timeout can show error
+
+    try {
+        console.log('[Backend] Calling enhance endpoint:', BACKEND_API_URL);
+        const response = await fetch(`${BACKEND_API_URL}/enhance`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt: userText,
+                enhancementType: enhancementType,
+                systemInstruction: systemInstruction
+            }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                errorData = { error: errorText || `Backend request failed (${response.status})` };
+            }
+            console.error('[Backend] Enhancement failed:', response.status, errorData);
+            throw new Error(errorData.error || `Backend request failed (${response.status})`);
+        }
+
+        const data = await response.json();
+        if (!data.result) {
+            console.error('[Backend] No result in response:', data);
+            throw new Error('Backend returned empty result');
+        }
+        console.log('[Backend] Enhancement successful, result length:', data.result.length);
+        return data.result;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            console.error('[Backend] Request timed out');
+            throw new Error('Backend request timed out');
+        }
+        console.error('[Backend] Enhancement error:', error.message, error.stack);
+        throw error;
+    }
+}
 
 /**
  * Core function to call the appropriate API from the background worker.
@@ -898,9 +1472,24 @@ const getRequestBody = (prompt, systemInstruction, modelId = 'gemini-2.5-flash-l
  * @returns {Promise<string>} The enhanced prompt text or an error message.
  */
 async function executeEnhancement(enhancementType, userText, provider = 'gemini', forceDefaultStyle = false) {
-    // Always use Gemini 2.5 Flash Lite
+    // Check usage limits for free users
+    if (usageTracker) {
+        try {
+            const limitCheck = await usageTracker.canUseFeature('enhancements');
+            if (!limitCheck.allowed) {
+                const limit = limitCheck.limit != null ? limitCheck.limit : 10;
+                const remaining = typeof limitCheck.remaining === 'number' && !isNaN(limitCheck.remaining) ? limitCheck.remaining : 0;
+                return `You've reached your weekly limit of ${limit} prompt enhancements. You have ${remaining} remaining this week. Upgrade to Premium for unlimited enhancements!`;
+            }
+        } catch (error) {
+            debug.warn('Usage limit check failed:', error);
+            // Continue with enhancement if check fails (fail open)
+        }
+    }
+
+    // Always use Gemma 3 4B
     const selectedProvider = 'gemini';
-    
+
     // Get active style key first
     // If forceDefaultStyle is true, always use 'default' (injected button always uses default)
     const activeStyleKey = forceDefaultStyle ? null : await getActiveStyle(enhancementType);
@@ -925,24 +1514,7 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
     // Create the enhancement promise
     const enhancementPromise = (async () => {
         try {
-            const apiKey = await getApiKey();
-            if (!apiKey) {
-                const providerNames = {
-                    'gemini': 'Google AI',
-                    'openai': 'OpenAI',
-                    'anthropic': 'Anthropic',
-                    'grok': 'xAI Grok',
-                    'deepseek': 'DeepSeek'
-                };
-                const providerName = providerNames[selectedProvider] || 'AI Provider';
-                throw new EnhancementError(
-                    ERROR_MESSAGES.API_KEY_MISSING,
-                    'API_KEY_MISSING',
-                    true,
-                    `${providerName} API Key not found. Please set your key in the Setup tab.`
-                );
-            }
-            
+            // 1. Resolve System Instruction first
             // Check for active style first, then fall back to legacy custom instruction, then default
             // If forceDefaultStyle is true, skip all style lookups and go straight to default
             let systemInstruction = null;
@@ -988,13 +1560,59 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 );
             }
 
+            // 2. Try backend proxy if enabled
+            if (USE_BACKEND_PROXY) {
+                try {
+                    const improvedPrompt = await callBackendEnhance(userText, systemInstruction, enhancementType);
+                    if (improvedPrompt && !improvedPrompt.startsWith('Error:')) {
+                        // Save to history
+                        saveToHistory(userText, improvedPrompt, enhancementType, 'gemini');
+
+                        // Track usage for free tier limits
+                        if (usageTracker) {
+                            try {
+                                await usageTracker.trackUsage('enhancements');
+                            } catch (error) {
+                                debug.warn('Usage tracking failed:', error);
+                            }
+                        }
+
+                        return improvedPrompt;
+                    }
+                    // If backend fails, fall through to direct API (if user has their own key)
+                    debug.warn('Backend proxy failed, falling back to direct API');
+                } catch (backendError) {
+                    debug.warn('Backend proxy error, falling back to direct API:', backendError);
+                    // Fall through to direct API
+                }
+            }
+
+            // 3. Fallback to direct API (requires user's own API key)
+            const apiKey = await getApiKey();
+            if (!apiKey) {
+                const providerNames = {
+                    'gemini': 'Google AI',
+                    'openai': 'OpenAI',
+                    'anthropic': 'Anthropic',
+                    'grok': 'xAI Grok',
+                    'deepseek': 'DeepSeek'
+                };
+                const providerName = providerNames[selectedProvider] || 'AI Provider';
+                throw new EnhancementError(
+                    'Service temporarily unavailable. Please try again in a moment.',
+                    'SERVICE_UNAVAILABLE',
+                    true,
+                    'Our enhancement service is temporarily unavailable. Please try again in a few moments.'
+                );
+            }
+            
             const config = API_CONFIGS.gemini;
             
-            // Always use Gemini 2.5 Flash Lite
-            const selectedModel = 'gemini-2.5-flash-lite';
+            // Always use Gemma 3 4B
+            const selectedModel = 'gemma-3-4b-it';
             const actualModelId = config.getModelId ? config.getModelId(selectedModel) : selectedModel;
             
-            // Gemini 2.5 Flash Lite is fast, no special timeout needed
+            // Gemma 3 4B - no special timeout needed
             const isReasoningModel = false;
 
             const requestBody = getRequestBody(userText, systemInstruction, selectedModel);
@@ -1092,13 +1710,69 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
 }
 
 /**
+ * Calls the backend proxy to ask a question
+ * @param {string} question - The user's question
+ * @param {string} systemInstruction - The system instruction
+ * @returns {Promise<string>} The answer
+ */
+async function callBackendAsk(question, systemInstruction) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+    try {
+        const response = await fetch(`${BACKEND_API_URL}/ask`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                question: question,
+                systemInstruction: systemInstruction
+            }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Backend request failed (${response.status})`);
+        }
+
+        const data = await response.json();
+        return data.result || 'Error: No result from backend';
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Backend request timed out');
+        }
+        throw error;
+    }
+}
+
+/**
  * Executes a question-answering request (Ask feature)
  * @param {string} question - The user's question
  * @param {string} provider - The API provider ('gemini', 'openai', 'anthropic')
  * @returns {Promise<string>} The answer text or an error message
  */
 async function executeAskQuestion(question, provider = 'gemini') {
-    // Always use Gemini 2.5 Flash Lite
+    // Check usage limits for free users
+    if (usageTracker) {
+        try {
+            const limitCheck = await usageTracker.canUseFeature('questions');
+            if (!limitCheck.allowed) {
+                const limit = limitCheck.limit != null ? limitCheck.limit : 5;
+                const remaining = typeof limitCheck.remaining === 'number' && !isNaN(limitCheck.remaining) ? limitCheck.remaining : 0;
+                return `You've reached your weekly limit of ${limit} questions. You have ${remaining} remaining this week. Upgrade to Premium for unlimited questions!`;
+            }
+        } catch (error) {
+            debug.warn('Usage limit check failed:', error);
+            // Continue with question if check fails (fail open)
+        }
+    }
+
+    // Always use Gemma 3 4B
     const selectedProvider = 'gemini';
     
     // Caching disabled - always make fresh API calls for unique responses
@@ -1120,27 +1794,52 @@ async function executeAskQuestion(question, provider = 'gemini') {
     // Create the question-answering promise
     const questionPromise = (async () => {
         try {
+            // Use ASK_QUESTION system instruction
+            const systemInstruction = SYSTEM_INSTRUCTIONS.ASK_QUESTION;
+            
+            // Try backend proxy first if enabled
+            if (USE_BACKEND_PROXY) {
+                try {
+                    const answer = await callBackendAsk(question, systemInstruction);
+                    if (answer && !answer.startsWith('Error:')) {
+                        // Save to history and track usage (same as direct API path)
+                        saveToHistory(question, answer, 'ASK_QUESTION', 'gemini');
+                        if (usageTracker) {
+                            try {
+                                await usageTracker.trackUsage('questions');
+                            } catch (error) {
+                                debug.warn('Usage tracking failed:', error);
+                            }
+                        }
+                        return answer;
+                    }
+                    // If backend fails, fall through to direct API (if user has their own key)
+                    debug.warn('Backend proxy failed for ask, falling back to direct API');
+                } catch (backendError) {
+                    debug.warn('Backend proxy error for ask, falling back to direct API:', backendError);
+                    // Fall through to direct API
+                }
+            }
+
+            // Fallback to direct API (requires user's own API key)
             const apiKey = await getApiKey();
             if (!apiKey) {
                 throw new EnhancementError(
-                    ERROR_MESSAGES.API_KEY_MISSING,
-                    'API_KEY_MISSING',
+                    'Service temporarily unavailable. Please try again in a moment.',
+                    'SERVICE_UNAVAILABLE',
                     true,
-                    'Gemini API Key not found. Please set your key in the Setup tab.'
+                    'Our question answering service is temporarily unavailable. Please try again in a few moments.'
                 );
             }
-            
-            // Use ASK_QUESTION system instruction
-            const systemInstruction = SYSTEM_INSTRUCTIONS.ASK_QUESTION;
             
             // Always use Gemini configuration
             const config = API_CONFIGS.gemini;
             
-            // Always use Gemini 2.5 Flash Lite
-            const selectedModel = 'gemini-2.5-flash-lite';
+            // Always use Gemma 3 4B
+            const selectedModel = 'gemma-3-4b-it';
             const actualModelId = config.getModelId ? config.getModelId(selectedModel) : selectedModel;
             
-            // Gemini 2.5 Flash Lite is fast, no special timeout needed
+            // Gemma 3 4B - no special timeout needed
             const isReasoningModel = false;
             
             // Build request body for Ask (Gemini format)
@@ -1152,7 +1851,7 @@ async function executeAskQuestion(question, provider = 'gemini') {
                 }],
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 8000,
+                    maxOutputTokens: 8192,
                     topP: 0.9,
                 }
             });
@@ -1202,9 +1901,18 @@ async function executeAskQuestion(question, provider = 'gemini') {
                 if (!answer.startsWith('Error:')) {
                     // Caching disabled - don't cache results
                     // cacheEnhancement(question, 'ASK_QUESTION', selectedProvider, answer, 'ask');
-                    
+
                     // Save to history (questions history)
                     saveToHistory(question, answer, 'ASK_QUESTION', 'gemini');
+
+                    // Track usage for free tier limits
+                    if (usageTracker) {
+                        try {
+                            await usageTracker.trackUsage('questions');
+                        } catch (error) {
+                            debug.warn('Usage tracking failed:', error);
+                        }
+                    }
                 }
                 
                 return answer;
@@ -1244,8 +1952,26 @@ async function executeAskQuestion(question, provider = 'gemini') {
     return questionPromise;
 }
 
+// Load default API key on startup
+chrome.storage.local.get(['defaultGeminiApiKey'], (result) => {
+    if (result['defaultGeminiApiKey']) {
+        defaultApiKey = result['defaultGeminiApiKey'];
+    }
+});
+
 // --- Message Listener (Communication from content.js) ---
 if (typeof chrome !== 'undefined' && chrome.runtime) {
+    // Handle default API key from popup
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'setDefaultApiKey') {
+            defaultApiKey = request.apiKey;
+            // Also store in chrome.storage for persistence
+            chrome.storage.local.set({ 'defaultGeminiApiKey': request.apiKey });
+            sendResponse({ success: true });
+            return true;
+        }
+    });
+    
     // Handle template and custom instruction requests
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Log for debugging
@@ -1256,9 +1982,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
             // Always return Gemini 2.5 Flash Lite
             sendResponse({ 
                 success: true, 
-                modelId: 'gemini-2.5-flash-lite',
-                models: [{ id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', recommended: true }],
-                recommendedModelId: 'gemini-2.5-flash-lite'
+                modelId: 'gemma-3-4b-it',
+                models: [{ id: 'gemma-3-4b-it', name: 'Gemma 3 4B', recommended: true }],
+                recommendedModelId: 'gemma-3-4b-it'
             });
             return true;
         }
@@ -1378,27 +2104,82 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         }
     });
 
+    chrome.runtime.onConnect.addListener((port) => {
+        if (port.name === 'enhanceStream') {
+            enhanceStreamPort = port;
+            port.onDisconnect.addListener(() => { enhanceStreamPort = null; });
+        }
+        if (port.name === 'enhanceStreamPage') {
+            const tabId = port.sender?.tab?.id;
+            if (tabId != null) {
+                enhanceStreamPagePorts.set(tabId, port);
+                port.onDisconnect.addListener(() => { enhanceStreamPagePorts.delete(tabId); });
+            }
+        }
+    });
+
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'enhancePromptStream') {
+            const enhancementType = request.enhancementType || 'TEXT_ENHANCEMENT';
+            const forceDefaultStyle = request.forceDefaultStyle || false;
+            const port = sender.tab ? enhanceStreamPagePorts.get(sender.tab.id) : enhanceStreamPort;
+            if (!port) {
+                sendResponse({ error: 'Stream not connected. Please try again.' });
+                return false;
+            }
+            (async () => {
+                if (usageTracker) {
+                    try {
+                        const limitCheck = await usageTracker.canUseFeature('enhancements');
+                        if (!limitCheck.allowed) {
+                            const limit = limitCheck.limit != null ? limitCheck.limit : 10;
+                            const remaining = typeof limitCheck.remaining === 'number' && !isNaN(limitCheck.remaining) ? limitCheck.remaining : 0;
+                            safePortPost(port, { error: `You've reached your weekly limit of ${limit} prompt enhancements. You have ${remaining} remaining this week. Upgrade to Premium for unlimited enhancements!` });
+                            sendResponse({ ok: false });
+                            return;
+                        }
+                    } catch (e) { debug.warn('Usage limit check failed:', e); }
+                }
+                const systemInstruction = await getSystemInstructionForEnhancement(enhancementType, forceDefaultStyle);
+                if (!systemInstruction) {
+                    safePortPost(port, { error: 'Invalid enhancement type or missing system instruction.' });
+                    sendResponse({ ok: false });
+                    return;
+                }
+                if (!USE_BACKEND_PROXY) {
+                    safePortPost(port, { error: 'Streaming is only available when using the backend proxy.' });
+                    sendResponse({ ok: false });
+                    return;
+                }
+                sendResponse({ ok: true });
+                await callBackendEnhanceStream(request.prompt, systemInstruction, enhancementType, port);
+            })();
+            return true; // async response
+        }
+
         if (request.action === 'enhancePrompt') {
             const enhancementType = request.enhancementType || 'TEXT_ENHANCEMENT';
             const forceDefaultStyle = request.forceDefaultStyle || false; // Injected button always uses default
-            // Always use Gemini 2.5 Flash Lite
-            let promise = executeEnhancement(enhancementType, request.prompt, 'gemini', forceDefaultStyle);
+            const enhancePromise = executeEnhancement(enhancementType, request.prompt, 'gemini', forceDefaultStyle);
+            // Guarantee we respond within 40s so popup never hangs
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Request timed out. The server may be slow. Please try again.')), 40000)
+            );
 
-            // Handle the promise result and send back to the content script
-            promise.then(result => {
-                sendResponse({ enhancedPrompt: result });
-            }).catch(error => {
-                debug.error("Error during enhancement processing:", error);
-                sendResponse({ enhancedPrompt: `Error: Processing failed in background. (${error.message || 'Unknown error'})` });
-            });
+            Promise.race([enhancePromise, timeoutPromise])
+                .then(result => {
+                    sendResponse({ enhancedPrompt: result });
+                })
+                .catch(error => {
+                    debug.error("Error during enhancement processing:", error);
+                    sendResponse({ enhancedPrompt: `Error: ${error.message || 'Processing failed in background.'}` });
+                });
 
-            // Return true to indicate that we will send an asynchronous response
-            return true;
+            return true; // async response
         }
         
         if (request.action === 'askQuestion') {
-            // Always use Gemini 2.5 Flash Lite
+            // Always use Gemma 3 4B
             let promise = executeAskQuestion(request.question, 'gemini');
 
             // Handle the promise result and send back
@@ -1445,24 +2226,23 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         // Always use Gemini
         const promise = executeEnhancement(enhancementType, selectedText, 'gemini');
 
-            // Send the result back to the content script via a message to update the input box
-            promise.then(result => {
-                chrome.tabs.sendMessage(tab.id, { 
-                    action: "contextMenuResult", 
-                    resultText: result,
-                    originalText: selectedText
-                });
-            }).catch(error => {
-                debug.error("Context Menu Enhancement Failed:", error);
-                chrome.tabs.sendMessage(tab.id, { 
-                    action: "contextMenuResult", 
-                    resultText: `Error: Failed to process context menu request. ${error.message}`,
-                    originalText: selectedText 
-                });
+        // Send the result back to the content script via a message to update the input box
+        promise.then(result => {
+            chrome.tabs.sendMessage(tab.id, {
+                action: "contextMenuResult",
+                resultText: result,
+                originalText: selectedText
+            });
+        }).catch(error => {
+            debug.error("Context Menu Enhancement Failed:", error);
+            chrome.tabs.sendMessage(tab.id, {
+                action: "contextMenuResult",
+                resultText: `Error: Failed to process context menu request. ${error.message}`,
+                originalText: selectedText
             });
         });
     });
-    
+
     // --- Keyboard Shortcut Handler ---
     chrome.commands.onCommand.addListener((command) => {
         if (command === 'enhance-prompt') {

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Popup</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: white;
+            color: black;
+            width: 420px;
+            min-height: 500px;
+        }
+        .test-content {
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-content">
+        <h1>Test Extension Popup</h1>
+        <p>If you can see this, the basic HTML is working!</p>
+        <p>Width: 420px, Height: 500px minimum</p>
+        <button onclick="alert('Button works!')">Test Button</button>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <script>
+        console.log('Test popup loaded');
+        setTimeout(() => {
+            console.log('Firebase available:', typeof firebase !== 'undefined');
+            console.log('window.auth:', !!window.auth);
+        }, 500);
+    </script>
+</body>
+</html>

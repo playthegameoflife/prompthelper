@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Prompt Helper Gemini</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="libs/firebase-app-compat.js"></script>
+    <script src="libs/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    
+    <style>
+        :root {
+            --brand-primary: #007AFF;
+            --brand-primary-hover: #0066DD;
+            --brand-primary-glow: rgba(0, 122, 255, 0.28);
+            --brand-gradient: linear-gradient(135deg, #007AFF 0%, #0055CC 100%);
+            --brand-gradient-soft: linear-gradient(135deg, rgba(0, 122, 255, 0.08) 0%, rgba(0, 85, 204, 0.05) 100%);
+            
+            --glass-bg: rgba(255, 255, 255, 0.88);
+            --glass-bg-hover: rgba(255, 255, 255, 0.95);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-stroke: rgba(0, 0, 0, 0.07);
+            --glass-stroke-strong: rgba(0, 0, 0, 0.1);
+            
+            --text-main: #1C1C1E;
+            --text-muted: #6E6E73;
+            --text-tertiary: #8E8E93;
+            --text-on-brand: #FFFFFF;
+            
+            --surface: #F7F7F9;
+            --surface-elevated: #FFFFFF;
+            --radius-main: 16px;
+            --radius-sm: 10px;
+            --radius-xs: 8px;
+            --radius-circle: 50%;
+            --blur-main: 20px;
+            --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+            --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.08);
+            --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        html {
+            height: 100%;
+            max-height: 600px;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 400px;
+            height: 100%;
+            min-height: 520px;
+            max-height: 600px;
+            background: var(--surface);
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            letter-spacing: -0.02em;
+            font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -80px;
+            right: -80px;
+            width: 240px;
+            height: 240px;
+            background: radial-gradient(circle, var(--brand-primary-glow) 0%, transparent 70%);
+            filter: blur(60px);
+            opacity: 0.4;
+            z-index: -1;
+            pointer-events: none;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -60px;
+            left: -60px;
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(circle, rgba(0, 122, 255, 0.06) 0%, transparent 70%);
+            filter: blur(40px);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            padding: 18px 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: relative;
+            flex: 1 1 0;
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 4px 10px;
+        }
+
+        .go-pro-badge {
+            background: var(--brand-gradient);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 122, 255, 0.35);
+            transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+            text-decoration: none;
+            display: none;
+        }
+        .go-pro-badge:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(0, 122, 255, 0.4);
+        }
+
+        .header-title {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            color: var(--text-main);
+        }
+
+        /* --- TAB CONTENT (only one section visible at a time) --- */
+        .setup-section {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+            overflow: visible;
+        }
+        .setup-section.active {
+            display: flex !important;
+            flex-direction: column;
+            gap: 16px;
+        }
+        /* Login section visible by default (JS hides it when showing main interface) */
+        #login-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.04);
+            padding: 5px;
+            border-radius: 12px;
+            gap: 4px;
+            margin-bottom: 6px;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 9px 8px;
+            border: none;
+            background: transparent;
+            border-radius: var(--radius-xs);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tab-button:hover:not(.active) {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.6);
+        }
+
+        .tab-button.active {
+            background: var(--surface-elevated);
+            color: var(--brand-primary);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur-main));
+            -webkit-backdrop-filter: blur(var(--blur-main));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-main);
+            padding: 20px;
+            box-shadow: var(--shadow-card);
+            transition: box-shadow 0.25s var(--ease);
+        }
+
+        .premium-textarea {
+            width: 100%;
+            min-height: 110px;
+            padding: 14px 16px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.55;
+            color: var(--text-main);
+            resize: none;
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+            margin-bottom: 12px;
+        }
+        .premium-textarea::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .premium-textarea:focus {
+            outline: none;
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px var(--brand-primary-glow);
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .mode-option {
+            flex: 1;
+            padding: 10px 6px;
+            border: 1px solid var(--glass-stroke);
+            background: var(--surface-elevated);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+            text-align: center;
+        }
+
+        .mode-option:hover:not(.active) {
+            border-color: var(--glass-stroke-strong);
+            color: var(--text-main);
+        }
+
+        .mode-option.active {
+            background: var(--brand-primary);
+            color: white;
+            border-color: var(--brand-primary);
+            box-shadow: 0 2px 10px rgba(0, 122, 255, 0.35);
+        }
+
+        .premium-button {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--brand-gradient);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            cursor: pointer;
+            transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 2px 12px rgba(0, 122, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .premium-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .premium-button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .premium-button:disabled {
+            background: #C7C7CC;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .premium-button-secondary {
+            padding: 10px 16px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+        }
+
+        .premium-button-secondary:hover {
+            background: var(--surface);
+            border-color: var(--glass-stroke-strong);
+        }
+
+        /* --- RESULTS --- */
+        .result-container {
+            margin-top: 20px;
+            display: none;
+            animation: slideUp 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .result-container.show {
+            display: block;
+        }
+
+        .result-text {
+            background: var(--brand-gradient-soft);
+            border: 1px solid rgba(0, 122, 255, 0.12);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-main);
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        /* Formatted refined prompt: bold, lists, spacing */
+        .result-text.result-text-formatted {
+            max-height: 380px;
+            line-height: 1.65;
+            white-space: normal;
+        }
+        .result-text.result-text-formatted strong {
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .result-text.result-text-formatted .result-list {
+            margin: 0.5em 0 0.75em 0;
+            padding-left: 1.25em;
+        }
+        .result-text.result-text-formatted .result-list li {
+            margin: 0.25em 0;
+        }
+        .result-text.result-text-formatted .result-num-list {
+            margin: 0.5em 0 0.75em 0;
+            padding-left: 1.25em;
+        }
+        .result-text.result-text-formatted .result-num-list li {
+            margin: 0.35em 0;
+        }
+        .result-text.result-text-formatted .result-section {
+            margin-top: 0.75em;
+        }
+        .result-text.result-text-formatted br + * {
+            margin-top: 0.35em;
+        }
+
+        #ask-result-text.ask-result-formatted {
+            max-height: 320px;
+            line-height: 1.65;
+            white-space: normal;
+        }
+        #ask-result-text.ask-result-formatted strong {
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        #ask-result-text.ask-result-formatted br + * {
+            margin-top: 0.35em;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- PREMIUM TAB --- */
+        .setup-section-scrollable,
+        .setup-section-scrollable .glass-card,
+        .premium-tab-card {
+            overflow: visible !important;
+        }
+        .premium-badge {
+            background: linear-gradient(160deg, #0d0d14 0%, #15152a 40%, #1a2744 85%, #0f3460 100%);
+            padding: 26px 20px;
+            border-radius: var(--radius-main) var(--radius-main) 0 0;
+            text-align: center;
+            color: white;
+            box-shadow: 0 6px 28px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+        .premium-badge .pro-icon {
+            width: 42px;
+            height: 42px;
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, rgba(0, 122, 255, 0.5) 0%, rgba(0, 150, 255, 0.25) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 11px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+        .premium-badge h2 {
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin: 0 0 4px;
+        }
+        .premium-badge p {
+            font-size: 12px;
+            opacity: 0.9;
+            margin: 0;
+            letter-spacing: 0.01em;
+        }
+        .premium-feature {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            font-size: 14px;
+            color: var(--text-main);
+        }
+
+        .check-icon {
+            background: linear-gradient(135deg, #007AFF 0%, #00C6FF 100%);
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35);
+        }
+        .subscribe-pro-btn {
+            background: linear-gradient(145deg, #007AFF 0%, #0051D5 100%) !important;
+            color: white !important;
+            font-weight: 600 !important;
+            padding: 14px 24px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 18px rgba(0, 122, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+            border: none !important;
+            width: 100%;
+            font-size: 15px;
+            cursor: pointer;
+            transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+        .subscribe-pro-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 22px rgba(0, 122, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+        }
+
+        /* Your plan pill */
+        .premium-plan-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            background: var(--surface);
+            border: 1px solid var(--glass-stroke);
+            color: var(--text-main);
+            margin-bottom: 18px;
+        }
+        /* Free vs Pro comparison */
+        .plan-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .plan-card {
+            border-radius: 12px;
+            padding: 16px 14px;
+            border: 1px solid var(--glass-stroke);
+            background: var(--surface);
+            transition: box-shadow 0.2s var(--ease);
+        }
+        .plan-card.free-plan {
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.02) 0%, var(--surface) 100%);
+        }
+        .plan-card.pro-plan {
+            border-color: rgba(0, 122, 255, 0.4);
+            background: linear-gradient(180deg, rgba(0, 122, 255, 0.08) 0%, rgba(0, 122, 255, 0.02) 50%, var(--surface-elevated) 100%);
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.14), 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .plan-card.pro-plan:hover {
+            box-shadow: 0 6px 20px rgba(0, 122, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .plan-card-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--glass-stroke);
+        }
+        .plan-card.free-plan .plan-card-title { color: var(--text-muted); }
+        .plan-card.pro-plan .plan-card-title {
+            color: var(--brand-primary);
+            border-bottom-color: rgba(0, 122, 255, 0.2);
+        }
+        .plan-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+        .plan-row:last-child { margin-bottom: 0; }
+        .plan-row .plan-label { flex: 1; min-width: 0; }
+        .plan-row .plan-check {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, #0051D5 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 1px 4px rgba(0, 122, 255, 0.4);
+        }
+        .plan-row .plan-limit {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .plan-row .plan-value {
+            font-weight: 600;
+            color: var(--text-main);
+            flex-shrink: 0;
+        }
+        .plan-card.free-plan .plan-row {
+            justify-content: space-between;
+        }
+        .plan-card.free-plan .plan-row .plan-limit {
+            flex: 1;
+            min-width: 0;
+        }
+        .pro-cta-wrap {
+            margin-top: 22px;
+            padding-top: 18px;
+            border-top: 1px solid var(--glass-stroke);
+        }
+
+        /* --- SPINNER --- */
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2.5px solid rgba(255,255,255,0.3);
+            border-top-color: #FFFFFF;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-spinner.show {
+            display: block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
+
+        .style-selector-integrated { position: relative; margin-bottom: 12px; }
+
+        .style-selector-button {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+        .style-selector-button:hover {
+            border-color: var(--glass-stroke-strong);
+        }
+        .style-selector-button.active {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 2px var(--brand-primary-glow);
+        }
+        .style-selector-button svg {
+            flex-shrink: 0;
+            margin-left: 8px;
+            transition: transform 0.25s var(--ease);
+            color: var(--text-muted);
+        }
+        .style-selector-button.active svg {
+            transform: rotate(180deg);
+            color: var(--brand-primary);
+        }
+
+        .style-selector-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-float);
+            z-index: 100;
+            display: none;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .style-selector-dropdown.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .style-selector-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-main);
+            transition: background 0.18s var(--ease), color 0.18s var(--ease);
+            border: none;
+            width: 100%;
+            text-align: left;
+            background: none;
+        }
+        .style-selector-option:hover {
+            background: var(--brand-gradient-soft);
+            color: var(--brand-primary);
+        }
+        .style-selector-option.active {
+            background: var(--brand-gradient-soft);
+            color: var(--brand-primary);
+        }
+        .style-selector-option .style-selector-option-check {
+            flex-shrink: 0;
+            width: 18px;
+            height: 18px;
+            opacity: 0;
+            color: var(--brand-primary);
+            transition: opacity 0.18s var(--ease);
+        }
+        .style-selector-option.active .style-selector-option-check {
+            opacity: 1;
+        }
+        .style-selector-option.customize {
+            color: var(--text-muted);
+            font-weight: 500;
+            border-top: 1px solid var(--glass-stroke);
+            margin-top: 4px;
+            padding-top: 12px;
+        }
+        .style-selector-option.customize:hover {
+            color: var(--brand-primary);
+        }
+        .style-selector-dropdown .style-selector-option:first-child {
+            border-radius: 6px 6px 0 0;
+        }
+        .style-selector-dropdown .style-selector-option:last-child {
+            border-radius: 0 0 6px 6px;
+        }
+
+        /* Login Section */
+        #login-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100%;
+            padding: 32px 20px;
+            text-align: center;
+        }
+        #login-section .glass-card {
+            width: 100%;
+            max-width: 340px;
+            padding: 32px 28px;
+            text-align: center;
+        }
+        .login-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--brand-gradient-soft);
+            border: 1px solid rgba(0, 122, 255, 0.15);
+            border-radius: 14px;
+            color: var(--brand-primary);
+        }
+        .login-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-main);
+            margin: 0 0 8px;
+            line-height: 1.25;
+        }
+        .login-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin: 0 0 28px;
+            max-width: 280px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #login-section .premium-button {
+            padding: 14px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 600;
+            box-shadow: var(--shadow-subtle);
+            border: 1px solid var(--glass-stroke);
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+        #login-section .premium-button:hover {
+            border-color: var(--glass-stroke-strong);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        }
+        .login-signout {
+            display: inline-block;
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            padding: 4px 0;
+            transition: color 0.2s var(--ease);
+        }
+        .login-signout:hover {
+            color: var(--text-muted);
+        }
+
+        .toggle-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            transition: border-color 0.2s var(--ease);
+        }
+        .toggle-card:hover {
+            border-color: var(--glass-stroke-strong);
+        }
+        .ask-toggle-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.98) 100%);
+            border: 1px solid rgba(0, 122, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), transform 0.2s var(--ease);
+        }
+        .ask-toggle-card:hover {
+            border-color: rgba(0, 122, 255, 0.18);
+            box-shadow: 0 4px 20px rgba(0, 122, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+        }
+        .ask-toggle-card .ask-toggle-label-wrap {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+            flex: 1;
+        }
+        .ask-toggle-card .ask-toggle-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 11px;
+            background: linear-gradient(165deg, var(--brand-primary) 0%, #0051D5 100%);
+            box-shadow: 0 3px 10px rgba(0, 122, 255, 0.3), 0 0 0 1px rgba(255,255,255,0.2) inset;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .ask-toggle-card .ask-toggle-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+        .ask-toggle-card .ask-toggle-label {
+            display: block;
+            cursor: pointer;
+            min-width: 0;
+        }
+        .ask-toggle-card .ask-toggle-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+            line-height: 1.35;
+            display: block;
+        }
+        .ask-toggle-card .ask-toggle-sub {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-top: 2px;
+            display: block;
+        }
+        .ask-toggle-card .ask-checkbox-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
+        .ask-toggle-card .ask-checkbox-wrap input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            width: 24px;
+            height: 24px;
+            margin: 0;
+            cursor: pointer;
+            z-index: 1;
+        }
+        .ask-toggle-card .ask-checkbox-custom {
+            width: 24px;
+            height: 24px;
+            border-radius: 8px;
+            border: 2px solid rgba(0, 0, 0, 0.08);
+            background: linear-gradient(180deg, #fafbfc 0%, #f0f2f5 100%);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) inset;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s var(--ease), background 0.2s var(--ease), box-shadow 0.2s var(--ease);
+            pointer-events: none;
+        }
+        .ask-toggle-card .ask-checkbox-custom svg {
+            width: 14px;
+            height: 14px;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+        }
+        .ask-toggle-card .ask-checkbox-wrap input:hover + .ask-checkbox-custom,
+        .ask-toggle-card .ask-checkbox-wrap input:focus-visible + .ask-checkbox-custom {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+        }
+        .ask-toggle-card .ask-checkbox-wrap input:checked + .ask-checkbox-custom {
+            border-color: var(--brand-primary);
+            background: linear-gradient(165deg, var(--brand-primary) 0%, #0051D5 100%);
+            box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3), 0 0 0 1px rgba(255,255,255,0.2) inset;
+        }
+        .ask-toggle-card .ask-checkbox-wrap input:checked + .ask-checkbox-custom svg {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .improve-button-preview {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(165deg, var(--brand-primary) 0%, #0051D5 100%);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.12) inset;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-right: 10px;
+        }
+        .improve-button-preview svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+        }
+
+        /* --- CUSTOM ENGINEERING STYLES --- */
+        .custom-styles-section .section-heading {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+            margin: 0 0 12px 0;
+        }
+        #custom-styles-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .custom-style-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-subtle);
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+        .custom-style-item:hover {
+            border-color: var(--glass-stroke-strong);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+        }
+        .custom-style-item > div:first-child {
+            min-width: 0;
+            flex: 1;
+        }
+        .custom-style-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 2px;
+            letter-spacing: -0.01em;
+        }
+        .custom-style-mode {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .custom-style-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .custom-style-actions .premium-button-secondary {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .add-custom-style-btn {
+            width: 100%;
+            margin-top: 12px;
+            padding: 12px 16px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--brand-primary);
+            cursor: pointer;
+            transition: background 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .add-custom-style-btn:hover {
+            background: var(--brand-gradient-soft);
+            border-color: rgba(0, 122, 255, 0.25);
+            box-shadow: 0 2px 12px rgba(0, 122, 255, 0.12);
+        }
+        .add-custom-style-btn::before {
+            content: '+';
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        /* --- HISTORY TAB --- */
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+            margin: 0 0 16px 0;
+        }
+        #history-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 4px;
+        }
+        #history-empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 48px 24px;
+            border: 1px dashed var(--glass-stroke);
+            border-radius: var(--radius-main);
+            background: var(--brand-gradient-soft);
+        }
+        #history-empty .history-empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.6;
+        }
+        #history-empty p {
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.5;
+        }
+        .history-item {
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            box-shadow: var(--shadow-subtle);
+            transition: box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
+        }
+        .history-item:hover {
+            border-color: rgba(0, 122, 255, 0.2);
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.08);
+        }
+        .history-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .history-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .history-item-mode {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            background: var(--brand-primary-glow);
+            color: var(--brand-primary);
+        }
+        .history-item-mode-ask {
+            background: rgba(88, 86, 214, 0.12);
+            color: #5856d6;
+        }
+        .history-item-ask .history-item-original {
+            border-left-color: #5856d6;
+        }
+        .history-item-time {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .history-item-original,
+        .history-item-enhanced {
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            max-height: 80px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+        .history-item-enhanced {
+            max-height: 120px;
+        }
+        .history-item-original::-webkit-scrollbar,
+        .history-item-enhanced::-webkit-scrollbar {
+            width: 4px;
+        }
+        .history-item-original::-webkit-scrollbar-thumb,
+        .history-item-enhanced::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 4px;
+        }
+        .history-item-original {
+            background: rgba(0, 0, 0, 0.03);
+            border-left: 3px solid var(--text-muted);
+        }
+        .history-item-original strong {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--text-muted);
+            margin-right: 6px;
+        }
+        .history-item-enhanced {
+            background: rgba(0, 122, 255, 0.06);
+            border-left: 3px solid var(--brand-primary);
+            max-height: 120px;
+        }
+        .history-item-enhanced .history-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--brand-primary);
+            margin-bottom: 4px;
+        }
+        .history-item-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--glass-stroke);
+        }
+        .history-action-button {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .history-action-button:not(.secondary) {
+            background: var(--brand-primary);
+            color: white;
+        }
+        .history-action-button:not(.secondary):hover {
+            background: #0066DD;
+            transform: translateY(-1px);
+        }
+        .history-action-button.secondary {
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--text-main);
+            border: 1px solid var(--glass-stroke);
+        }
+        .history-action-button.secondary:hover {
+            background: #F2F2F7;
+            border-color: #C7C7CC;
+        }
+
+        /* Status Messages */
+        .status-message {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            display: none;
+        }
+        .status-message.show { display: block; }
+        .status-success { background: #E8F9EE; color: #34C759; }
+        .status-error { background: #FEEBEB; color: #FF3B30; }
+
+        /* --- ADD/EDIT CUSTOM STYLE MODAL --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 24px;
+            animation: modalFadeIn 0.2s var(--ease);
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            background: var(--surface-elevated);
+            border-radius: var(--radius-main);
+            padding: 24px;
+            max-width: 420px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-float);
+            border: 1px solid var(--glass-border);
+            animation: modalSlideIn 0.25s var(--ease);
+        }
+        @keyframes modalSlideIn {
+            from { opacity: 0; transform: scale(0.98) translateY(-8px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-main);
+            margin: 0 0 6px;
+        }
+        .modal-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.45;
+            margin: 0;
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+        .premium-input {
+            width: 100%;
+            padding: 12px 14px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--glass-stroke);
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 14px;
+            color: var(--text-main);
+            transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        }
+        .premium-input::placeholder {
+            color: var(--text-tertiary);
+        }
+        .premium-input:focus {
+            outline: none;
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px var(--brand-primary-glow);
+        }
+        .modal-content .premium-textarea {
+            min-height: 120px;
+            margin-bottom: 0;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid var(--glass-stroke);
+        }
+        .modal-actions .premium-button-secondary {
+            flex: 1;
+        }
+        .modal-actions .premium-button {
+            flex: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="main-container">
+        <!-- Unified Header -->
+        <div class="header">
+            <h1 class="header-title" id="header-title">Prompt Helper Gemini</h1>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div id="go-pro-header" class="go-pro-badge" style="display: none;">GO PRO</div>
+                <div id="initial-loader" class="loading-spinner show" style="border-top-color: var(--brand-primary);"></div>
+            </div>
+        </div>
+
+        <!-- Login Section (Initially hidden by JS) -->
+        <div id="login-section" class="setup-section">
+            <div class="glass-card">
+                <div class="login-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>
+                </div>
+                <h2 class="login-title">Get started with Prompt Helper Gemini</h2>
+                <p class="login-subtitle">Sign in to unlock one-click prompt improvement on ChatGPT, Gemini & more.</p>
+                <button id="google-signin-button" class="premium-button" style="background: var(--surface-elevated); color: var(--text-main);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 10px; flex-shrink: 0;">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Continue with Google
+                </button>
+                <div id="auth-status" class="status-message"></div>
+            </div>
+        </div>
+
+        <!-- Main Interface (Tabs) -->
+        <div class="tabs" id="main-tabs" style="display: none;">
+            <button class="tab-button active" data-tab="enhance">Build</button>
+            <button class="tab-button" data-tab="ask">Ask</button>
+            <button class="tab-button" data-tab="recent">History</button>
+            <button class="tab-button" data-tab="premium">Pro</button>
+            <button class="tab-button" data-tab="setup">Settings</button>
+        </div>
+
+        <!-- Enhance Tab -->
+        <div id="enhance-section" class="setup-section active">
+            <div class="glass-card">
+                <div id="usage-indicator" class="info-box" style="background: var(--brand-gradient-soft); border: 1px solid rgba(0, 122, 255, 0.15); border-left: 4px solid var(--brand-primary); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; font-weight: 600;">Free Balance: <span id="enhancements-usage" style="color: var(--brand-primary);">0 / 10</span></span>
+                        <button id="upgrade-usage-button" style="background: var(--brand-primary); color: white; border: none; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer;">Upgrade</button>
+                    </div>
+                </div>
+
+                <div class="mode-selector">
+                    <button class="mode-option active" data-mode="TEXT_ENHANCEMENT">Text</button>
+                    <button class="mode-option" data-mode="CODE_ENHANCEMENT">Code</button>
+                    <button class="mode-option" data-mode="IMAGE_ENHANCEMENT">Image</button>
+                    <button class="mode-option" data-mode="VIDEO_ENHANCEMENT">Video</button>
+                </div>
+
+                <textarea id="prompt-input" class="premium-textarea" placeholder="Paste your raw idea here..."></textarea>
+
+                <div id="style-selector-container" class="style-selector-integrated">
+                    <button id="style-selector-button" class="style-selector-button">
+                        <span style="color: var(--text-muted); font-size: 13px;">Style: <span id="style-selector-value" style="color: var(--text-main); font-weight: 600;">Default</span></span>
+                        <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="#86868B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <div id="style-selector-dropdown" class="style-selector-dropdown">
+                        <div id="style-selector-options"></div>
+                    </div>
+                </div>
+
+                <button id="enhance-button" class="premium-button">
+                    <span id="enhance-button-text">Improve prompt</span>
+                    <div id="enhance-spinner" class="loading-spinner"></div>
+                </button>
+
+                <div id="status-message" class="status-message"></div>
+
+                <div id="result-container" class="result-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-size: 13px; font-weight: 700; color: var(--brand-primary);">Refined prompt</span>
+                        <button id="copy-button" class="premium-button-secondary" style="padding: 6px 12px; font-size: 12px;">Copy Result</button>
+                    </div>
+                    <div id="result-text" class="result-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ask Tab -->
+        <div id="ask-section" class="setup-section">
+            <div class="glass-card">
+                <h2 class="section-title">Direct Inquiry</h2>
+                <div id="ask-usage-indicator" class="info-box" style="background: var(--brand-gradient-soft); border: 1px solid rgba(0, 122, 255, 0.15); border-left: 4px solid var(--brand-primary); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; font-weight: 600;">Balance: <span id="ask-questions-usage" style="color: var(--brand-primary);">0 / 5</span></span>
+                        <button id="ask-upgrade-usage-button" style="background: var(--brand-primary); color: white; border: none; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer;">Upgrade</button>
+                    </div>
+                </div>
+                <textarea id="ask-input" class="premium-textarea" placeholder="How can I help you today?"></textarea>
+                
+                <div class="ask-toggle-card">
+                    <div class="ask-toggle-label-wrap">
+                        <span class="ask-toggle-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>
+                        </span>
+                        <label for="enhance-question-toggle" class="ask-toggle-label">
+                            <span class="ask-toggle-text">Apply auto-improve before sending</span>
+                        </label>
+                    </div>
+                    <span class="ask-checkbox-wrap">
+                        <input type="checkbox" id="enhance-question-toggle">
+                        <span class="ask-checkbox-custom" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+                        </span>
+                    </span>
+                </div>
+
+                <button id="ask-button" class="premium-button" style="margin-top: 8px;">
+                    <span id="ask-button-text">Ask AI</span>
+                    <div id="ask-spinner" class="loading-spinner"></div>
+                </button>
+                <div id="ask-status-message" class="status-message"></div>
+                <div id="ask-result-container" class="result-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-size: 13px; font-weight: 700; color: var(--brand-primary);">AI response</span>
+                        <button id="ask-copy-button" class="premium-button-secondary" style="padding: 6px 12px; font-size: 12px;">Copy</button>
+                    </div>
+                    <div id="ask-result-text" class="result-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="recent-section" class="setup-section">
+            <div class="glass-card">
+                <h2 class="section-title">Timeline</h2>
+                <div id="history-container"></div>
+                <div id="history-empty">
+                    <div class="history-empty-icon">📝</div>
+                    <p>No prompts yet. Your refined prompts will appear here.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Premium Tab -->
+        <div id="premium-section" class="setup-section setup-section-scrollable">
+            <div class="glass-card premium-tab-card" style="padding: 0; border: none; overflow: hidden; border-radius: var(--radius-main); box-shadow: var(--shadow-float);">
+                <div class="premium-badge">
+                    <div class="pro-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>
+                    </div>
+                    <h2>Prompt Helper Gemini</h2>
+                    <p>Free vs Pro — see what you get</p>
+                </div>
+                
+                <div style="padding: 24px; background: var(--surface-elevated);">
+                    <div id="subscription-status" class="premium-plan-pill" style="display: block; text-align: center; width: 100%; box-sizing: border-box;">
+                        <span style="font-size: 13px; font-weight: 600;">Your plan: <span id="subscription-status-text">Checking...</span></span>
+                    </div>
+
+                    <div id="subscription-loading" style="text-align: center; padding: 20px;"><div class="loading-spinner show" style="border-top-color: var(--brand-primary);"></div></div>
+                    
+                    <div id="pricing-plans" style="display: none;">
+                        <div class="plan-comparison">
+                            <div class="plan-card free-plan">
+                                <div class="plan-card-title">Free</div>
+                                <div class="plan-row"><span class="plan-limit">Prompt enhancements</span><span class="plan-value">10/week</span></div>
+                                <div class="plan-row"><span class="plan-limit">AI questions</span><span class="plan-value">5/week</span></div>
+                                <div class="plan-row"><span class="plan-limit">History</span><span class="plan-value">1 item</span></div>
+                                <div class="plan-row"><span class="plan-limit">Styles</span><span class="plan-value">Default only</span></div>
+                            </div>
+                            <div class="plan-card pro-plan">
+                                <div class="plan-card-title">Pro</div>
+                                <div class="plan-row"><span class="plan-check">✓</span><span>Unlimited enhancements</span></div>
+                                <div class="plan-row"><span class="plan-check">✓</span><span>Unlimited questions</span></div>
+                                <div class="plan-row"><span class="plan-check">✓</span><span>Full history</span></div>
+                                <div class="plan-row"><span class="plan-check">✓</span><span>Custom styles</span></div>
+                                <div class="plan-row"><span class="plan-check">✓</span><span>Priority speed</span></div>
+                            </div>
+                        </div>
+                        <div class="pro-cta-wrap">
+                            <p id="premium-sign-in-notice" style="display: none; font-size: 12px; color: var(--text-muted); margin: 0 0 12px 0; line-height: 1.4;">Sign in with Google to upgrade. Your subscription will work on all your devices.</p>
+                            <button type="button" id="subscribe-premium-button" class="subscribe-pro-btn" data-price-id="">
+                                Upgrade to Pro — $19.99/mo
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="active-subscription" style="display: none;">
+                        <div class="info-box" style="background: rgba(52, 199, 89, 0.08); border: 1px solid rgba(52, 199, 89, 0.25); color: #1E6730; margin-bottom: 20px; border-radius: var(--radius-sm); padding: 14px;">
+                            <p id="subscription-details" style="margin: 0; font-size: 13px; line-height: 1.4;"></p>
+                        </div>
+                        <button id="manage-subscription-button" class="premium-button-secondary" style="width: 100%;">Billing Portal</button>
+                    </div>
+
+                    <div id="sync-subscription-row" style="display: none; margin-top: 16px; text-align: center;">
+                        <p style="font-size: 13px; color: var(--text-muted); margin: 0 0 8px 0;">Already paid but still see Free?</p>
+                        <button id="sync-subscription-button" type="button" class="premium-button-secondary">Sync my subscription</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="setup-section" class="setup-section">
+            <div class="glass-card" id="user-info" style="display: none; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img id="user-avatar" style="width: 44px; height: 44px; border-radius: var(--radius-circle); border: 2px solid white; box-shadow: var(--shadow-subtle);">
+                        <div>
+                            <div id="user-name" style="font-weight: 700; font-size: 15px;"></div>
+                            <div id="user-email" style="font-size: 12px; color: var(--text-muted);"></div>
+                        </div>
+                    </div>
+                    <button id="logout-button" class="premium-button-secondary" style="color: #FF3B30; padding: 6px 12px; font-size: 12px; border-radius: 20px;">Sign Out</button>
+                </div>
+            </div>
+
+            <div class="glass-card" id="advanced-section">
+                <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.02em;">Preferences</h3>
+                
+                <div class="toggle-card">
+                    <div style="display: flex; align-items: center; gap: 0; flex: 1; min-width: 0;">
+                        <span class="improve-button-preview" title="Preview of the in-chat button" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>
+                        </span>
+                        <span style="font-size: 13px; font-weight: 500;">In-Chat "Improve" Button</span>
+                    </div>
+                    <input type="checkbox" id="inject-button-toggle" checked style="accent-color: var(--brand-primary);">
+                </div>
+                <div class="toggle-card">
+                    <span style="font-size: 13px; font-weight: 500;">Auto-send after improve</span>
+                    <input type="checkbox" id="auto-send-toggle" style="accent-color: var(--brand-primary);">
+                </div>
+                <div class="toggle-card">
+                    <span style="font-size: 13px; font-weight: 500;">Visual Style Selector</span>
+                    <input type="checkbox" id="show-style-selector-toggle" style="accent-color: var(--brand-primary);">
+                </div>
+                
+                <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--glass-stroke);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <h3 style="font-size: 14px; font-weight: 700; margin: 0;">UI Zoom</h3>
+                        <span id="zoom-level" style="font-size: 12px; font-weight: 700; color: var(--brand-primary);">100%</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="zoom-out-button" class="premium-button-secondary" style="flex: 1;">-</button>
+                        <button id="zoom-reset-button" class="premium-button-secondary" style="flex: 1;">Reset</button>
+                        <button id="zoom-in-button" class="premium-button-secondary" style="flex: 1;">+</button>
+                    </div>
+                </div>
+
+                <div class="custom-styles-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--glass-stroke);">
+                    <h3 class="section-heading">Custom Engineering Styles</h3>
+                    <div id="custom-styles-list"></div>
+                    <button id="add-custom-style-button" class="add-custom-style-btn">Create New Style</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="config.js"></script>
+    <script src="stripe-config.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

@@ -10,7 +10,7 @@ Based on the current implementation, **free users get full access** to all core 
    - ✅ All enhancement modes (Text, Code, Image, Video)
    - ✅ Basic style templates (default, concise, detailed, etc.)
    - ✅ Custom style creation
-   - ✅ "Improve" button in AI chat interfaces
+   - ✅ ✨ button in AI chat interfaces
    - ✅ Keyboard shortcuts (`Ctrl+Shift+E`)
    - ✅ Context menu enhancements
 
@@ -22,7 +22,7 @@ Based on the current implementation, **free users get full access** to all core 
    - ✅ View recent enhancements
    - ✅ Copy enhanced prompts
    - ✅ Reuse previous prompts
-   - ✅ History saved locally (last 50 items)
+   - ✅ History saved locally (last 1 item)
 
 4. **Multi-Provider Support**
    - ✅ Google Gemini
@@ -57,8 +57,8 @@ To create a proper freemium model, you should implement these limits:
 // Free tier limits
 const FREE_TIER_LIMITS = {
   enhancements_per_week: 10,       // 10 enhancements per week
-  history_items: 20,               // Keep last 20 items (vs 50 for Premium)
-  ask_questions_per_day: 5,        // 5 questions per day
+  history_items: 1,                // Keep last 1 item (vs 50+ for Premium)
+  ask_questions_per_week: 5,       // 5 questions per week
   custom_styles: 2,                // Only 2 custom styles
   advanced_templates: false,       // No access to advanced templates
   export_history: false,           // No export feature
@@ -177,14 +177,17 @@ async function enhancePrompt(prompt) {
 ```
 Week 1:
 ✅ Enhanced 10 prompts (limit reached)
-❌ "You've reached your weekly limit. Upgrade for unlimited!"
+✅ Asked 5 questions (limit reached)
+❌ "You've reached your weekly limits. Upgrade for unlimited!"
 
 Week 2:
 ✅ Enhanced 10 prompts (limit reset)
-❌ Limit reached again
+✅ Asked 5 questions (limit reset)
+❌ Limits reached again
 
 After upgrade:
 ✅ Unlimited enhancements
+✅ Unlimited questions
 ✅ All premium features unlocked
 ```
 

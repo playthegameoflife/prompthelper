@@ -14,8 +14,8 @@ export class InjectionManager {
      */
     static async hasApiKey() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(['userGeminiApiKey'], (result) => {
-                const hasKey = !!result.userGeminiApiKey;
+            chrome.storage.local.get(['userGeminiApiKey', 'defaultGeminiApiKey'], (result) => {
+                const hasKey = !!(result.userGeminiApiKey || result.defaultGeminiApiKey);
                 resolve(hasKey);
             });
         });
@@ -87,22 +87,25 @@ export class InjectionManager {
                 enhancerDiv.appendChild(statusArea);
                 enhancerDiv.appendChild(enhanceButton);
 
-                // Ensure container is flex
-                const containerStyle = window.getComputedStyle(targetContainer);
-                if (!containerStyle.display.includes('flex')) {
-                    targetContainer.style.display = 'flex';
-                    targetContainer.style.alignItems = 'center';
-                    targetContainer.style.gap = '6px';
-                }
-
-                // Verify send button is still in the container before inserting
-                if (!targetContainer.contains(sendButton)) {
+                // Use send button's direct parent so enhance is always directly left of send (never above/below)
+                const insertParent = sendButton.parentElement;
+                if (!insertParent || !insertParent.contains(sendButton)) {
                     reject(new Error('Send button is not in the target container'));
                     return;
                 }
 
+                // Force horizontal row so enhance button stays directly to the left of send
+                insertParent.style.setProperty('display', 'flex', 'important');
+                insertParent.style.setProperty('flex-direction', 'row', 'important');
+                insertParent.style.setProperty('align-items', 'center', 'important');
+                insertParent.style.setProperty('flex-wrap', 'nowrap', 'important');
+                if (!insertParent.style.gap) insertParent.style.gap = '6px';
+
                 // Insert before send button
-                targetContainer.insertBefore(enhancerDiv, sendButton);
+                insertParent.insertBefore(enhancerDiv, sendButton);
+
+                // Preload handler so first click doesn't wait for dynamic import
+                import('../content.js').catch(() => {});
 
                 // Verify and set up protection
                 setTimeout(() => {
@@ -136,6 +139,10 @@ export class InjectionManager {
         enhancerDiv.style.setProperty('z-index', '999999', 'important');
         enhancerDiv.style.setProperty('visibility', 'visible', 'important');
         enhancerDiv.style.setProperty('opacity', '1', 'important');
+        // Keep button in the same row as send button on all sites (no wrap, no shrink)
+        enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+        enhancerDiv.style.setProperty('position', 'relative', 'important');
+        enhancerDiv.style.setProperty('align-self', 'center', 'important');
         return enhancerDiv;
     }
 
@@ -154,31 +161,6 @@ export class InjectionManager {
             overflow: hidden;
         `;
         
-        const loadingSpinner = document.createElement('div');
-        loadingSpinner.className = 'spinner';
-        loadingSpinner.style.cssText = `
-            border: 2.5px solid rgba(0, 122, 255, 0.15); 
-            border-top: 2.5px solid #007AFF; 
-            border-radius: 50%; 
-            width: 18px; 
-            height: 18px; 
-            animation: spin 0.7s linear infinite; 
-            display: none;
-        `;
-        
-        // Add spin animation if not already present
-        if (!document.getElementById('pa-spin-animation')) {
-            const style = document.createElement('style');
-            style.id = 'pa-spin-animation';
-            style.textContent = `
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            `;
-            document.head.appendChild(style);
-        }
-        
         const statusMessage = document.createElement('div');
         statusMessage.id = 'prompt-architect-status';
         statusMessage.style.cssText = `
@@ -194,7 +176,6 @@ export class InjectionManager {
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         `;
         
-        statusArea.appendChild(loadingSpinner);
         statusArea.appendChild(statusMessage);
         return statusArea;
     }
@@ -227,92 +208,47 @@ export class InjectionManager {
           ? 'Improve prompt with AI (Cmd+Shift+E)' 
           : 'Improve prompt with AI (Ctrl+Shift+E)';
         
-        // Create button content container
-        const buttonContent = document.createElement('div');
-        buttonContent.style.cssText = 'display: flex; align-items: center; gap: 6px;';
-        
-        const buttonText = document.createElement('span');
-        buttonText.textContent = 'Improve';
-        buttonContent.appendChild(buttonText);
-        
-        // Create mode icon (tiny icon on the button)
-        const modeIcon = document.createElement('span');
-        modeIcon.id = 'pa-mode-icon';
-        modeIcon.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 16px;
-            height: 16px;
-            font-size: 12px;
-            cursor: pointer;
-            border-radius: 3px;
-            transition: background-color 0.2s;
-            user-select: none;
-        `;
-        modeIcon.title = 'Click to change mode';
-        
-        // Define modes in order for cycling
-        const modes = [
-            { value: 'TEXT_ENHANCEMENT', icon: '📝' },
-            { value: 'CODE_ENHANCEMENT', icon: '💻' },
-            { value: 'IMAGE_ENHANCEMENT', icon: '🎨' },
-            { value: 'VIDEO_ENHANCEMENT', icon: '🎬' }
-        ];
-        
-        // Function to update icon based on current mode
-        const updateModeIcon = (mode) => {
-            const modeData = modes.find(m => m.value === mode);
-            if (modeData) {
-                modeIcon.textContent = modeData.icon;
-            }
-        };
-        
-        // Load current mode and set icon
-        chrome.storage.local.get(['buttonEnhancementMode'], (result) => {
-            const currentMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-            updateModeIcon(currentMode);
-        });
-        
-        // Hover effect for icon
-        modeIcon.onmouseenter = () => {
-            modeIcon.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-        };
-        modeIcon.onmouseleave = () => {
-            modeIcon.style.backgroundColor = 'transparent';
-        };
-        
-        buttonContent.appendChild(modeIcon);
-        button.appendChild(buttonContent);
-        
-        // Cycle through modes on icon click
-        modeIcon.onclick = (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            
-            chrome.storage.local.get(['buttonEnhancementMode'], (result) => {
-                const currentMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-                const currentIndex = modes.findIndex(m => m.value === currentMode);
-                const nextIndex = (currentIndex + 1) % modes.length;
-                const nextMode = modes[nextIndex];
-                
-                chrome.storage.local.set({ buttonEnhancementMode: nextMode.value }, () => {
-                    updateModeIcon(nextMode.value);
-                });
-            });
-        };
-        
-        // Apply styling
-        button.className = 'text-white font-semibold text-sm';
-        button.style.setProperty('height', finalDesign.height, 'important');
-        button.style.setProperty('padding', '0 14px', 'important');
+        const size = 40;
+        const hex = (finalDesign.primary || '#1a73e8').replace('#', '');
+        const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+        const glow = `rgba(${r},${g},${b},0.35)`;
+        const glowHover = `rgba(${r},${g},${b},0.5)`;
+
+        const sparkleSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>`;
+        const iconWrap = document.createElement('span');
+        iconWrap.className = 'pa-enhance-button-icon';
+        iconWrap.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;';
+        iconWrap.innerHTML = sparkleSvg;
+        button.appendChild(iconWrap);
+
+        const spinner = document.createElement('span');
+        spinner.id = 'pa-enhance-button-spinner';
+        spinner.className = 'pa-enhance-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        spinner.style.cssText = 'position:absolute;inset:0;margin:auto;display:none;align-items:center;justify-content:center;width:20px;height:20px;pointer-events:none;border:2px solid rgba(255,255,255,0.35);border-top-color:white;border-radius:50%;animation:pa-spinner-rotate 0.7s linear infinite;';
+        button.appendChild(spinner);
+
+        if (!document.getElementById('pa-button-animations')) {
+            const style = document.createElement('style');
+            style.id = 'pa-button-animations';
+            style.textContent = `
+                @keyframes pa-spinner-rotate { to { transform: rotate(360deg); } }
+                @keyframes pa-loading-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.75; transform: scale(0.96); } }
+                @keyframes pa-success-pop { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 70% { transform: scale(0.98); } 100% { transform: scale(1); } }
+            `;
+            (document.head || document.documentElement).appendChild(style);
+        }
+
+        button.style.setProperty('position', 'relative', 'important');
+        button.className = 'text-white text-sm';
+        button.style.setProperty('width', size + 'px', 'important');
+        button.style.setProperty('height', size + 'px', 'important');
+        button.style.setProperty('padding', '0', 'important');
+        button.style.setProperty('min-width', size + 'px', 'important');
         button.style.setProperty('background', finalDesign.primary, 'important');
         button.style.setProperty('border', 'none', 'important');
         button.style.setProperty('white-space', 'nowrap', 'important');
-        button.style.setProperty('font-family', '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'important');
-        button.style.setProperty('font-size', finalDesign.fontSize, 'important');
-        button.style.setProperty('font-weight', finalDesign.fontWeight, 'important');
-        button.style.setProperty('letter-spacing', '-0.01em', 'important');
+        button.style.setProperty('font-family', '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'important');
         button.style.setProperty('flex-shrink', '0', 'important');
         button.style.setProperty('cursor', 'pointer', 'important');
         button.style.setProperty('user-select', 'none', 'important');
@@ -322,23 +258,22 @@ export class InjectionManager {
         button.style.setProperty('visibility', 'visible', 'important');
         button.style.setProperty('opacity', '1', 'important');
         button.style.setProperty('z-index', '1000000', 'important');
-        button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
-        button.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        button.style.borderRadius = finalDesign.borderRadius;
-        
-        // Store original colors
+        button.style.borderRadius = '50%';
+        button.style.boxShadow = `0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.12) inset, 0 4px 16px ${glow}`;
+        button.style.transition = 'box-shadow 0.25s ease, background 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1)';
+
         button.dataset.originalColor = finalDesign.primary;
         button.dataset.originalHover = finalDesign.primaryHover;
-        
-        // Hover effect
+
         button.onmouseenter = () => {
             button.style.background = finalDesign.primaryHover;
-            button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
+            button.style.transform = 'translateY(-2px)';
+            button.style.boxShadow = `0 6px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.18) inset, 0 8px 24px ${glowHover}`;
         };
-        
         button.onmouseleave = () => {
             button.style.background = finalDesign.primary;
-            button.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
+            button.style.transform = 'translateY(0)';
+            button.style.boxShadow = `0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.12) inset, 0 4px 16px ${glow}`;
         };
         
         // Prevent form submission
@@ -356,41 +291,38 @@ export class InjectionManager {
             parentForm.addEventListener('submit', preventFormSubmit, true);
         }
         
-        // Button click handler - use stored button mode (no auto-detection)
+        // Always text enhancement (no mode selection)
         button.onclick = async (event) => {
-            // Don't trigger if clicking the mode icon
-            if (event.target === modeIcon || modeIcon.contains(event.target)) {
-                return;
-            }
-            
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            
-            // Get stored button mode
-            chrome.storage.local.get(['buttonEnhancementMode'], async (result) => {
-                const buttonMode = result.buttonEnhancementMode || 'TEXT_ENHANCEMENT';
-            
-            // Import and call handleButtonClick
-            const { handleButtonClick } = await import('../content.js');
-                handleButtonClick(inputElement, buttonMode, enhancerDiv);
-            });
-            
+            // Immediate feedback so user doesn't feel delay before loading state
+            button.disabled = true;
+            button.style.cursor = 'wait';
+            const iconEl = button.querySelector('.pa-enhance-button-icon');
+            const spinnerEl = button.querySelector('.pa-enhance-spinner');
+            if (iconEl) iconEl.style.display = 'none';
+            if (spinnerEl) spinnerEl.style.display = 'flex';
+            try {
+                const { handleButtonClick } = await import('../content.js');
+                await handleButtonClick(inputElement, 'TEXT_ENHANCEMENT', enhancerDiv);
+            } catch (err) {
+                if (typeof console !== 'undefined' && console.warn) console.warn('[Prompt Architect] Enhance click error:', err);
+                button.disabled = false;
+                button.style.cursor = '';
+                if (iconEl) iconEl.style.display = '';
+                if (spinnerEl) spinnerEl.style.display = 'none';
+            }
             return false;
         };
-        
+
         button.onmousedown = (event) => {
-            // Don't prevent default for mode icon clicks
-            if (event.target === modeIcon || modeIcon.contains(event.target)) {
-                return;
-            }
             event.preventDefault();
             event.stopPropagation();
-            button.style.opacity = '0.9';
+            button.style.transform = 'translateY(0) scale(0.96)';
         };
-        
         button.onmouseup = () => {
-            button.style.opacity = '1';
+            button.style.transform = '';
         };
         
         return button;

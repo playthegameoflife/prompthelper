@@ -3,10 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <title>Prompt Helper Gemini</title>
+    <!-- Content Security Policy for testing - allows Firebase CDN -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://www.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
     <!-- Version 2.0 - Recommended Models & Enhanced UI -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs - Modern Modular API -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM",
+            authDomain: "prompt-enhancer-ai.firebaseapp.com",
+            projectId: "prompt-enhancer-ai",
+            storageBucket: "prompt-enhancer-ai.firebasestorage.app",
+            messagingSenderId: "1097186279139",
+            appId: "1:1097186279139:web:4578ddc11ca5c5283f4fd6"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        // Configure Google provider
+        provider.setCustomParameters({
+            prompt: 'select_account'
+        });
+
+        // Make globally available
+        window.auth = auth;
+        window.provider = provider;
+        window.signInWithPopup = signInWithPopup;
+        window.signOut = signOut;
+        window.onAuthStateChanged = onAuthStateChanged;
+
+        console.log('Firebase initialized successfully with modern API');
+        console.log('window.auth set:', !!window.auth);
+    </script>
+    <script src="firebase-config.js"></script>
     <style>
         /* Premium Jony Ive-Inspired Design System */
         :root {
@@ -74,12 +113,12 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .header-title {
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 700;
             letter-spacing: -0.02em;
             color: var(--text-primary);
@@ -89,23 +128,23 @@
         /* Tab Navigation */
         .tabs {
             display: flex;
-            gap: var(--spacing-sm);
+            gap: 4px;
             background: rgba(255, 255, 255, 0.6);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             border: 0.5px solid var(--border-light);
             border-radius: var(--radius-md);
-            padding: 6px;
+            padding: 4px;
             box-shadow: var(--shadow-sm);
         }
 
         .tab-button {
             flex: 1;
-            padding: 10px 16px;
+            padding: 6px 8px;
             background: transparent;
             border: none;
             border-radius: var(--radius-sm);
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             letter-spacing: -0.01em;
             color: var(--text-secondary);
@@ -156,7 +195,7 @@
 
         /* Setup View */
         .setup-section {
-            display: none !important;
+            display: none;
             /* Ensure proper scrolling */
             overflow: visible;
         }
@@ -1337,22 +1376,103 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- EMERGENCY FALLBACK: Show something immediately if JS fails -->
+    <noscript>
+        <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+            <h1>JavaScript Required</h1>
+            <p>Please enable JavaScript to use this extension.</p>
+        </div>
+    </noscript>
+
+    <div class="container" id="main-container">
         <div class="header">
             <h1 class="header-title">Prompt Helper Gemini</h1>
         </div>
 
+        <!-- Login/Onboarding Section -->
+        <div id="login-section" class="setup-section" style="display: flex; flex-direction: column;">
+            <!-- EMERGENCY FALLBACK CONTENT -->
+            <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif; background: white; border-radius: 8px;">
+                <h2 style="color: #007AFF; margin-bottom: 10px;">🚀 Prompt Helper</h2>
+                <p style="color: #666; margin-bottom: 20px;">If you see this, JavaScript may not be loading properly.</p>
+                <button onclick="location.reload()" style="padding: 10px 20px; background: #007AFF; color: white; border: none; border-radius: 4px; cursor: pointer;">Reload</button>
+            </div>
+            <div class="glass-card" style="text-align: center; padding: var(--spacing-3xl);">
+                <div style="font-size: 48px; margin-bottom: var(--spacing-lg);">🚀</div>
+
+                <h1 style="margin: 0 0 var(--spacing-md) 0; font-size: 24px; font-weight: 700; color: var(--text-primary);">
+                    Welcome to Prompt Helper!
+                </h1>
+
+                <p style="margin: 0 0 var(--spacing-xl) 0; font-size: 16px; color: var(--text-secondary); line-height: 1.6;">
+                    Transform your prompts into powerful AI instructions. Get started with <strong>10 free enhancements</strong> per week!
+                </p>
+
+                <!-- Value Props -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-bottom: var(--spacing-2xl);">
+                    <div style="padding: var(--spacing-lg); background: rgba(0, 122, 255, 0.05); border-radius: var(--radius-md); border: 1px solid rgba(0, 122, 255, 0.1);">
+                        <div style="font-size: 24px; margin-bottom: var(--spacing-xs); line-height: 1;">Improve</div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Smart Enhancement</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">AI-powered prompt optimization</div>
+                    </div>
+
+                    <div style="padding: var(--spacing-lg); background: rgba(52, 199, 89, 0.05); border-radius: var(--radius-md); border: 1px solid rgba(52, 199, 89, 0.1);">
+                        <div style="font-size: 24px; margin-bottom: var(--spacing-xs);">🆓</div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Free to Try</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">10 enhancements per week</div>
+                    </div>
+
+                    <div style="padding: var(--spacing-lg); background: rgba(255, 193, 7, 0.05); border-radius: var(--radius-md); border: 1px solid rgba(255, 193, 7, 0.1);">
+                        <div style="font-size: 24px; margin-bottom: var(--spacing-xs);">⚡</div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Instant Results</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Works on ChatGPT, Gemini & more</div>
+                    </div>
+
+                    <div style="padding: var(--spacing-lg); background: rgba(102, 126, 234, 0.05); border-radius: var(--radius-md); border: 1px solid rgba(102, 126, 234, 0.1);">
+                        <div style="font-size: 24px; margin-bottom: var(--spacing-xs);">⭐</div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Premium Upgrade</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Unlimited usage available</div>
+                    </div>
+                </div>
+
+                <button id="google-signin-button" class="google-signin-button" style="width: 100%; max-width: 280px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 20px; background: white; border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; font-weight: 500; color: #3c4043; cursor: pointer; transition: background-color 0.2s;">
+                    <svg width="18" height="18" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Sign in with Google
+                </button>
+
+                <div id="auth-status" style="margin-top: var(--spacing-md); font-size: 12px; color: var(--text-secondary); display: none;">
+                    Signing you in...
+                </div>
+
+                <div style="margin-top: var(--spacing-md); padding: 8px; background: rgba(255, 193, 7, 0.1); border-radius: 4px; border: 1px solid rgba(255, 193, 7, 0.2);">
+                    <p style="margin: 0; font-size: 11px; color: var(--text-secondary); text-align: center;">
+                        <strong>Debug:</strong> If you don't see the login screen, you might already be signed in.
+                        <button id="force-signout" style="margin-left: 8px; padding: 2px 6px; font-size: 10px; background: #FF3B30; color: white; border: none; border-radius: 3px; cursor: pointer;">Force Sign Out</button>
+                    </p>
+                </div>
+
+                <p style="margin: var(--spacing-lg) 0 0 0; font-size: 12px; color: var(--text-tertiary);">
+                    By continuing, you agree to our terms of service.
+                </p>
+            </div>
+        </div>
+
         <!-- Tab Navigation -->
-        <div class="tabs">
-            <button class="tab-button active" data-tab="enhance">Enhance</button>
-            <button class="tab-button" data-tab="ask">Ask</button>
-            <button class="tab-button" data-tab="recent">Recent</button>
-            <button class="tab-button" data-tab="premium">Premium</button>
-            <button class="tab-button" data-tab="setup">Setup</button>
+        <div class="tabs" style="display: none;">
+            <button class="tab-button active" data-tab="enhance" title="Enhance Prompts">Enhance</button>
+            <button class="tab-button" data-tab="ask" title="Ask AI Questions">💭</button>
+            <button class="tab-button" data-tab="recent" title="Recent History">🕒</button>
+            <button class="tab-button" data-tab="premium" title="Premium Features">⭐</button>
+            <button class="tab-button" data-tab="setup" title="Settings">⚙️</button>
         </div>
 
         <!-- Enhance Tab -->
-        <div id="enhance-section" class="setup-section active">
+        <div id="enhance-section" class="setup-section" style="display: none;">
             <div class="glass-card">
                 <!-- Setup CTA (shown when no API key) -->
                 <div id="api-key-cta" style="display: none; margin-bottom: var(--spacing-xl);">
@@ -1393,10 +1513,26 @@
                 </div>
 
                 <h2 class="section-title">Enhance Your Prompt</h2>
-                
-                <textarea 
-                    id="prompt-input" 
-                    class="premium-textarea" 
+
+                <!-- Usage Indicator (shown for free users) -->
+                <div id="usage-indicator" class="info-box" style="display: none; margin-bottom: var(--spacing-lg);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>Free Tier Usage</strong>
+                            <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
+                                <span id="enhancements-usage">0 / 10</span> enhancements this week<br>
+                                <span id="questions-usage">0 / 5</span> questions this week
+                            </div>
+                        </div>
+                        <button id="upgrade-usage-button" class="premium-button" style="padding: 6px 12px; font-size: 12px;">
+                            Upgrade
+                        </button>
+                    </div>
+                </div>
+
+                <textarea
+                    id="prompt-input"
+                    class="premium-textarea"
                     placeholder="Enter your prompt here..."
                 ></textarea>
 
@@ -1451,11 +1587,26 @@
         </div>
         
         <!-- Ask Tab -->
-        <div id="ask-section" class="setup-section">
+        <div id="ask-section" class="setup-section" style="display: none;">
             <div class="glass-card">
                 <h2 class="section-title">Ask a Question</h2>
                 <p class="section-subtitle">Get direct answers to your questions</p>
-                
+
+                <!-- Usage Indicator for Ask (shown for free users) -->
+                <div id="ask-usage-indicator" class="info-box" style="display: none; margin-bottom: var(--spacing-lg);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>Weekly Questions</strong>
+                            <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
+                                <span id="ask-questions-usage">0 / 5</span> used this week
+                            </div>
+                        </div>
+                        <button id="ask-upgrade-usage-button" class="premium-button" style="padding: 6px 12px; font-size: 12px;">
+                            Upgrade
+                        </button>
+                    </div>
+                </div>
+
                 <textarea 
                     id="ask-input" 
                     class="premium-textarea" 
@@ -1492,7 +1643,7 @@
         </div>
         
         <!-- Recent Tab -->
-        <div id="recent-section" class="setup-section">
+        <div id="recent-section" class="setup-section" style="display: none;">
             <div class="glass-card">
                 <h2 class="section-title">Recent Enhancements</h2>
                 <p class="section-subtitle">View and reuse your recently enhanced prompts</p>
@@ -1510,7 +1661,7 @@
         </div>
         
         <!-- Premium Tab -->
-        <div id="premium-section" class="setup-section">
+        <div id="premium-section" class="setup-section" style="display: none;">
             <div class="glass-card">
                 <div class="section-header">
                     <div class="section-header-icon">⭐</div>
@@ -1543,9 +1694,9 @@
                         </div>
                         <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
                             <li>10 prompt enhancements per week</li>
-                            <li>5 "Ask" questions per day</li>
+                            <li>5 "Ask" questions per week</li>
                             <li>Basic style templates</li>
-                            <li>Last 20 history items</li>
+                            <li>Last 1 history item</li>
                             <li>Community support</li>
                         </ul>
                     </div>
@@ -1591,6 +1742,12 @@
                     </div>
                 </div>
                 
+                <!-- Already paid? Sync subscription (shown when status is Free) -->
+                <div id="sync-subscription-row" style="display: none; margin-top: var(--spacing-lg); text-align: center;">
+                    <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 var(--spacing-sm);">Already paid but still see Free?</p>
+                    <button id="sync-subscription-button" class="premium-button-secondary" type="button">Sync my subscription</button>
+                </div>
+                
                 <!-- Loading State -->
                 <div id="subscription-loading" style="text-align: center; padding: var(--spacing-2xl);">
                     <div class="loading-spinner show"></div>
@@ -1600,50 +1757,43 @@
         </div>
         
         <!-- Setup Tab -->
-        <div id="setup-section" class="setup-section">
+        <div id="setup-section" class="setup-section" style="display: none;">
             <div class="glass-card">
                 <div class="section-header">
-                    <div class="section-header-icon">🔑</div>
+                    <div class="section-header-icon">⚙️</div>
                     <div class="section-header-content">
-                        <h2 class="section-title">Gemini API Key Setup</h2>
-                        <p class="section-subtitle">Configure your Google Gemini API key</p>
+                        <h2 class="section-title">Settings</h2>
+                        <p class="section-subtitle">Customize your experience</p>
                     </div>
                 </div>
-                
-                <div class="info-box">
-                    <p>
-                        <strong>Why do I need this?</strong><br>
-                        Your Gemini API key enables prompt enhancement. It's stored locally and never shared. Gemini 2.5 Flash Lite offers a generous free tier and low-cost paid usage.
+
+                <div class="info-box" style="background: rgba(52, 199, 89, 0.1); border-left: 3px solid #30D158;">
+                    <p style="margin: 0;">
+                        <strong>✅ Ready to Use!</strong><br>
+                        The extension works immediately with no setup required. Customize your preferences below.
                     </p>
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Google Gemini API Key</label>
-                    <input 
-                        type="password" 
-                        id="api-key-input" 
-                        class="premium-input monospace-input" 
-                        placeholder="AIza... (paste your Gemini API key here)"
-                    />
-                    <div id="api-key-help" class="help-text">
-                        <a id="api-key-link" href="https://aistudio.google.com/api-keys" target="_blank" class="link">Get your Gemini API key</a>
-                        <br>
-                        <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: block;">
-                            Using Gemini 2.5 Flash Lite - Fast, efficient, and cost-effective
-                        </span>
+
+                <!-- User Account Section -->
+                <div id="user-account-section" style="margin-bottom: var(--spacing-xl);">
+                    <h3 class="section-title" style="font-size: 16px; margin-bottom: var(--spacing-md);">Account</h3>
+                    <div id="user-info" style="display: none; margin-bottom: var(--spacing-md);">
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                            <img id="user-avatar" style="width: 32px; height: 32px; border-radius: 50%;" alt="Avatar">
+                            <div>
+                                <div id="user-name" style="font-weight: 600; color: var(--text-primary);"></div>
+                                <div id="user-email" style="font-size: 12px; color: var(--text-secondary);"></div>
+                            </div>
+                        </div>
                     </div>
+                    <button id="logout-button" class="premium-button-secondary" style="width: 100%; display: none;">
+                        Sign Out
+                    </button>
                 </div>
-                
-                <button id="save-button" class="premium-button">
-                    <span class="button-with-icon">
-                        <span>💾</span>
-                        <span>Save & Activate</span>
-                    </span>
-                </button>
-                
+
             </div>
 
-            <!-- Advanced Settings Section (merged into Setup) -->
+            <!-- Advanced Settings Section -->
             <div id="advanced-section" style="margin-top: var(--spacing-2xl); padding-top: var(--spacing-2xl); border-top: 1px solid var(--border-subtle);">
             <div class="glass-card">
                 <div class="section-header">
@@ -1739,7 +1889,6 @@
             </div>
         </div>
     </div>
-    <script src="utils/subscription-manager.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ const OBFUSCATION_OPTIONS = {
     deadCodeInjectionThreshold: 0.4,
     debugProtection: false, // Set to false to avoid breaking extension
     debugProtectionInterval: 0,
-    disableConsoleOutput: true,
+    disableConsoleOutput: false, // Set true for production to strip console
     identifierNamesGenerator: 'hexadecimal',
     log: false,
     numbersToExpressions: true,
@@ -46,13 +46,19 @@ const JS_FILES = [
 // Files to copy as-is
 const COPY_FILES = [
     'popup.html',
+    'popup-extension.html',
+    'test-popup.html',
     'manifest.json',
-    'LICENSE'
+    'LICENSE',
+    'firebase-config.js',
+    'config.js',
+    'stripe-config.js'
 ];
 
 // Directories to copy
 const COPY_DIRS = [
-    'icons'
+    'icons',
+    'libs'
 ];
 
 async function build() {
@@ -80,9 +86,8 @@ async function build() {
         // First minify with terser
         const minified = await minify(code, {
             compress: {
-                drop_console: true, // Remove console.log statements
                 drop_debugger: true,
-                pure_funcs: ['console.log', 'console.info', 'console.debug'],
+                // pure_funcs: ['console.log', 'console.info', 'console.warn', 'console.debug'], // Uncomment for production to remove debug logs
                 passes: 2
             },
             mangle: {
