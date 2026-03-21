@@ -9,7 +9,7 @@ Your extension uses **Firebase Cloud Functions** at `https://api-clyep56cdq-uc.a
 ### 1. **Firebase API Key** ✅ CONFIGURED
 - **Location:** `firebase-config.js`
 - **Status:** ✅ Configured
-- **Key:** `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
+- **Key:** Set in `firebase-config.js` (get from Firebase Console; never commit real key)
 - **Purpose:** Firebase Authentication
 
 ### 2. **Stripe Secret Key** ✅ CONFIGURED

@@ -11,7 +11,7 @@
 
 ### 2. **Sign In** ✅ CONFIGURED
 - **Firebase Config:** Set in `firebase-config.js` ✅
-- **API Key:** `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM` ✅
+- **API Key:** `YOUR_FIREBASE_API_KEY` (set in firebase-config.js) ✅
 - **OAuth Client:** "Prompt Helper" Chrome Extension configured ✅
 - **Status:** ✅ **SHOULD WORK**
 

@@ -1819,21 +1819,14 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
 
 /** Storage key for persisted Firebase user (must match popup.js); when set, user is signed in */
 const STORAGE_FIREBASE_USER = 'pa_firebase_user';
-/** When true, skip Google sign-in (development mode); in-chat button and popup treat as signed in */
-const STORAGE_DEV_BYPASS_AUTH = 'pa_dev_bypass_auth';
 
 /**
  * Checks if the user is signed in (Firebase auth persisted in chrome.storage by popup).
  * In-chat Improve button is shown only when signed in for a consistent experience.
- * When dev bypass is on (pa_dev_bypass_auth), returns true without requiring Google auth.
  */
 async function isUserSignedIn() {
     return new Promise((resolve) => {
-        chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH, STORAGE_FIREBASE_USER], (result) => {
-            if (result[STORAGE_DEV_BYPASS_AUTH]) {
-                resolve(true);
-                return;
-            }
+        chrome.storage.local.get([STORAGE_FIREBASE_USER], (result) => {
             const user = result[STORAGE_FIREBASE_USER];
             resolve(!!(user && user.uid));
         });

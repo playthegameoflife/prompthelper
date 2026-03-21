@@ -5,7 +5,7 @@
 
 // Firebase configuration for compatibility libraries
 const firebaseConfig = {
-  apiKey: "AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM",
+  apiKey: "YOUR_FIREBASE_API_KEY", // Get from Firebase Console; never commit a real key to git
   authDomain: "prompt-enhancer-ai.firebaseapp.com",
   projectId: "prompt-enhancer-ai",
   storageBucket: "prompt-enhancer-ai.firebasestorage.app",

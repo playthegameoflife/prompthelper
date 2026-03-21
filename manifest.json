@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Prompt Helper Gemini",
   "short_name": "Prompt Helper Gemini",
-  "version": "2.3.1",
+  "version": "2.3.8",
   "description": "Intelligent prompt refinement for AI chats. Enhance Text, Code, Image, and Video prompts with one click.",
   "permissions": [
     "activeTab",
@@ -12,7 +12,7 @@
     "identity"
   ],
   "oauth2": {
-    "client_id": "1097186279139-00aqbna3di7fch3m5mbvov2824lri3bq.apps.googleusercontent.com",
+    "client_id": "1097186279139-27imo3kn8rdj5ldsbj05s4jb5h3n1b1p.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile"

@@ -879,9 +879,11 @@ Crucially, your output MUST contain ONLY the improved prompt text itself. Do not
 // Instruction Templates - Preset variations for each mode
 const INSTRUCTION_TEMPLATES = {
     TEXT_ENHANCEMENT: {
-        'default': SYSTEM_INSTRUCTIONS.TEXT_ENHANCEMENT,
+        'default': `You are a prompt engineering expert. Your task is to enhance the following prompt to make it more effective, specific, and likely to generate better responses from an AI model. Add more specific details, improve structure, and add any relevant context that might help. Focus on making the prompt clear, effective, and well-structured. Crucially, your output MUST contain ONLY the enhanced prompt without any explanations or additional text.`,
+        'expert': SYSTEM_INSTRUCTIONS.TEXT_ENHANCEMENT,
         'concise': `You are an expert prompt engineer. Rewrite the user's text into a clear, concise, and effective prompt. Focus on brevity while maintaining clarity. Remove unnecessary words. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
         'detailed': `You are an expert prompt engineer specializing in comprehensive prompt design. Rewrite the user's text into a highly detailed, structured prompt with explicit instructions, examples, constraints, and output format specifications. Include role definition, tone, context, and expected structure. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
+        'casual': `You are a prompt engineering expert. Your task is to enhance the following prompt to make it more effective, specific, and likely to generate better responses from an AI model. Add more specific details, improve structure, and add any relevant context that might help. Focus on making the prompt clear, effective, and well-structured. Crucially, your output MUST contain ONLY the enhanced prompt without any explanations or additional text.`,
         'creative': `You are an expert prompt engineer specializing in creative writing prompts. Rewrite the user's text into an inspiring, imaginative prompt that encourages creative expression. Focus on evocative language, mood, and narrative elements. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
         'technical': `You are an expert prompt engineer specializing in technical documentation. Rewrite the user's text into a precise, structured technical prompt with clear specifications, parameters, and requirements. Focus on accuracy, completeness, and technical precision. Crucially, your output MUST contain ONLY the improved prompt text itself. Do not include any introduction, explanation, or conversational filler.`,
     },
@@ -1133,7 +1135,11 @@ async function getActiveStyle(enhancementType) {
     try {
         const result = await chrome.storage.local.get(STORAGE_ACTIVE_STYLE);
         const activeStyles = result[STORAGE_ACTIVE_STYLE] || {};
-        const styleKey = activeStyles[enhancementType] || null;
+        let styleKey = activeStyles[enhancementType] || null;
+        // First-time users: use Default for Text enhancement
+        if (!styleKey && enhancementType === 'TEXT_ENHANCEMENT') {
+            styleKey = 'default';
+        }
         if (styleKey) {
             debug.log(`Active style for ${enhancementType}: ${styleKey}`);
         }
@@ -1289,7 +1295,8 @@ async function getSystemInstructionForEnhancement(enhancementType, forceDefaultS
     let systemInstruction = null;
     if (!forceDefaultStyle && activeStyleKey) {
         if (activeStyleKey === 'default') {
-            systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+            const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
+            systemInstruction = templates['default'] || SYSTEM_INSTRUCTIONS[enhancementType];
         } else if (activeStyleKey.startsWith('template:')) {
             const templateKey = activeStyleKey.replace('template:', '');
             const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
@@ -1523,7 +1530,8 @@ async function executeEnhancement(enhancementType, userText, provider = 'gemini'
                 // Popup mode: Use active style if set
                 if (activeStyleKey) {
                     if (activeStyleKey === 'default') {
-                        systemInstruction = SYSTEM_INSTRUCTIONS[enhancementType];
+                        const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};
+                        systemInstruction = templates['default'] || SYSTEM_INSTRUCTIONS[enhancementType];
                     } else if (activeStyleKey.startsWith('template:')) {
                         const templateKey = activeStyleKey.replace('template:', '');
                         const templates = INSTRUCTION_TEMPLATES[enhancementType] || {};

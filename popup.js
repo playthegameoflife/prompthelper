@@ -40,28 +40,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const userEmail = document.getElementById('user-email');
   const logoutButton = document.getElementById('logout-button');
   
-  // Firebase variables
-  let auth, provider, signInWithPopup, signOut, onAuthStateChanged;
-
-  // Chrome extension: Firebase LOCAL persistence is not supported in MV3, so we persist user in chrome.storage
-  // and restore by re-authenticating with chrome.identity when the popup opens.
+  // Backend auth (no Firebase SDK - Chrome Web Store MV3 no remote code)
   const STORAGE_FIREBASE_USER = 'pa_firebase_user';
-  /** When true, skip Google sign-in (development mode). Must match content.js STORAGE_DEV_BYPASS_AUTH. */
-  const STORAGE_DEV_BYPASS_AUTH = 'pa_dev_bypass_auth';
-  /** Fake user object when dev bypass is on (so header/settings don't break). */
-  const DEV_BYPASS_FAKE_USER = { uid: 'dev', email: 'dev@local', displayName: 'Dev User' };
+  let currentUser = null; // { uid, email, displayName } from backend
+  const BACKEND_URL = typeof BACKEND_API_URL !== 'undefined' ? BACKEND_API_URL : 'https://api-clyep56cdq-uc.a.run.app';
 
-  function saveFirebaseUserToStorage(user) {
-    if (!user || !chrome.storage || !chrome.storage.local) return;
+  function saveUserToStorage(user) {
+    if (!user || !chrome.storage?.local) return;
     chrome.storage.local.set({
       [STORAGE_FIREBASE_USER]: { uid: user.uid, email: user.email || null }
     });
   }
 
   function clearFirebaseUserFromStorage() {
-    if (chrome.storage && chrome.storage.local) {
-      chrome.storage.local.remove([STORAGE_FIREBASE_USER]);
-    }
+    if (chrome.storage?.local) chrome.storage.local.remove([STORAGE_FIREBASE_USER]);
+    currentUser = null;
   }
 
   /**
@@ -83,23 +76,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * Restore Firebase session from chrome.storage by re-authenticating with Chrome identity.
-   * Firebase LOCAL persistence is not supported in MV3 extensions, so we do this on each popup open.
-   * @returns {Promise<boolean>} true if session was restored, false otherwise
-   */
-  function tryRestoreFirebaseSession() {
-    return new Promise((resolve) => {
-      if (!auth || !chrome.storage || !chrome.identity || !chrome.identity.getAuthToken) {
-        resolve(false);
-        return;
-      }
-      chrome.storage.local.get([STORAGE_FIREBASE_USER], async (result) => {
-        const saved = result[STORAGE_FIREBASE_USER];
-        if (!saved || !saved.uid) {
-          resolve(false);
-          return;
+  async function verifyGoogleToken(accessToken) {
+    // Use long names so minifiers don't shadow the Response (e.g. inner `t` breaking `t.status`).
+    const fetchResponse = await fetch(`${BACKEND_URL}/verify-google-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken })
+    });
+    if (!fetchResponse.ok) {
+      let detail = '';
+      try {
+        const responseText = await fetchResponse.text();
+        try {
+          const errJson = JSON.parse(responseText);
+          detail = errJson.error || errJson.message || responseText;
+        } catch {
+          detail = responseText || '';
         }
+      } catch (_) { /* ignore */ }
+      const status = fetchResponse.status;
+      const msg = detail ? `Verification failed (${status}): ${detail}` : `Verification failed (${status})`;
+      throw new Error(msg);
+    }
+    return fetchResponse.json();
+  }
+
+  async function tryRestoreSession() {
+    if (!chrome.identity?.getAuthToken) return false;
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_FIREBASE_USER], (result) => {
+        const saved = result[STORAGE_FIREBASE_USER];
+        if (!saved?.uid) { resolve(false); return; }
         chrome.identity.getAuthToken({ interactive: false }, async (token) => {
           if (chrome.runtime.lastError || !token) {
             clearFirebaseUserFromStorage();
@@ -107,13 +114,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
           try {
-            const credential = firebase.auth.GoogleAuthProvider.credential(null, token);
-            await auth.signInWithCredential(credential);
+            const user = await verifyGoogleToken(token);
+            currentUser = user;
+            saveUserToStorage(user);
             resolve(true);
-          } catch (err) {
-            if (err && (err.code === 'auth/invalid-credential' || err.message && err.message.includes('audience'))) {
-              chrome.identity.removeCachedAuthToken({ token: token }, () => {});
-            }
+          } catch (e) {
             clearFirebaseUserFromStorage();
             resolve(false);
           }
@@ -122,219 +127,74 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize Firebase Auth after persistence is set (firebase-config.js dispatches 'firebase-auth-ready')
-  function setupFirebaseAuth() {
-    console.log('Firebase auth ready, checking availability...');
-    console.log('window.auth:', !!window.auth);
-    console.log('window.provider:', !!window.provider);
-    console.log('window.signInWithPopup:', !!window.signInWithPopup);
-
-    if (window.auth && window.provider && window.signInWithPopup && window.signOut && window.onAuthStateChanged) {
-      console.log('Firebase available, setting up auth...');
-      auth = window.auth;
-      provider = window.provider;
-      signInWithPopup = window.signInWithPopup;
-      signOut = window.signOut;
-      onAuthStateChanged = window.onAuthStateChanged;
-
-      // Google Sign-in handler - now that Firebase is available
-      const googleSignInButton = document.getElementById('google-signin-button');
-      const authStatus = document.getElementById('auth-status');
-
-      // Enable the sign-in button now that Firebase is ready
-      if (googleSignInButton) {
-        googleSignInButton.disabled = false;
-        googleSignInButton.style.cursor = 'pointer';
-        googleSignInButton.style.opacity = '1';
-        googleSignInButton.innerHTML = `
-          <svg width="18" height="18" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Sign in with Google
-        `;
-      }
-
-      if (googleSignInButton) {
-        googleSignInButton.addEventListener('click', async () => {
-          if (!auth || !signInWithPopup || !provider) {
-            console.error('Firebase auth not initialized');
-            return;
-          }
-
-          try {
-            // Show loading state
-            googleSignInButton.disabled = true;
-            googleSignInButton.textContent = 'Signing in...';
-            if (authStatus) {
-              authStatus.style.display = 'block';
-              authStatus.textContent = 'Opening Google sign-in...';
-            }
-
-            // Sign in with Google - Extension version using chrome.identity
-            // This avoids CSP issues with signInWithPopup in Manifest V3.
-            // If a "400. That's an error" tab appears (sign-in still works), ensure your Google Cloud
-            // OAuth client is type "Chrome application" with your extension ID, not "Web application".
-            if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
-              console.log('Using chrome.identity for sign-in...');
-              
-              chrome.identity.getAuthToken({ interactive: true }, async (token) => {
-                try {
-                  if (chrome.runtime.lastError) {
-                    throw new Error(chrome.runtime.lastError.message);
-                  }
-                  
-                  if (!token) {
-                    throw new Error('Failed to get auth token from Chrome');
-                  }
-
-                  console.log('Auth token received, signing into Firebase...');
-                  
-                  const credential = firebase.auth.GoogleAuthProvider.credential(null, token);
-                  const result = await auth.signInWithCredential(credential);
-                  const user = result.user;
-                  console.log('Successfully signed in with credential:', user.displayName);
-                } catch (err) {
-                  console.error('Sign-in error:', err);
-                  
-                  // Reset button UI
-                  googleSignInButton.disabled = false;
-                  googleSignInButton.innerHTML = `
-                    <svg width="18" height="18" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    Sign in with Google
-                  `;
-
-                  if (authStatus) {
-                    authStatus.style.display = 'block';
-                    authStatus.style.color = '#FF3B30';
-                    authStatus.textContent = 'Sign-in failed: ' + (err.message || 'Unknown error');
-                  }
-
-                  if (err.code === 'auth/invalid-credential' || err.message.includes('audience')) {
-                    chrome.identity.removeCachedAuthToken({ token: token }, () => {
-                      console.log('Token cache cleared.');
-                    });
-                  }
-                }
-              });
-            } else {
-              // Fallback for non-extension context or if chrome.identity is missing
-              console.log('Falling back to signInWithPopup...');
-              const result = await signInWithPopup(provider);
-              const user = result.user;
-              console.log('Successfully signed in with popup:', user.displayName);
-            }
-
-          } catch (error) {
-            console.error('Sign-in error:', error);
-
-            // Reset button
-            googleSignInButton.disabled = false;
-            googleSignInButton.innerHTML = `
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Sign in with Google
-            `;
-
-            if (authStatus) {
-              authStatus.style.display = 'block';
-              authStatus.textContent = 'Sign-in failed. Please try again.';
-              authStatus.style.color = '#FF3B30';
-            }
-          }
-        });
-      }
-
-      // Force sign out handler (for debugging) - now that Firebase is available
-      const forceSignOutButton = document.getElementById('force-signout');
-      if (forceSignOutButton) {
-        forceSignOutButton.addEventListener('click', async () => {
-          if (signOut) {
+  async function setupBackendAuth() {
+    const googleSignInButton = document.getElementById('google-signin-button');
+    const authStatus = document.getElementById('auth-status');
+    if (googleSignInButton) {
+      googleSignInButton.disabled = false;
+      googleSignInButton.style.cursor = 'pointer';
+      googleSignInButton.style.opacity = '1';
+      googleSignInButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Sign in with Google';
+      googleSignInButton.addEventListener('click', async () => {
+        try {
+          googleSignInButton.disabled = true;
+          googleSignInButton.textContent = 'Signing in...';
+          if (authStatus) { authStatus.style.display = 'block'; authStatus.textContent = 'Opening Google sign-in...'; }
+          chrome.identity.getAuthToken({ interactive: true }, async (token) => {
             try {
-              await signOut();
-              console.log('Force signed out');
-              forceSignOutButton.textContent = 'Signed Out!';
-              setTimeout(() => {
-                forceSignOutButton.textContent = 'Force Sign Out';
-              }, 2000);
-            } catch (error) {
-              console.error('Force sign out error:', error);
+              if (chrome.runtime.lastError || !token) throw new Error(chrome.runtime.lastError?.message || 'No token');
+              const user = await verifyGoogleToken(token);
+              currentUser = user;
+              saveUserToStorage(user);
+              setTimeout(closeGoogleOAuthErrorTabs, 800);
+              showMainInterface(user);
+              subscriptionManager.getSubscriptionStatus(true).catch(() => {}).then(() => { if (typeof loadPremiumTab === 'function') loadPremiumTab(); });
+            } catch (err) {
+              console.error('Sign-in error:', err);
+              googleSignInButton.disabled = false;
+              googleSignInButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Sign in with Google';
+              if (authStatus) { authStatus.style.display = 'block'; authStatus.style.color = '#FF3B30'; authStatus.textContent = 'Sign-in failed: ' + (err.message || 'Unknown error'); }
             }
-          }
+          });
+        } catch (e) {
+          googleSignInButton.disabled = false;
+          if (authStatus) { authStatus.style.display = 'block'; authStatus.style.color = '#FF3B30'; authStatus.textContent = 'Sign-in failed.'; }
+        }
+      });
+    }
+    const forceSignOutButton = document.getElementById('force-signout');
+    if (forceSignOutButton) {
+      forceSignOutButton.addEventListener('click', () => {
+        currentUser = null;
+        clearFirebaseUserFromStorage();
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (token) chrome.identity.removeCachedAuthToken({ token }, () => {});
         });
-      }
-
-      // Set up auth state listener
-      try {
-        console.log('Setting up Firebase auth state listener...');
-        onAuthStateChanged(async (user) => {
-          console.log('Auth state changed:', user ? 'user found' : 'no user');
-
-          if (user) {
-            saveFirebaseUserToStorage(user);
-            console.log('Showing main interface for user:', user.displayName);
-            showMainInterface(user);
-            // Close any Google OAuth 400 error tab left by chrome.identity.getAuthToken
-            setTimeout(closeGoogleOAuthErrorTabs, 800);
-            subscriptionManager.getSubscriptionStatus(true).then(() => {
-              loadPremiumTab();
-            }).catch((error) => {
-              console.warn('Error refreshing subscription status:', error);
-              loadPremiumTab();
-            });
-          } else {
-            const restored = await tryRestoreFirebaseSession();
-            if (!restored) {
-              console.log('Showing login section');
-              showLoginSection();
-            }
-          }
-        });
-        console.log('Firebase auth state listener set up successfully');
-      } catch (error) {
-        console.error('Error setting up auth state listener:', error);
-        console.error('Error details:', error.message, error.stack);
+        forceSignOutButton.textContent = 'Signed Out!';
+        setTimeout(() => { forceSignOutButton.textContent = 'Force Sign Out'; }, 2000);
         showLoginSection();
-      }
+      });
+    }
+
+    const restored = await tryRestoreSession();
+    if (restored && currentUser) {
+      showMainInterface(currentUser);
+      subscriptionManager.getSubscriptionStatus(true).catch(() => {}).then(() => { if (typeof loadPremiumTab === 'function') loadPremiumTab(); });
     } else {
-      console.error('Firebase not available, showing login as fallback');
-      // Fallback: show login section if Firebase fails to load
       showLoginSection();
     }
   }
 
-  // Wait for Firebase to set persistence and expose auth, or fallback after 2s
   let authSetupDone = false;
-  async function runSetupOnce() {
+  function runSetupOnce() {
     if (authSetupDone) return;
     authSetupDone = true;
-    // Development: bypass Google auth when pa_dev_bypass_auth is set
-    if (chrome.storage?.local) {
-      const result = await new Promise((resolve) => chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH], resolve));
-      if (result[STORAGE_DEV_BYPASS_AUTH]) {
-        showMainInterface(DEV_BYPASS_FAKE_USER);
-        subscriptionManager.getSubscriptionStatus(true).catch(() => {}).then(() => loadPremiumTab?.());
-        return;
-      }
-    }
-    setupFirebaseAuth();
+    setupBackendAuth();
   }
-  if (window.auth && window.provider && window.signInWithPopup) {
-    runSetupOnce();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runSetupOnce);
   } else {
-    window.addEventListener('firebase-auth-ready', runSetupOnce, { once: true });
-    setTimeout(runSetupOnce, 2000);
+    runSetupOnce();
   }
 
   // Inline usage tracker (since require() doesn't work in Chrome extensions)
@@ -588,22 +448,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     getUserId: function() {
       return new Promise((resolve) => {
-        // 1. Check if Firebase user is logged in (This is the "Anywhere" ID)
-        if (auth && auth.currentUser) {
-          resolve(auth.currentUser.uid);
+        // 1. Signed-in user (currentUser or stored pa_firebase_user)
+        if (currentUser && currentUser.uid) {
+          resolve(currentUser.uid);
           return;
         }
-
-        // 2. Fallback to local storage (Only for guest usage tracking)
-        chrome.storage.local.get([this.STORAGE_USER_ID], (result) => {
-          if (result[this.STORAGE_USER_ID]) {
-            resolve(result[this.STORAGE_USER_ID]);
-          } else {
-            const userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            chrome.storage.local.set({ [this.STORAGE_USER_ID]: userId }, () => {
-              resolve(userId);
-            });
+        chrome.storage.local.get([STORAGE_FIREBASE_USER], (result) => {
+          const stored = result[STORAGE_FIREBASE_USER];
+          if (stored && stored.uid) {
+            resolve(stored.uid);
+            return;
           }
+          // 2. Fallback to local storage (guest usage tracking)
+          chrome.storage.local.get([this.STORAGE_USER_ID], (result2) => {
+            if (result2[this.STORAGE_USER_ID]) {
+              resolve(result2[this.STORAGE_USER_ID]);
+            } else {
+              const userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              chrome.storage.local.set({ [this.STORAGE_USER_ID]: userId }, () => {
+                resolve(userId);
+              });
+            }
+          });
         });
       });
     },
@@ -977,25 +843,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   if (tabsContainer) tabsContainer.style.display = 'none';
 
-  // Developer: bypass sign-in checkbox (login section + sync when showing login)
-  const devBypassCheckbox = document.getElementById('dev-bypass-auth-checkbox');
-  if (devBypassCheckbox) {
-    chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH], (result) => {
-      devBypassCheckbox.checked = !!result[STORAGE_DEV_BYPASS_AUTH];
-    });
-    devBypassCheckbox.addEventListener('change', () => {
-      const enabled = devBypassCheckbox.checked;
-      chrome.storage.local.set({ [STORAGE_DEV_BYPASS_AUTH]: enabled }, () => {
-        if (enabled) {
-          showMainInterface(DEV_BYPASS_FAKE_USER);
-          if (typeof subscriptionManager !== 'undefined') subscriptionManager.getSubscriptionStatus(true).catch(() => {}).then(() => loadPremiumTab?.());
-        } else {
-          showLoginSection();
-        }
-      });
-    });
-  }
-
   function hideInitialLoader() {
     const loader = document.getElementById('initial-loader');
     if (loader) {
@@ -1313,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Template options for each mode
   const TEMPLATE_OPTIONS = {
-    TEXT_ENHANCEMENT: ['default', 'concise', 'detailed', 'creative', 'technical'],
+    TEXT_ENHANCEMENT: ['default', 'expert', 'concise', 'detailed', 'creative', 'technical'],
     CODE_ENHANCEMENT: ['default', 'minimal', 'comprehensive', 'production-ready', 'cursor'],
     IMAGE_ENHANCEMENT: ['default', 'minimal', 'detailed', 'cinematic'],
     VIDEO_ENHANCEMENT: ['default', 'concise', 'cinematic', 'ad']
@@ -1453,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', () => {
       displayText = 'Default';
     } else if (styleKey.startsWith('template:')) {
       const template = styleKey.replace('template:', '');
-      displayText = template.charAt(0).toUpperCase() + template.slice(1);
+      displayText = template === 'casual' ? 'Default' : template.charAt(0).toUpperCase() + template.slice(1);
     } else if (styleKey.startsWith('custom:')) {
       const styleName = styleKey.replace('custom:', '');
       displayText = `★ ${styleName}`;
@@ -2297,11 +2144,12 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   if (logoutButton) {
     logoutButton.addEventListener('click', async () => {
-      if (!signOut) return;
-
       try {
+        currentUser = null;
         clearFirebaseUserFromStorage();
-        await signOut();
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (token) chrome.identity.removeCachedAuthToken({ token }, () => {});
+        });
         console.log('User signed out');
 
         // Reset UI
@@ -2314,6 +2162,7 @@ document.addEventListener('DOMContentLoaded', () => {
           headerTitle.style.fontSize = '22px';
         }
 
+        showLoginSection();
       } catch (error) {
         console.error('Logout error:', error);
       }
@@ -2327,11 +2176,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // (Element declarations moved to top)
 
   /**
-   * Authentication is now handled by Firebase onAuthStateChanged listener
+   * Auth state is handled by setupBackendAuth / tryRestoreSession
    * This function is kept for backwards compatibility but does nothing
    */
   function checkAndShowLogin() {
-    // Firebase handles auth state automatically via onAuthStateChanged
+    // Auth is handled by backend auth flow on load
   }
 
   /**
@@ -2355,10 +2204,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hide user info
     if (userInfo) userInfo.style.display = 'none';
     if (logoutButton) logoutButton.style.display = 'none';
-
-    // Unsync dev bypass checkbox so it reflects actual state
-    const devBypassCheckbox = document.getElementById('dev-bypass-auth-checkbox');
-    if (devBypassCheckbox) devBypassCheckbox.checked = false;
 
     // Show login section
     if (loginSection) {
@@ -2528,19 +2373,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save auto-send preference
     autoSendToggle.addEventListener('change', (e) => {
       chrome.storage.local.set({ autoSendAfterEnhancement: e.target.checked });
-    });
-  }
-
-  // Developer: bypass sign-in (Settings toggle — turn off to return to login when in dev mode)
-  const devBypassToggle = document.getElementById('dev-bypass-auth-toggle');
-  if (devBypassToggle) {
-    chrome.storage.local.get([STORAGE_DEV_BYPASS_AUTH], (result) => {
-      devBypassToggle.checked = !!result[STORAGE_DEV_BYPASS_AUTH];
-    });
-    devBypassToggle.addEventListener('change', (e) => {
-      const enabled = e.target.checked;
-      chrome.storage.local.set({ [STORAGE_DEV_BYPASS_AUTH]: enabled });
-      if (!enabled && !(auth && auth.currentUser)) showLoginSection();
     });
   }
 
@@ -2895,7 +2727,8 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   function loadStyleSelectorVisibility() {
     chrome.storage.local.get([STORAGE_SHOW_STYLE_SELECTOR], (result) => {
-      const show = result[STORAGE_SHOW_STYLE_SELECTOR] === true;
+      // Show by default on first boot; only hide when user explicitly set to false
+      const show = result[STORAGE_SHOW_STYLE_SELECTOR] !== false;
       if (showStyleSelectorToggle) {
         showStyleSelectorToggle.checked = show;
       }
@@ -3062,7 +2895,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show "Sign in to upgrade" notice when not signed in
         const premiumSignInNotice = document.getElementById('premium-sign-in-notice');
         if (premiumSignInNotice) {
-          premiumSignInNotice.style.display = (auth && auth.currentUser) ? 'none' : 'block';
+          premiumSignInNotice.style.display = currentUser ? 'none' : 'block';
         }
         
         // Ensure subscribe button is visible and enabled
@@ -3095,7 +2928,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (syncRowErr) syncRowErr.style.display = 'block';
       if (goProHeader) goProHeader.style.display = 'block';
       const signInNoticeErr = document.getElementById('premium-sign-in-notice');
-      if (signInNoticeErr) signInNoticeErr.style.display = (auth && auth.currentUser) ? 'none' : 'block';
+      if (signInNoticeErr) signInNoticeErr.style.display = currentUser ? 'none' : 'block';
       
       // Ensure subscribe button is visible and enabled
       if (subscribePremiumButton) {
@@ -3138,7 +2971,7 @@ document.addEventListener('DOMContentLoaded', () => {
           console.log('[Premium Tab] Fallback: Showing pricing plans');
           pricingPlans.style.display = 'block';
           const signInNoticeFallback = document.getElementById('premium-sign-in-notice');
-          if (signInNoticeFallback) signInNoticeFallback.style.display = (auth && auth.currentUser) ? 'none' : 'block';
+          if (signInNoticeFallback) signInNoticeFallback.style.display = currentUser ? 'none' : 'block';
           if (subscribePremiumButton) {
             subscribePremiumButton.style.display = 'block';
             subscribePremiumButton.style.visibility = 'visible';
@@ -3267,7 +3100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('subscribe-premium-button'); // live reference
     try {
       // Require sign-in so subscription is tied to their account (works across devices/reinstalls)
-      if (!auth || !auth.currentUser) {
+      if (!currentUser) {
         showStatus('Sign in with Google to upgrade. Your subscription will work on all your devices.', 'error');
         const setupTabButton = document.querySelector('[data-tab="setup"]');
         if (setupTabButton) setupTabButton.click();
@@ -3371,7 +3204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncSubscriptionButton.disabled = true;
         syncSubscriptionButton.textContent = 'Syncing...';
         const userId = await subscriptionManager.getUserId();
-        const email = (auth && auth.currentUser && auth.currentUser.email) ? auth.currentUser.email : null;
+        const email = (currentUser && currentUser.email) ? currentUser.email : null;
         const response = await fetch(`${subscriptionManager.PAYMENT_SERVER_URL}/sync-subscription-by-user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

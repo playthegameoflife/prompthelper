@@ -16,7 +16,7 @@ Your Firebase API key lives in `firebase-config.js` and is bundled with the exte
 
 2. **Find the Firebase key**
    - Under **API keys**, find the key that matches the value in `firebase-config.js`:  
-     `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
+     `YOUR_FIREBASE_API_KEY` (from Firebase Console)
    - Click the key name (or the pencil icon) to edit.
 
 3. **Application restrictions**

@@ -2,7 +2,7 @@
 
 ## 🔍 Finding Your Firebase API Key
 
-Your Firebase API key is: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
+Your Firebase API key is: `YOUR_FIREBASE_API_KEY`
 
 ## 📍 Method 1: Firebase Console (Easier)
 
@@ -30,7 +30,7 @@ Your Firebase API key is: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
 
 ### Step 3: Find Your Firebase API Key
 
-Look for the key: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
+Look for the key: `YOUR_FIREBASE_API_KEY`
 
 **If you don't see it:**
 - It might be listed under a different name
@@ -53,7 +53,7 @@ Look for the key: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
 1. Go to: https://console.firebase.google.com/project/prompt-enhancer-ai/settings/general
 2. Scroll to **Your apps** section
 3. Click on your web app
-4. You'll see: **apiKey: "AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM"**
+4. You'll see: **apiKey: "YOUR_FIREBASE_API_KEY"**
 5. Click the link that says **"Restrict key"** or **"Manage in Google Cloud Console"**
 
 ## 🆘 Still Can't Find It?
@@ -62,7 +62,7 @@ Look for the key: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
 
 1. Go to: https://console.cloud.google.com/apis/credentials
 2. Use the search box at the top
-3. Search for: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
+3. Search for: `YOUR_FIREBASE_API_KEY`
 
 ### Option 2: Check API Key Restrictions
 
@@ -102,4 +102,4 @@ If you can't find the existing key:
 
 - **Firebase Console:** https://console.firebase.google.com/project/prompt-enhancer-ai
 - **Google Cloud Console:** https://console.cloud.google.com/apis/credentials?project=prompt-enhancer-ai
-- **Direct API Key Search:** https://console.cloud.google.com/apis/credentials?project=prompt-enhancer-ai&q=AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM
+- **Direct API Key Search:** https://console.cloud.google.com/apis/credentials?project=prompt-enhancer-ai&q=YOUR_FIREBASE_API_KEY

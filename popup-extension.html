@@ -7,11 +7,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Firebase SDKs -->
-    <script src="libs/firebase-app-compat.js"></script>
-    <script src="libs/firebase-auth-compat.js"></script>
-    <script src="firebase-config.js"></script>
-    
+    <!-- Auth via chrome.identity + backend (no Firebase SDK - Chrome Web Store MV3 no remote code) -->
     <style>
         :root {
             --brand-primary: #007AFF;
@@ -1305,10 +1301,6 @@
                     Continue with Google
                 </button>
                 <div id="auth-status" class="status-message"></div>
-                <label class="dev-bypass-label" style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--text-muted); cursor: pointer;">
-                    <input type="checkbox" id="dev-bypass-auth-checkbox" style="width: 14px; height: 14px; accent-color: var(--brand-primary);">
-                    <span>Developer: bypass sign-in</span>
-                </label>
             </div>
         </div>
 
@@ -1516,10 +1508,6 @@
                 <div class="toggle-card">
                     <span style="font-size: 13px; font-weight: 500;">Visual Style Selector</span>
                     <input type="checkbox" id="show-style-selector-toggle" style="accent-color: var(--brand-primary);">
-                </div>
-                <div class="toggle-card">
-                    <span style="font-size: 13px; font-weight: 500;">Developer: bypass sign-in</span>
-                    <input type="checkbox" id="dev-bypass-auth-toggle" style="accent-color: var(--brand-primary);">
                 </div>
                 
                 <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--glass-stroke);">

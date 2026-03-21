@@ -25,7 +25,7 @@ These keys are stored in **Firebase Functions Secrets** and are **NEVER** includ
 
 ## ⚠️ **EXPOSED - Client-Side Key (Public by Design)**
 
-### ⚠️ Firebase API Key (`AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`)
+### ⚠️ Firebase API Key (`YOUR_FIREBASE_API_KEY`)
 - **Location:** `firebase-config.js` (bundled with extension)
 - **Exposed in extension?** ✅ YES
 - **Status:** ⚠️ **EXPECTED** but needs restrictions
@@ -37,7 +37,7 @@ These keys are stored in **Firebase Functions Secrets** and are **NEVER** includ
 
 **However, you MUST restrict it:**
 1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Find your Firebase API key: `AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM`
+2. Find your Firebase API key: `YOUR_FIREBASE_API_KEY`
 3. Click **Edit** and set restrictions:
 
    **Application restrictions:**

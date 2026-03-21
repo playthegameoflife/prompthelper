@@ -24,7 +24,7 @@ Your Firebase configuration is already configured in `firebase-config.js` with y
 
 ```javascript
 const firebaseConfig = {
-  apiKey: "AIzaSyDHlUcbwTNzApvbTkxNEw4brkE3CJ6rBoM",
+  apiKey: "AIzaSy_YOUR_FIREBASE_API_KEY",
   authDomain: "prompt-enhancer-ai.firebaseapp.com",
   projectId: "prompt-enhancer-ai",
   storageBucket: "prompt-enhancer-ai.firebasestorage.app",

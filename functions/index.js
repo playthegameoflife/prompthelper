@@ -113,6 +113,33 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================================================
+// VERIFY GOOGLE TOKEN (Chrome extension auth without Firebase SDK in extension)
+// ============================================================================
+
+app.post('/verify-google-token', async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+    if (!accessToken || typeof accessToken !== 'string') {
+      return res.status(400).json({ error: 'Missing accessToken' });
+    }
+    const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const user = await resp.json();
+    const uid = user.id;
+    const email = user.email || null;
+    const displayName = user.name || user.email || 'User';
+    res.json({ uid, email, displayName });
+  } catch (e) {
+    console.error('[verify-google-token]', e.message);
+    res.status(500).json({ error: e.message || 'Verification failed' });
+  }
+});
+
+// ============================================================================
 // STRIPE CHECKOUT
 // ============================================================================
 

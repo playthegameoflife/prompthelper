@@ -1,40 +1,8 @@
 const fs = require('fs-extra');
 const path = require('path');
 const { minify } = require('terser');
-const JavaScriptObfuscator = require('javascript-obfuscator');
 
-// Configuration
-const OBFUSCATION_OPTIONS = {
-    compact: true,
-    controlFlowFlattening: true,
-    controlFlowFlatteningThreshold: 0.75,
-    deadCodeInjection: true,
-    deadCodeInjectionThreshold: 0.4,
-    debugProtection: false, // Set to false to avoid breaking extension
-    debugProtectionInterval: 0,
-    disableConsoleOutput: false, // Set true for production to strip console
-    identifierNamesGenerator: 'hexadecimal',
-    log: false,
-    numbersToExpressions: true,
-    renameGlobals: false,
-    selfDefending: true,
-    simplify: true,
-    splitStrings: true,
-    splitStringsChunkLength: 10,
-    stringArray: true,
-    stringArrayCallsTransform: true,
-    stringArrayEncoding: ['base64'],
-    stringArrayIndexShift: true,
-    stringArrayRotate: true,
-    stringArrayShuffle: true,
-    stringArrayWrappersCount: 2,
-    stringArrayWrappersChainedCalls: true,
-    stringArrayWrappersParametersMaxCount: 2,
-    stringArrayWrappersType: 'function',
-    stringArrayThreshold: 0.75,
-    transformObjectKeys: true,
-    unicodeEscapeSequence: false
-};
+// Chrome Web Store does not allow obfuscated code; we only minify for smaller size and readability.
 
 // Files to process
 const JS_FILES = [
@@ -43,22 +11,18 @@ const JS_FILES = [
     'popup.js'
 ];
 
-// Files to copy as-is
+// Files to copy as-is (exclude popup.html - it loads remote Firebase scripts; Chrome Web Store MV3 rejects remotely hosted code)
 const COPY_FILES = [
-    'popup.html',
     'popup-extension.html',
-    'test-popup.html',
     'manifest.json',
     'LICENSE',
-    'firebase-config.js',
     'config.js',
     'stripe-config.js'
 ];
 
-// Directories to copy
+// Directories to copy (exclude libs/ - Firebase SDK contains remote-code loading; we use backend auth instead)
 const COPY_DIRS = [
-    'icons',
-    'libs'
+    'icons'
 ];
 
 async function build() {
@@ -104,17 +68,13 @@ async function build() {
             process.exit(1);
         }
         
-        // Then obfuscate
-        const obfuscationResult = JavaScriptObfuscator.obfuscate(minified.code, OBFUSCATION_OPTIONS);
-        const obfuscatedCode = obfuscationResult.getObfuscatedCode();
-        
-        // Write to dist
+        // Write minified (readable) code to dist - no obfuscation (Chrome Web Store policy)
         const distPath = path.join(distDir, file);
-        await fs.writeFile(distPath, obfuscatedCode, 'utf8');
+        await fs.writeFile(distPath, minified.code, 'utf8');
         
         const originalSize = (code.length / 1024).toFixed(2);
-        const finalSize = (obfuscatedCode.length / 1024).toFixed(2);
-        console.log(`    ✓ ${file}: ${originalSize}KB → ${finalSize}KB`);
+        const finalSize = (minified.code.length / 1024).toFixed(2);
+        console.log(`    ✓ ${file}: ${originalSize}KB → ${finalSize}KB (minified)`);
     }
     
     // Copy non-JS files
