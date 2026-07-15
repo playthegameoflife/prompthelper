@@ -3,7 +3,7 @@
   "name": "Prompt Helper Gemini — AI Prompt Generator for ChatGPT, Claude & Midjourney",
   "short_name": "Prompt Helper",
   "version": "2.4.6",
-  "description": "Write better AI prompts in one click. Works with ChatGPT, Claude, Gemini, Midjourney, Grok & more. Free Chrome extension for Text, Code, Image, and Video prompts.",
+  "description": "Write better AI prompts in one click. ChatGPT, Claude, Gemini & Midjourney. Free Chrome extension for Text, Code, Image & Video.",
   "minimum_chrome_version": "102",
   "permissions": [
     "activeTab",
