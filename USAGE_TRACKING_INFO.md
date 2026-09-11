@@ -5,7 +5,7 @@
 Your extension tracks free tier usage:
 
 ### Free Tier Limits:
-- **10 prompt enhancements per week**
+- **5 prompt enhancements per week**
 - **5 AI questions per week**
 - **1 history item** (only latest enhancement/question saved)
 
@@ -13,7 +13,7 @@ Your extension tracks free tier usage:
 
 1. **Before Enhancement:**
    - Checks if you have an active subscription
-   - If free tier: Checks if you've used less than 10 enhancements this week
+   - If free tier: Checks if you've used less than 5 enhancements this week
    - If limit reached: Shows message and blocks enhancement
 
 2. **After Successful Enhancement:**

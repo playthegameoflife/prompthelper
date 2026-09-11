@@ -56,7 +56,7 @@ To create a proper freemium model, you should implement these limits:
 ```javascript
 // Free tier limits
 const FREE_TIER_LIMITS = {
-  enhancements_per_week: 10,       // 10 enhancements per week
+  enhancements_per_week: 5,       // 5 enhancements per week
   history_items: 1,                // Keep last 1 item (vs 50+ for Premium)
   ask_questions_per_week: 5,       // 5 questions per week
   custom_styles: 2,                // Only 2 custom styles
@@ -136,11 +136,11 @@ async function enhancePrompt(prompt) {
   
   if (!hasActive) {
     // Check free tier limit
-    const canEnhance = await checkLimit('enhancements', 10); // 10 per week
+    const canEnhance = await checkLimit('enhancements', 5); // 5 per week
     if (!canEnhance) {
       return {
         error: 'Weekly limit reached',
-        message: 'You\'ve used your 10 free enhancements this week. Upgrade to Premium for unlimited!',
+        message: 'You\'ve used your 5 free enhancements this week. Upgrade to Premium for unlimited!',
         upgradeRequired: true
       };
     }
@@ -162,7 +162,7 @@ async function enhancePrompt(prompt) {
   <p style="margin: 0; font-size: 12px;">
     <strong>Today:</strong> 
     <span id="usage-count">0</span> / 
-    <span id="usage-limit">10</span> enhancements
+    <span id="usage-limit">5</span> enhancements
     <button id="upgrade-link" class="link" style="margin-left: 8px;">
       Upgrade for unlimited
     </button>
@@ -176,12 +176,12 @@ async function enhancePrompt(prompt) {
 
 ```
 Week 1:
-✅ Enhanced 10 prompts (limit reached)
+✅ Enhanced 5 prompts (limit reached)
 ✅ Asked 5 questions (limit reached)
 ❌ "You've reached your weekly limits. Upgrade for unlimited!"
 
 Week 2:
-✅ Enhanced 10 prompts (limit reset)
+✅ Enhanced 5 prompts (limit reset)
 ✅ Asked 5 questions (limit reset)
 ❌ Limits reached again
 

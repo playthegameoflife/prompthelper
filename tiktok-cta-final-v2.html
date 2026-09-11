@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>Prompt Helper Gemini - TikTok CTA</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px;
+    height: 1920px;
+    background: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Subtle grid / circuit texture */
+  .bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,102,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,102,0,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* Top glow accent */
+  .top-glow {
+    position: absolute;
+    top: -120px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(255,102,0,0.18) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Floating orbs */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+  }
+  .orb1 {
+    width: 300px; height: 300px;
+    background: rgba(255,102,0,0.12);
+    top: 100px; left: -80px;
+  }
+  .orb2 {
+    width: 250px; height: 250px;
+    background: rgba(255,87,34,0.1);
+    top: 600px; right: -60px;
+  }
+  .orb3 {
+    width: 200px; height: 200px;
+    background: rgba(255,102,0,0.08);
+    bottom: 200px; left: 50px;
+  }
+
+  /* ─── HEADER / BRAND ─── */
+  .header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 36px 40px 0;
+    z-index: 10;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand-icon {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, #FF6600, #FF5722);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 0 24px rgba(255,102,0,0.5);
+  }
+  .brand-name {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: #FF6600;
+    text-transform: uppercase;
+  }
+
+  /* ─── MAIN HEADLINE ─── */
+  .headline-section {
+    position: absolute;
+    top: 130px; left: 0; right: 0;
+    text-align: center;
+    z-index: 10;
+  }
+  .headline-eyebrow {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    color: rgba(255,102,0,0.7);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .headline {
+    font-size: 72px;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -1px;
+    color: #FFFFFF;
+    text-transform: uppercase;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #FF6600, #FF8C00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .headline .accent2 {
+    background: linear-gradient(90deg, #FF6600, #FF8C00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ─── UI MOCKUP ─── */
+  .ui-mockup {
+    position: absolute;
+    top: 490px;   /* Below CTA section */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 820px;
+    background: #0D0D0D;
+    border-radius: 28px;
+    border: 1.5px solid rgba(255,102,0,0.3);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,102,0,0.1),
+      0 30px 80px rgba(0,0,0,0.8),
+      0 0 60px rgba(255,102,0,0.12);
+    z-index: 10;
+  }
+  .ui-top-bar {
+    display: flex;
+    align-items: center;
+    padding: 16px 28px;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255,102,0,0.12);
+    background: #0A0A0A;
+  }
+  .ui-tab {
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    padding: 8px 20px;
+    border-radius: 10px;
+    cursor: default;
+  }
+  .ui-tab.active {
+    color: #FF6600;
+    background: rgba(255,102,0,0.1);
+    box-shadow: 0 0 16px rgba(255,102,0,0.15);
+  }
+  .ui-spacer { flex: 1; }
+  .ui-dots {
+    display: flex; gap: 6px;
+  }
+  .ui-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,102,0,0.25);
+  }
+  .ui-dot:nth-child(1) { background: rgba(255,102,0,0.3); }
+  .ui-dot:nth-child(2) { background: rgba(255,102,0,0.2); }
+  .ui-dot:nth-child(3) { background: rgba(255,102,0,0.15); }
+
+  .ui-body {
+    padding: 18px 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 14px;
+  }
+  .input-box {
+    flex: 1;
+    background: #141414;
+    border: 1.5px solid rgba(255,102,0,0.2);
+    border-radius: 16px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .input-icon {
+    width: 36px; height: 36px;
+    background: rgba(255,102,0,0.1);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .input-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255,102,0,0.6);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .input-placeholder {
+    font-size: 21px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    font-style: italic;
+  }
+
+  .category-box {
+    background: #141414;
+    border: 1.5px solid rgba(255,102,0,0.2);
+    border-radius: 16px;
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 180px;
+    flex-shrink: 0;
+  }
+  .cat-icon {
+    width: 44px; height: 44px;
+    background: rgba(255,102,0,0.12);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .cat-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255,102,0,0.5);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .cat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #FF6600;
+  }
+
+  .enhance-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 20px;
+    background: linear-gradient(135deg, #FF6600, #FF5722);
+    border-radius: 16px;
+    font-size: 22px;
+    font-weight: 800;
+    color: #000000;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 24px rgba(255,102,0,0.35);
+  }
+
+  /* ─── TRANSFORMATION SECTION ─── */
+  .transform-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin-top: 8px;
+  }
+
+  .transform-arrow {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .arrow-line {
+    width: 3px;
+    height: 40px;
+    background: linear-gradient(to bottom, #FF6600, rgba(255,102,0,0));
+    border-radius: 2px;
+    position: relative;
+  }
+  .arrow-line::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 10px solid #FF6600;
+  }
+  .sparkle {
+    position: absolute;
+    width: 8px; height: 8px;
+    background: #FF6600;
+    border-radius: 50%;
+    animation: sparkle 2s infinite;
+  }
+  .sparkle:nth-child(2) { top: 0; left: -14px; animation-delay: 0.3s; }
+  .sparkle:nth-child(3) { top: 8px; right: -14px; animation-delay: 0.7s; }
+  .sparkle:nth-child(4) { top: 20px; left: -18px; animation-delay: 1.1s; }
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+
+  /* OUTPUT BOX */
+  .output-box {
+    width: 100%;
+    background: #0A0A0A;
+    border: 1.5px solid rgba(255,102,0,0.35);
+    border-radius: 18px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .output-glow {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #FF6600, transparent);
+    opacity: 0.6;
+  }
+  .output-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255,102,0,0.5);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .output-text {
+    font-size: 17px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.9);
+  }
+  .output-text .hl {
+    color: #FF6600;
+    font-weight: 700;
+  }
+
+  /* ─── CTA SECTION — UPPER MIDDLE (as requested) ─── */
+  .cta-section {
+    position: absolute;
+    top: 320px;  /* TRUE upper-middle — right below headline */
+    left: 0; right: 0;
+    text-align: center;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .cta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,102,0,0.1);
+    border: 1px solid rgba(255,102,0,0.3);
+    border-radius: 50px;
+    padding: 8px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(255,102,0,0.8);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .cta-pulse {
+    width: 10px; height: 10px;
+    background: #FF6600;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,102,0,0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(255,102,0,0); }
+  }
+  .cta-main {
+    font-size: 44px;
+    font-weight: 900;
+    color: #FFFFFF;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 0 0 40px rgba(255,102,0,0.5);
+    line-height: 1.1;
+  }
+  .cta-main .orange {
+    color: #FF6600;
+    display: block;
+  }
+  .cta-sub {
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    margin-top: 2px;
+  }
+  .cta-sub .highlight {
+    color: #FF6600;
+    font-weight: 700;
+  }
+  .cta-arrow {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    animation: bounce 2s infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(6px); }
+  }
+  .cta-arrow-line {
+    width: 2px; height: 28px;
+    background: linear-gradient(to bottom, #FF6600, rgba(255,102,0,0.3));
+    border-radius: 2px;
+  }
+  .cta-arrow-head {
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 9px solid #FF6600;
+  }
+
+  /* ─── BOTTOM LOGO ─── */
+  .bottom-logo {
+    position: absolute;
+    bottom: 60px; left: 0; right: 0;
+    text-align: center;
+    z-index: 10;
+  }
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg, #FF6600, #FF5722);
+    border-radius: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 0 30px rgba(255,102,0,0.4);
+    font-size: 28px;
+  }
+  .logo-text {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #FF6600;
+    text-transform: uppercase;
+  }
+  .logo-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .logo-line {
+    width: 120px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,102,0,0.4), transparent);
+    margin: 14px auto 0;
+  }
+
+  /* ─── SIDE ACCENT LINES ─── */
+  .side-line {
+    position: absolute;
+    top: 340px; bottom: 200px;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(255,102,0,0.2), transparent);
+  }
+  .side-line.left { left: 120px; }
+  .side-line.right { right: 120px; }
+
+  /* ─── CORNER ELEMENTS ─── */
+  .corner {
+    position: absolute;
+    width: 40px; height: 40px;
+    z-index: 5;
+  }
+  .corner-tl { top: 16px; left: 16px; border-top: 2px solid rgba(255,102,0,0.3); border-left: 2px solid rgba(255,102,0,0.3); border-radius: 8px 0 0 0; }
+  .corner-tr { top: 16px; right: 16px; border-top: 2px solid rgba(255,102,0,0.3); border-right: 2px solid rgba(255,102,0,0.3); border-radius: 0 8px 0 0; }
+  .corner-bl { bottom: 16px; left: 16px; border-bottom: 2px solid rgba(255,102,0,0.3); border-left: 2px solid rgba(255,102,0,0.3); border-radius: 0 0 0 8px; }
+  .corner-br { bottom: 16px; right: 16px; border-bottom: 2px solid rgba(255,102,0,0.3); border-right: 2px solid rgba(255,102,0,0.3); border-radius: 0 0 8px 0; }
+
+  /* bottom gradient fade */
+  .bottom-fade {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 300px;
+    background: linear-gradient(to top, #000000, transparent);
+    pointer-events: none;
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="top-glow"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<!-- Corner accents -->
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<!-- Side lines -->
+<div class="side-line left"></div>
+<div class="side-line right"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="brand">
+    <div class="brand-icon">✦</div>
+    <div class="brand-name">Prompt Helper Gemini</div>
+  </div>
+</div>
+
+<!-- Headline -->
+<div class="headline-section">
+  <div class="headline-eyebrow">AI-Powered Prompt Engineering</div>
+  <div class="headline">
+    <span class="accent">SIMPLE PROMPT</span><br>
+    <span class="accent2">→ PRO-GRADE RESULT</span>
+  </div>
+</div>
+
+<!-- UI Mockup -->
+<div class="ui-mockup">
+  <div class="ui-top-bar">
+    <div class="ui-tab active">✦ Enhance</div>
+    <div class="ui-tab">✦ Generate</div>
+    <div class="ui-spacer"></div>
+    <div class="ui-dots">
+      <div class="ui-dot"></div>
+      <div class="ui-dot"></div>
+      <div class="ui-dot"></div>
+    </div>
+  </div>
+  <div class="ui-body">
+    <div class="input-row">
+      <div class="input-box">
+        <div class="input-icon">✎</div>
+        <div>
+          <div class="input-label">Your Prompt</div>
+          <div class="input-placeholder">"draw a dog"</div>
+        </div>
+      </div>
+      <div class="category-box">
+        <div class="cat-icon" style="color:#FF6600; font-size:22px; font-weight:900;">IMG</div>
+        <div class="cat-label">Category</div>
+        <div class="cat-value">Image</div>
+      </div>
+    </div>
+    <div class="enhance-btn">⚡ Enhance Prompt</div>
+    <div class="transform-section">
+      <div class="transform-arrow">
+        <div class="sparkle"></div>
+        <div class="sparkle"></div>
+        <div class="sparkle"></div>
+        <div class="sparkle"></div>
+        <div class="arrow-line"></div>
+      </div>
+      <div class="output-box">
+        <div class="output-glow"></div>
+        <div class="output-label">Enhanced Output</div>
+        <div class="output-text">
+          <span class="hl">hyperrealistic</span>, golden retriever puppy, <span class="hl">8K</span>, professional lighting, studio quality, depth of field, fine art photography...
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA — UPPER MIDDLE (as requested) -->
+<div class="cta-section">
+  <div class="cta-badge">
+    <div class="cta-pulse"></div>
+    FREE Chrome Extension
+  </div>
+  <div class="cta-main">
+    TAP THE LINK<br>
+    <span class="orange">IN BIO ↓</span>
+  </div>
+  <div class="cta-sub">Install free · Works with Gemini &amp; ChatGPT</div>
+  <div class="cta-arrow">
+    <div class="cta-arrow-line"></div>
+    <div class="cta-arrow-head"></div>
+  </div>
+</div>
+
+<!-- Bottom Logo -->
+<div class="bottom-logo">
+  <div class="logo-mark">✦</div>
+  <div class="logo-text">Prompt Helper</div>
+  <div class="logo-sub">gemini.google.com</div>
+  <div class="logo-line"></div>
+</div>
+
+<div class="bottom-fade"></div>
+
+</body>
+</html>

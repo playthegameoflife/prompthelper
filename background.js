@@ -14,7 +14,7 @@ let usageTracker = {
 
   // Free tier limits
   FREE_TIER_LIMITS: {
-    enhancements_per_week: 10,
+    enhancements_per_week: 5,
     ask_questions_per_week: 5,
     history_items: 1
   },

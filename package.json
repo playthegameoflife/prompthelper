@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node build.js",
     "clean": "rm -rf dist",
-    "pack": "npm run build && echo '\n>>> Zip for store: cd dist && zip -r ../extension-for-store.zip .\n>>> Upload extension-for-store.zip (never zip from project root).'"
+    "pack": "npm run build && cd dist && zip -r ../prompt-helper-gemini-chrome-web-store.zip . && echo '\n>>> Upload: prompt-helper-gemini-chrome-web-store.zip to Chrome Web Store (load unpacked from dist/ to test).'"
   },
   "devDependencies": {
     "fs-extra": "^11.2.0",

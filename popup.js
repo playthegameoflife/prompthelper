@@ -39,11 +39,65 @@ document.addEventListener('DOMContentLoaded', () => {
   const userName = document.getElementById('user-name');
   const userEmail = document.getElementById('user-email');
   const logoutButton = document.getElementById('logout-button');
+  const pinNudgeCard = document.getElementById('pin-nudge-card');
+  const pinNudgeRemind = document.getElementById('pin-nudge-remind');
+  const pinNudgeDismiss = document.getElementById('pin-nudge-dismiss');
+  const pinNudgeClose = document.getElementById('pin-nudge-close');
   
   // Backend auth (no Firebase SDK - Chrome Web Store MV3 no remote code)
   const STORAGE_FIREBASE_USER = 'pa_firebase_user';
+  const STORAGE_PIN_NUDGE_DISMISSED = 'pinNudgeDismissed';
+  const STORAGE_PIN_NUDGE_REMIND_AT = 'pinNudgeRemindAt';
+  const PIN_NUDGE_REMIND_DELAY_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
   let currentUser = null; // { uid, email, displayName } from backend
   const BACKEND_URL = typeof BACKEND_API_URL !== 'undefined' ? BACKEND_API_URL : 'https://api-clyep56cdq-uc.a.run.app';
+
+  function hidePinNudge() {
+    if (pinNudgeCard) pinNudgeCard.style.display = 'none';
+  }
+
+  function getIsPinnedOnToolbar() {
+    return new Promise((resolve) => {
+      if (!chrome?.action?.getUserSettings) {
+        resolve(false);
+        return;
+      }
+      try {
+        chrome.action.getUserSettings((settings) => {
+          if (chrome.runtime.lastError) {
+            resolve(false);
+            return;
+          }
+          resolve(Boolean(settings?.isOnToolbar));
+        });
+      } catch (_) {
+        resolve(false);
+      }
+    });
+  }
+
+  async function refreshPinNudgeVisibility() {
+    if (!pinNudgeCard || !currentUser) {
+      hidePinNudge();
+      return;
+    }
+
+    const isPinned = await getIsPinnedOnToolbar();
+    if (isPinned) {
+      hidePinNudge();
+      return;
+    }
+
+    chrome.storage.local.get([STORAGE_PIN_NUDGE_DISMISSED, STORAGE_PIN_NUDGE_REMIND_AT], (result) => {
+      const dismissed = result[STORAGE_PIN_NUDGE_DISMISSED] === true;
+      const remindAt = Number(result[STORAGE_PIN_NUDGE_REMIND_AT] || 0);
+      if (dismissed || Date.now() < remindAt) {
+        hidePinNudge();
+        return;
+      }
+      pinNudgeCard.style.display = 'flex';
+    });
+  }
 
   function saveUserToStorage(user) {
     if (!user || !chrome.storage?.local) return;
@@ -197,6 +251,28 @@ document.addEventListener('DOMContentLoaded', () => {
     runSetupOnce();
   }
 
+  if (pinNudgeRemind) {
+    pinNudgeRemind.addEventListener('click', () => {
+      chrome.storage.local.set({ [STORAGE_PIN_NUDGE_REMIND_AT]: Date.now() + PIN_NUDGE_REMIND_DELAY_MS }, () => {
+        hidePinNudge();
+      });
+    });
+  }
+  if (pinNudgeDismiss) {
+    pinNudgeDismiss.addEventListener('click', () => {
+      chrome.storage.local.set({ [STORAGE_PIN_NUDGE_DISMISSED]: true }, () => {
+        hidePinNudge();
+      });
+    });
+  }
+  if (pinNudgeClose) {
+    pinNudgeClose.addEventListener('click', () => {
+      chrome.storage.local.set({ [STORAGE_PIN_NUDGE_REMIND_AT]: Date.now() + PIN_NUDGE_REMIND_DELAY_MS }, () => {
+        hidePinNudge();
+      });
+    });
+  }
+
   // Inline usage tracker (since require() doesn't work in Chrome extensions)
   let usageTracker = {
     // Storage keys
@@ -206,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Free tier limits
     FREE_TIER_LIMITS: {
-      enhancements_per_week: 10,
+      enhancements_per_week: 5,
       ask_questions_per_week: 5,
       history_items: 1
     },
@@ -2188,6 +2264,7 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   function showLoginSection() {
     hideInitialLoader();
+    hidePinNudge();
 
     // Hide tabs and main content
     if (tabsContainer) tabsContainer.style.display = 'none';
@@ -2234,6 +2311,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Update user info in settings
       updateUserInfo(user);
+      // Show pin hint only for signed-in users and only when not pinned.
+      refreshPinNudgeVisibility();
     }
 
     // Show the enhance tab by default

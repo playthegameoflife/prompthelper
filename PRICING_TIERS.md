@@ -6,7 +6,7 @@
 **Cost to you: ~$0.00 - $0.50 per user/month**
 
 **Features:**
-- ✅ 10 prompt enhancements per week
+- ✅ 5 prompt enhancements per week
 - ✅ 5 "Ask" questions per week
 - ✅ Basic style templates (default, concise, detailed)
 - ✅ View last 1 history item
@@ -16,7 +16,7 @@
 
 **Your API Costs:**
 - Average prompt: ~130 tokens input, ~260 tokens output
-- 10 enhancements/week × 4.3 weeks = 43 enhancements/month
+- 5 enhancements/week × 4.3 weeks ≈ 22 enhancements/month
 - Cost per enhancement: ~$0.00012 (130 × $0.10/1M + 260 × $0.40/1M)
 - **Monthly cost per free user: ~$0.005** (0.5 cents)
 - With 5 questions/week: +$0.004 = **~$0.009/month per free user**
@@ -93,9 +93,9 @@
 
 | User Type | Enhancements/Month | API Cost/Month |
 |-----------|-------------------|----------------|
-| Free (light) | 10 | $0.001 |
-| Free (average) | 43 | $0.005 |
-| Free (heavy) | 70 | $0.008 |
+| Free (light) | 5 | $0.001 |
+| Free (average) | 22 | $0.003 |
+| Free (heavy) | 35 | $0.004 |
 | Premium (light) | 20 | $0.002 |
 | Premium (average) | 50 | $0.006 |
 | Premium (heavy) | 200 | $0.024 |
@@ -105,7 +105,7 @@
 ## 🎯 Recommended Pricing
 
 ### Option 1: Simple Two-Tier (Recommended) ✅
-- **Free**: 10 enhancements/week, 5 questions/day
+- **Free**: 5 enhancements/week, 5 questions/day
 - **Premium**: $19.99/month - Unlimited everything
 
 ### Option 2: More Generous Free Tier
@@ -113,7 +113,7 @@
 - **Premium**: $19.99/month - Unlimited everything
 
 ### Option 3: Lower Premium Price
-- **Free**: 10 enhancements/week, 5 questions/day
+- **Free**: 5 enhancements/week, 5 questions/day
 - **Premium**: $9.99/month - Unlimited everything
 - (Lower margin but potentially higher conversion)
 
@@ -170,7 +170,7 @@
 
 **Free Tier:**
 - Cost to you: **~$0.02/month per user**
-- Features: Limited but useful (10 enhancements/week)
+- Features: Limited but useful (5 enhancements/week)
 - Purpose: User acquisition
 
 **Premium Tier:**

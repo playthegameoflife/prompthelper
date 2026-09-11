@@ -46,7 +46,7 @@ KEYBOARD SHORTCUT
 • Ctrl+Shift+E (Windows) or Cmd+Shift+E (Mac) to improve the current prompt in supported chats
 
 PRO (UPGRADE)
-• Free: 10 prompt enhancements and 5 Ask questions per week, plus limited history
+• Free: 5 prompt enhancements and 5 Ask questions per week, plus limited history
 • Pro: Unlimited enhancements, unlimited Ask, full history—subscribe in the Pro tab
 
 ⸻

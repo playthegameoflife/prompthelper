@@ -1173,6 +1173,62 @@
         .status-success { background: #E8F9EE; color: #34C759; }
         .status-error { background: #FEEBEB; color: #FF3B30; }
 
+        /* Pin onboarding */
+        .pin-nudge-card {
+            display: none;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 10px 16px 0;
+            padding: 12px 12px 10px;
+            border-radius: 12px;
+            background: rgba(0, 122, 255, 0.08);
+            border: 1px solid rgba(0, 122, 255, 0.18);
+            border-left: 4px solid var(--brand-primary);
+        }
+        .pin-nudge-content {
+            min-width: 0;
+        }
+        .pin-nudge-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0 0 4px;
+        }
+        .pin-nudge-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.35;
+            margin: 0;
+        }
+        .pin-nudge-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .pin-nudge-btn {
+            border: 1px solid rgba(0, 122, 255, 0.25);
+            background: rgba(255, 255, 255, 0.88);
+            color: var(--brand-primary);
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+        .pin-nudge-btn:hover {
+            background: #fff;
+        }
+        .pin-nudge-close {
+            border: none;
+            background: transparent;
+            color: #8E8E93;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 2px 4px;
+        }
+
         /* --- ADD/EDIT CUSTOM STYLE MODAL --- */
         .modal-overlay {
             position: fixed;
@@ -1282,6 +1338,17 @@
                 <div id="initial-loader" class="loading-spinner show" style="border-top-color: var(--brand-primary);"></div>
             </div>
         </div>
+        <div id="pin-nudge-card" class="pin-nudge-card">
+            <div class="pin-nudge-content">
+                <p class="pin-nudge-title">Pin Prompt Helper for faster access</p>
+                <p class="pin-nudge-text">Click Chrome's puzzle icon, then click the pin next to Prompt Helper Gemini.</p>
+                <div class="pin-nudge-actions">
+                    <button id="pin-nudge-remind" class="pin-nudge-btn">Remind me later</button>
+                    <button id="pin-nudge-dismiss" class="pin-nudge-btn">Don't show again</button>
+                </div>
+            </div>
+            <button id="pin-nudge-close" class="pin-nudge-close" aria-label="Dismiss pin hint">×</button>
+        </div>
 
         <!-- Login Section (Initially hidden by JS) -->
         <div id="login-section" class="setup-section">
@@ -1318,7 +1385,7 @@
             <div class="glass-card">
                 <div id="usage-indicator" class="info-box" style="background: var(--brand-gradient-soft); border: 1px solid rgba(0, 122, 255, 0.15); border-left: 4px solid var(--brand-primary); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 13px; font-weight: 600;">Free Balance: <span id="enhancements-usage" style="color: var(--brand-primary);">0 / 10</span></span>
+                        <span style="font-size: 13px; font-weight: 600;">Free Balance: <span id="enhancements-usage" style="color: var(--brand-primary);">0 / 5</span></span>
                         <button id="upgrade-usage-button" style="background: var(--brand-primary); color: white; border: none; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer;">Upgrade</button>
                     </div>
                 </div>
@@ -1437,17 +1504,15 @@
                         <div class="plan-comparison">
                             <div class="plan-card free-plan">
                                 <div class="plan-card-title">Free</div>
-                                <div class="plan-row"><span class="plan-limit">Prompt enhancements</span><span class="plan-value">10/week</span></div>
+                                <div class="plan-row"><span class="plan-limit">Prompt enhancements</span><span class="plan-value">5/week</span></div>
                                 <div class="plan-row"><span class="plan-limit">AI questions</span><span class="plan-value">5/week</span></div>
                                 <div class="plan-row"><span class="plan-limit">History</span><span class="plan-value">1 item</span></div>
-                                <div class="plan-row"><span class="plan-limit">Styles</span><span class="plan-value">Default only</span></div>
                             </div>
                             <div class="plan-card pro-plan">
                                 <div class="plan-card-title">Pro</div>
                                 <div class="plan-row"><span class="plan-check">✓</span><span>Unlimited enhancements</span></div>
                                 <div class="plan-row"><span class="plan-check">✓</span><span>Unlimited questions</span></div>
                                 <div class="plan-row"><span class="plan-check">✓</span><span>Full history</span></div>
-                                <div class="plan-row"><span class="plan-check">✓</span><span>Custom styles</span></div>
                                 <div class="plan-row"><span class="plan-check">✓</span><span>Priority speed</span></div>
                             </div>
                         </div>

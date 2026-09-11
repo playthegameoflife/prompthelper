@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Helper Gemini — Affiliate Program Setup Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f5f0;
+  --card: #ffffff;
+  --border: #e2ddd4;
+  --border-soft: #ede9e2;
+  --text: #14171e;
+  --muted: #6b7280;
+  --accent: #16a34a;
+  --accent-soft: #f0fdf4;
+  --accent-mid: #dcfce7;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --code-bg: #f3f4f6;
+  --tag-bg: #eef2ff;
+  --tag-text: #4338ca;
+  --radius: 14px;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --font-body: 'Outfit', sans-serif;
+  --font-serif: 'DM Serif Display', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── NAV ─────────────────────────────────── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(247,245,240,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0 24px;
+}
+nav .inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  height: 60px;
+}
+nav .logo {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+nav .logo svg { color: var(--accent); }
+nav .links { display: flex; gap: 4px; list-style: none; margin-left: auto; }
+nav .links a {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+nav .links a:hover { background: var(--border-soft); color: var(--text); }
+
+/* ── HERO ────────────────────────────────── */
+.hero {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 80px 24px 64px;
+  position: relative;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 480px; height: 480px;
+  background: radial-gradient(circle, rgba(22,163,74,0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-mid);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+h1 {
+  font-family: var(--font-serif);
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 20px;
+  max-width: 720px;
+}
+h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+.subtitle {
+  font-size: 17px;
+  color: var(--muted);
+  max-width: 560px;
+  line-height: 1.7;
+  margin-bottom: 36px;
+}
+.hero-meta {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.meta-item strong { color: var(--text); font-weight: 600; }
+.meta-item svg { color: var(--accent); }
+
+/* ── SECTIONS ─────────────────────────────── */
+.section {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 40px;
+}
+.section-icon {
+  width: 44px; height: 44px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-mid);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.section-title {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+.section-desc {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ── CARDS ────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+.card-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.card p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+/* ── CALLOUT ──────────────────────────────── */
+.callout {
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+.callout-success { background: var(--accent-soft); border: 1px solid var(--accent-mid); }
+.callout-warn { background: var(--warn-soft); border: 1px solid #fde68a; }
+.callout svg { flex-shrink: 0; margin-top: 2px; }
+.callout-success svg { color: var(--accent); }
+.callout-warn svg { color: var(--warn); }
+.callout p { font-size: 14px; line-height: 1.6; }
+.callout strong { font-weight: 600; }
+
+/* ── BENCH ────────────────────────────────── */
+.bench-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 80px;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.bench-row:last-child { border-bottom: none; }
+.bench-label { font-size: 14px; font-weight: 500; color: var(--text); }
+.bench-track { height: 20px; background: var(--bg); border-radius: 8px; overflow: hidden; }
+.bench-fill { height: 100%; background: var(--accent); border-radius: 8px; transition: width 0.6s ease; }
+.bench-fill.highlight { background: linear-gradient(90deg, #16a34a, #22c55e); }
+.bench-val { font-size: 14px; font-weight: 600; color: var(--text); text-align: right; }
+.bench-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+
+/* ── COMPARISON TABLE ─────────────────────── */
+.comp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.comp-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 2px solid var(--border);
+  background: var(--bg);
+}
+.comp-table th:first-child { border-radius: 10px 0 0 0; }
+.comp-table th:last-child { border-radius: 0 10px 0 0; }
+.comp-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+.comp-table tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+.comp-table tr:last-child td:last-child { border-radius: 0 0 10px 0; }
+.comp-table .check { color: var(--accent); font-weight: 700; }
+.comp-table .cross { color: #dc2626; font-weight: 700; }
+.comp-table .warn-check { color: #d97706; font-weight: 700; }
+.platform-name { font-weight: 600; }
+.platform-tag {
+  display: inline-block;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.platform-tag.recommended { background: var(--accent-soft); color: var(--accent); }
+.platform-tag.simplest { background: #fdf2f8; color: #be185d; }
+.platform-tag.custom { background: #f0fdf4; color: #15803d; }
+
+/* ── STEP TIMELINE ────────────────────────── */
+.steps { list-style: none; }
+.step-item {
+  position: relative;
+  padding: 0 0 32px 48px;
+}
+.step-item:last-child { padding-bottom: 0; }
+.step-item::before {
+  content: '';
+  position: absolute;
+  left: 15px; top: 28px; bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.step-item:last-child::before { display: none; }
+.step-num {
+  position: absolute;
+  left: 0; top: 0;
+  width: 32px; height: 32px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+.step-item h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  margin-top: 4px;
+}
+.step-item p { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+.step-item code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text);
+}
+.step-sub {
+  margin-top: 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+}
+.step-sub li { margin-left: 16px; margin-bottom: 4px; }
+
+/* ── CODE BLOCK ───────────────────────────── */
+.code-block {
+  background: #1e293b;
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+.code-block code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.7;
+  white-space: pre;
+}
+.code-block .c-key { color: #60a5fa; }
+.code-block .c-val { color: #86efac; }
+.code-block .c-comment { color: #64748b; }
+
+/* ── AGREEMENT CLAUSE ──────────────────────── */
+.clause {
+  border-left: 3px solid var(--accent);
+  padding: 16px 20px;
+  background: var(--card);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.clause h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.clause p, .clause li {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.clause li { margin-left: 18px; margin-bottom: 4px; }
+
+/* ── EMAIL TEMPLATE ───────────────────────── */
+.email-frame {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+.email-header {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.email-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+}
+.dot-red { background: #ef4444; }
+.dot-yellow { background: #f59e0b; }
+.dot-green { background: #22c55e; }
+.email-subject {
+  font-size: 13px;
+  color: var(--muted);
+  margin-left: 12px;
+}
+.email-body { padding: 32px 36px; font-size: 15px; line-height: 1.8; }
+.email-body .greeting { font-weight: 600; margin-bottom: 16px; }
+.email-body p { margin-bottom: 16px; }
+.email-body .highlight-box {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-mid);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin: 20px 0;
+}
+.email-body .highlight-box .big { font-size: 22px; font-weight: 700; color: var(--accent); display: block; }
+.email-body .cta {
+  display: inline-block;
+  background: var(--accent);
+  color: white !important;
+  text-decoration: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  margin: 20px 0;
+}
+.email-body .sig { margin-top: 24px; color: var(--muted); }
+.email-body .sig strong { color: var(--text); display: block; }
+
+/* ── ASSETS GRID ──────────────────────────── */
+.asset-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s;
+}
+.asset-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.asset-preview {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.asset-preview img { width: 100%; height: 100%; object-fit: cover; }
+.asset-info { padding: 16px 20px; }
+.asset-info h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.asset-info p { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; }
+.asset-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.badge-green { background: var(--accent-soft); color: var(--accent); }
+.badge-blue { background: #eff6ff; color: #2563eb; }
+.badge-purple { background: #f5f3ff; color: #7c3aed; }
+.badge-orange { background: #fff7ed; color: #ea580c; }
+
+/* ── COPY BLOCK ───────────────────────────── */
+.copy-block {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  position: relative;
+  margin: 8px 0;
+}
+.copy-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.copy-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.copy-btn:hover { background: var(--bg); color: var(--text); }
+
+/* ── DIVIDER ──────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  margin: 0 0 48px;
+}
+
+/* ── PROMO BANNER MOCK ─────────────────────── */
+.banner-mock {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-radius: 10px;
+  padding: 28px 36px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+.banner-mock::after {
+  content: '';
+  position: absolute;
+  right: -20px; top: -20px;
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, rgba(22,163,74,0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+.banner-mock .b-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #4ade80; margin-bottom: 8px; }
+.banner-mock .b-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; line-height: 1.2; }
+.banner-mock .b-sub { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 16px; }
+.banner-mock .b-cta {
+  display: inline-block;
+  background: #16a34a;
+  color: white;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.banner-mock .b-cta:hover { background: #15803d; }
+.banner-mock-2 {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid var(--accent-mid);
+  color: var(--text);
+}
+.banner-mock-2 .b-label { color: var(--accent); }
+.banner-mock-2 .b-cta { background: var(--text); color: white; }
+
+/* ── FOOTER ───────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border-soft);
+  padding: 40px 24px;
+  text-align: center;
+}
+footer p { font-size: 13px; color: var(--muted); }
+
+/* ── RESPONSIVE ────────────────────────────── */
+@media (max-width: 768px) {
+  nav .links { display: none; }
+  .card-grid-3 { grid-template-columns: 1fr; }
+  .hero { padding: 48px 24px 40px; }
+  h1 { font-size: 34px; }
+  .bench-row { grid-template-columns: 120px 1fr 60px; }
+  .email-body { padding: 24px; font-size: 14px; }
+  .comp-table { font-size: 12px; }
+  .comp-table th, .comp-table td { padding: 10px 10px; }
+}
+@media (max-width: 480px) {
+  .banner-mock { padding: 20px 24px; }
+  .banner-mock .b-title { font-size: 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────── -->
+<nav>
+  <div class="inner">
+    <a href="#" class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      Prompt Helper Gemini
+    </a>
+    <ul class="links">
+      <li><a href="#commission">Commission</a></li>
+      <li><a href="#platforms">Platforms</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#agreement">Agreement</a></li>
+      <li><a href="#email">Email</a></li>
+      <li><a href="#assets">Assets</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────── -->
+<section class="hero">
+  <div class="badge">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    Affiliate Program Guide
+  </div>
+  <h1>Turn your <em>430 users</em> into a 1,000-person<br>affiliate sales army</h1>
+  <p class="subtitle">A complete, step-by-step setup guide for Prompt Helper Gemini's Chrome extension affiliate program — covering commission structure, platform selection, legal terms, recruitment, and promotional assets.</p>
+  <div class="hero-meta">
+    <div class="meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Setup time: <strong>2–4 hours</strong>
+    </div>
+    <div class="meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 15h4"/></svg>
+      6 deliverables in one guide
+    </div>
+    <div class="meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Stripe-integrated &amp; tax-compliant
+    </div>
+  </div>
+</section>
+
+<!-- ── 01: COMMISSION STRUCTURE ──────────────────────── -->
+<section class="section" id="commission">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    </div>
+    <div>
+      <h2 class="section-title">01 — Commission Structure</h2>
+      <p class="section-desc">The right commission model determines whether affiliates promote you once or for years. Here's the data-driven recommendation.</p>
+    </div>
+  </div>
+
+  <div class="callout callout-success">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    <p><strong>Recommendation: 30% recurring commission.</strong> Affiliates earn 30% of every payment — including renewals — for the full lifetime of the customer they refer. This is the industry standard for SaaS Chrome extensions and creates genuine alignment between your affiliate and product growth.</p>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <p class="bench-title">Commission Model Comparison</p>
+    <div class="bench-row">
+      <div class="bench-label">15% one-time</div>
+      <div class="bench-track"><div class="bench-fill" style="width:15%"></div></div>
+      <div class="bench-val">Low incentive</div>
+    </div>
+    <div class="bench-row">
+      <div class="bench-label">15% recurring</div>
+      <div class="bench-track"><div class="bench-fill" style="width:45%"></div></div>
+      <div class="bench-val">Decent</div>
+    </div>
+    <div class="bench-row">
+      <div class="bench-label">20% one-time</div>
+      <div class="bench-track"><div class="bench-fill" style="width:20%"></div></div>
+      <div class="bench-val">Low incentive</div>
+    </div>
+    <div class="bench-row">
+      <div class="bench-label">20% recurring</div>
+      <div class="bench-track"><div class="bench-fill" style="width:60%"></div></div>
+      <div class="bench-val">Good</div>
+    </div>
+    <div class="bench-row">
+      <div class="bench-label">30% recurring</div>
+      <div class="bench-track"><div class="bench-fill highlight" style="width:90%"></div></div>
+      <div class="bench-val" style="color:var(--accent)">Best choice</div>
+    </div>
+    <div class="bench-row">
+      <div class="bench-label">40% recurring</div>
+      <div class="bench-track"><div class="bench-fill" style="width:80%"></div></div>
+      <div class="bench-val">Generous</div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <h3>Why 30% Recurring?</h3>
+      <p>For a freemium-to-premium product with Stripe billing, 30% is the sweet spot. You keep 70% of revenue to cover hosting, support, and operations. Your affiliate earns ongoing passive income — so they stay motivated to keep sending quality referrals. Win-win.</p>
+    </div>
+    <div class="card">
+      <h3>What this means in practice</h3>
+      <p>If a customer pays <strong>$9/month</strong> via Stripe: affiliate earns <strong>$2.70/month</strong> as long as that customer stays subscribed. A $99/year plan = <strong>$29.70/year</strong> per subscriber. 10 paying referrals = $297/month in passive affiliate income.</p>
+    </div>
+    <div class="card">
+      <h3>Cookie & Attribution</h3>
+      <p>Set a <strong>90-day cookie window</strong>. If a user clicks an affiliate link and subscribes within 90 days, the affiliate gets credit — even if they come back later. This dramatically increases conversions and reduces affiliate frustration.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 02: PLATFORM SELECTION ───────────────────────── -->
+<section class="section" id="platforms">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    </div>
+    <div>
+      <h2 class="section-title">02 — Platform Comparison</h2>
+      <p class="section-desc">Three options, each with a different trade-off between simplicity, power, and control.</p>
+    </div>
+  </div>
+
+  <div class="card" style="overflow-x:auto">
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th><span class="platform-name">Rewardful</span> <span class="platform-tag recommended">Recommended</span></th>
+          <th><span class="platform-name">Gumroad</span> <span class="platform-tag simplest">Simplest</span></th>
+          <th><span class="platform-name">Custom (DIY)</span> <span class="platform-tag custom">Most Control</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Setup difficulty</td>
+          <td>Medium — connects Stripe + affiliate tracking</td>
+          <td>Low — all-in-one, minimal config</td>
+          <td>High — build everything from scratch</td>
+        </tr>
+        <tr>
+          <td>Commission models</td>
+          <td>Recurring + one-time, multi-tier</td>
+          <td>Recurring + one-time</td>
+          <td>Fully customizable</td>
+        </tr>
+        <tr>
+          <td>Stripe integration</td>
+          <td class="check">Native (Stripe Connect)</td>
+          <td class="check">Native</td>
+          <td class="warn-check">Manual webhook</td>
+        </tr>
+        <tr>
+          <td>Tax compliance (1099/W-9)</td>
+          <td class="check">Auto via Stripe Connect</td>
+          <td class="check">Built-in</td>
+          <td class="cross">DIY</td>
+        </tr>
+        <tr>
+          <td>Real-time tracking</td>
+          <td class="check">Dashboard + email alerts</td>
+          <td class="check">Basic dashboard</td>
+          <td class="warn-check">Custom build</td>
+        </tr>
+        <tr>
+          <td>Self-serve affiliate signup</td>
+          <td class="check">Yes — branded portal</td>
+          <td class="check">Yes</td>
+          <td class="warn-check">Needs custom form</td>
+        </tr>
+        <tr>
+          <td>Platform fee</td>
+          <td>5% on commissions</td>
+          <td>10% + payment fees</td>
+          <td>$0 (your time)</td>
+        </tr>
+        <tr>
+          <td>Best for</td>
+          <td>SaaS with Stripe, serious affiliates</td>
+          <td>Quick start, small volume</td>
+          <td>Maximum control, dev resources</td>
+        </tr>
+        <tr>
+          <td>Time to launch</td>
+          <td>1–2 hours</td>
+          <td>30 minutes</td>
+          <td>1–2 weeks</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-warn" style="margin-top:20px">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <p><strong>Important:</strong> If you use Gumroad for payments AND affiliate tracking, their 10% fee applies to ALL transactions — not just affiliate ones. Rewardful's 5% fee only applies to affiliate-attributed revenue, which is far more economical.</p>
+  </div>
+</section>
+
+<!-- ── 03: SETUP INSTRUCTIONS ───────────────────────── -->
+<section class="section" id="setup">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    </div>
+    <div>
+      <h2 class="section-title">03 — Step-by-Step Setup</h2>
+      <p class="section-desc">Detailed setup for all three platforms.</p>
+    </div>
+  </div>
+
+  <div class="card-grid" style="margin-bottom:32px">
+    <div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px">
+        <span style="background:var(--accent-soft);color:var(--accent);width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">1</span>
+        Rewardful Setup
+      </h3>
+      <ol class="steps">
+        <li class="step-item">
+          <div class="step-num">1</div>
+          <h4>Create Rewardful account</h4>
+          <p>Go to <code>getrewardful.com</code> → Sign up. Connect your Stripe account via OAuth. This links Rewardful to your Stripe and enables commission tracking.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">2</div>
+          <h4>Configure commission rate</h4>
+          <p>In Settings → Payout → Default Commission, set:<br>Rate: <code>30%</code><br>Type: <code>Recurring</code><br>Duration: <code>Unlimited (lifetime)</code></p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">3</div>
+          <h4>Set cookie window</h4>
+          <p>Settings → Referral → Cookie Window → set to <code>90 days</code>. This is critical for accurate attribution.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">4</div>
+          <h4>Create your affiliate portal</h4>
+          <p>Rewardful auto-generates a portal at <code>yourproduct.rewardful.com</code>. Customize branding, add your own copy, and enable self-serve signup.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">5</div>
+          <h4>Add your Stripe webhook</h4>
+          <p>Rewardful provides a webhook URL. In Stripe Dashboard → Webhooks, add the Rewardful endpoint. This syncs all payments and refunds automatically.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">6</div>
+          <h4>Test with a pilot affiliate</h4>
+          <p>Create a test affiliate account. Complete a purchase through their link. Verify it appears in Rewardful's dashboard within minutes. Fix any tracking gaps before going live.</p>
+        </li>
+      </ol>
+    </div>
+
+    <div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px">
+        <span style="background:#fdf2f8;color:#be185d;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">2</span>
+        Gumroad Setup
+      </h3>
+      <ol class="steps">
+        <li class="step-item">
+          <div class="step-num">1</div>
+          <h4>Enable Gumroad's affiliate feature</h4>
+          <p>In Gumroad → Settings → Affiliates → toggle <strong>Enable affiliates</strong>. You can now onboard affiliates directly within Gumroad.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">2</div>
+          <h4>Set commission rate</h4>
+          <p>Set default to <code>30%</code> recurring. In Advanced settings, choose <strong>"For all billing intervals"</strong> for lifetime recurring commissions.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">3</div>
+          <h4>Set up your product</h4>
+          <p>Add your premium tier as a product or subscription. If using Stripe directly alongside Gumroad, use Gumroad's overlay checkout — this ensures affiliate attribution works.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">4</div>
+          <h4>Invite affiliates</h4>
+          <p>Gumroad generates unique affiliate links. Go to your product → Affiliates → Generate link. Share the link with recruits via email or Gumroad's built-in share tools.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">5</div>
+          <h4>Configure payouts</h4>
+          <p>Gumroad pays affiliates via PayPal or Stripe Connect. Affiliates complete W-9 forms directly in Gumroad. Set minimum payout threshold (recommended: <code>$25</code>).</p>
+        </li>
+      </ol>
+    </div>
+
+    <div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px">
+        <span style="background:#f0fdf4;color:#15803d;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">3</span>
+        Custom DIY Setup
+      </h3>
+      <ol class="steps">
+        <li class="step-item">
+          <div class="step-num">1</div>
+          <h4>Generate referral links</h4>
+          <p>Create a URL structure: <code>yourdomain.com/?ref=AFFILIATE_ID</code> or use path-based: <code>yourdomain.com/ref/AFFILIATE_ID</code>. Store affiliate IDs in your database or a spreadsheet.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">2</div>
+          <h4>Track with Google Analytics 4</h4>
+          <p>Set up a custom UTM parameter: <code>utm_source=affiliate&utm_medium=referral&utm_campaign=NAME</code>. Use GA4 Audiences to segment affiliate traffic and set up conversion goals.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">3</div>
+          <h4>Add Stripe webhook listener</h4>
+          <div class="code-block">
+<code><span class="c-comment">// Example Stripe webhook handler (Node.js)</span>
+<span class="c-key">app.post</span>(<span class="c-val">'/webhook/stripe'</span>, (req, res) => {
+  <span class="c-key">const sig</span> = req.headers[<span class="c-val">'stripe-signature'</span>];
+  <span class="c-key">const event</span> = stripe.webhooks.constructEvent(
+    req.body, sig, <span class="c-val">'WEBHOOK_SECRET'</span>
+  );
+  <span class="c-key">if</span> (event.type === <span class="c-val">'invoice.paid'</span>) {
+    <span class="c-key">const customer</span> = event.data.object.customer;
+    <span class="c-comment">// Look up affiliate by customer metadata, pay commission</span>
+    await <span class="c-key">calculateAndPayAffiliate</span>(customer);
+  }
+});</code>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-num">4</div>
+          <h4>Manage affiliates in a spreadsheet</h4>
+          <p>Track: affiliate name, email, ref code, referred customers, commission earned, payout status. Use Google Sheets + Apps Script for automated commission calculation.</p>
+        </li>
+        <li class="step-item">
+          <div class="step-num">5</div>
+          <h4>Manual or PayPal payouts</h4>
+          <p>Pay affiliates monthly via PayPal or bank transfer. Track W-9 status in your spreadsheet. Set a minimum payout threshold (e.g., $25).</p>
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ── 04: AFFILIATE AGREEMENT ───────────────────────── -->
+<section class="section" id="agreement">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    </div>
+    <div>
+      <h2 class="section-title">04 — Affiliate Agreement Template</h2>
+      <p class="section-desc">Every affiliate must agree to these terms before joining. Key clauses to include in your affiliate agreement.</p>
+    </div>
+  </div>
+
+  <div class="card-grid" style="margin-bottom:24px">
+    <div>
+      <div class="clause">
+        <h4>§1 — Definitions</h4>
+        <p>"Affiliate" means you (the independent promoter). "Commission" is the percentage of Net Revenue paid to you. "Referred Customer" is anyone who purchases via your unique affiliate link. "Net Revenue" is total payments minus Stripe fees and refunds.</p>
+      </div>
+      <div class="clause">
+        <h4>§2 — Commission Rate</h4>
+        <ul>
+          <li>30% of Net Revenue for all payments made by Referred Customers</li>
+          <li>Commissions apply to initial subscriptions and all renewals, upgrades, and add-ons</li>
+          <li>Commissions are paid for the full lifetime of the Referred Customer account</li>
+          <li>Cookie window: 90 days from last click</li>
+        </ul>
+      </div>
+      <div class="clause">
+        <h4>§3 — Commission Exclusions</h4>
+        <p>No commission is paid on: free tier signups (no payment), refunds or chargebacks, self-referrals (you cannot refer yourself), or customers from fraudulent/duplicated clicks. If a customer signs up through multiple affiliates, credit goes to the most recent click.</p>
+      </div>
+      <div class="clause">
+        <h4>§4 — Payment Terms</h4>
+        <p>Payouts are processed monthly, within 15 days of month-end. Minimum payout threshold: $25. Payments are sent via PayPal or Stripe Connect. Affiliates are responsible for their own tax obligations. 1099 forms issued when required by US law.</p>
+      </div>
+    </div>
+    <div>
+      <div class="clause">
+        <h4>§5 — Permitted Promotional Methods</h4>
+        <p>Allowed: content marketing (blogs, YouTube, social media), email marketing to your own list, paid advertising where permitted, product reviews. All promotional content must be truthful and not misleading.</p>
+      </div>
+      <div class="clause">
+        <h4>§6 — Prohibited Conduct</h4>
+        <ul>
+          <li>No using our brand name or trademarks in misleading ways</li>
+          <li>No spam or unsolicited bulk email (CAN-SPAM / GDPR compliant only)</li>
+          <li>No fake reviews, testimonials, or fabricated claims about the product</li>
+          <li>No cookie stuffing, typosquatting, or domain squatting</li>
+          <li>No using paid search ads on branded terms without written approval</li>
+          <li>No incentive-only offers (bribing people to sign up)</li>
+        </ul>
+      </div>
+      <div class="clause">
+        <h4>§7 — Termination</h4>
+        <p>Either party may terminate with 7 days notice. Prompt Helper Gemini may terminate immediately for breach of this agreement or suspected fraud. Upon termination, unpaid commissions are paid in the next cycle. Fraudulently earned commissions are never paid and may be reclaimed.</p>
+      </div>
+      <div class="clause">
+        <h4>§8 — Relationship</h4>
+        <p>Affiliates are independent contractors, not employees, partners, or agents. You are solely responsible for your taxes, insurance, and legal compliance. You may not represent yourself as an employee or agent of Prompt Helper Gemini.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-warn">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <p><strong>Legal note:</strong> This is a framework template. Have a lawyer review it before going live, especially if you're operating internationally or handling tax forms. Rewardful and Gumroad include compliant agreement templates as part of their platform — use those as your baseline.</p>
+  </div>
+</section>
+
+<!-- ── 05: RECRUITMENT EMAIL ────────────────────────── -->
+<section class="section" id="email">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    </div>
+    <div>
+      <h2 class="section-title">05 — Recruitment Email</h2>
+      <p class="section-desc">Send this to your 430 existing users. Personalize the [BRACKETS] fields before sending. Use a tool like Loops or ConvertKit for trackable sends.</p>
+    </div>
+  </div>
+
+  <div class="email-frame">
+    <div class="email-header">
+      <div class="email-dot dot-red"></div>
+      <div class="email-dot dot-yellow"></div>
+      <div class="email-dot dot-green"></div>
+      <span class="email-subject">Subject: You're invited to earn 30% recurring commission — Prompt Helper Gemini Affiliate Program 🎯</span>
+    </div>
+    <div class="email-body">
+      <p class="greeting">Hi [First Name],</p>
+
+      <p>You've been using Prompt Helper Gemini — and we think you're the perfect person to help us grow it.</p>
+
+      <p>We're launching our affiliate program and <strong>you get early access before anyone else.</strong></p>
+
+      <div class="highlight-box">
+        <span class="big">Earn 30% recurring commission</span>
+        for every user you refer — forever, not just the first month.
+      </div>
+
+      <p>Here's the math: if just <strong>3 of your colleagues</strong> sign up for our $9/month premium plan, you'll earn <strong>$81/year</strong> in passive income. 10 signups = $270/year. And it keeps growing as they renew.</p>
+
+      <p>We've seen how much you get out of Prompt Helper Gemini. Imagine how much your network would benefit too — and get paid for sharing it.</p>
+
+      <p><strong>What you get as an affiliate:</strong></p>
+      <ul style="margin: 12px 0 12px 20px; color: var(--muted); font-size: 14px;">
+        <li>Your own unique tracking link — 90-day cookie window</li>
+        <li>Ready-to-use banners, copy templates, and a demo video</li>
+        <li>Real-time dashboard tracking every referral and commission</li>
+        <li>Monthly payouts via PayPal or bank transfer (min. $25)</li>
+        <li>Priority support — your questions get answered first</li>
+      </ul>
+
+      <p>No spam, no sales quotas. Just share when it feels natural.</p>
+
+      <a href="[YOUR_AFFILIATE_SIGNUP_URL]" class="cta">Claim Your Affiliate Link →</a>
+
+      <p>This offer expires in <strong>7 days</strong>. After that, the program opens to the public and your early-access bonus (extended cookie window) won't be available.</p>
+
+      <p>Questions? Just reply to this email — I'll personally answer.</p>
+
+      <div class="sig">
+        <strong>[Your Name]</strong>
+        Founder, Prompt Helper Gemini<br>
+        <a href="mailto:[YOUR_EMAIL]" style="color:var(--muted);font-size:13px">[YOUR_EMAIL]</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <h3 style="margin-bottom:12px">Send Strategy</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+      <div>
+        <p style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Timing</p>
+        <p style="font-size:13px;color:var(--muted)">Send Tuesday–Thursday, 9–11am local time. Avoid Mondays and Fridays.</p>
+      </div>
+      <div>
+        <p style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Segment</p>
+        <p style="font-size:13px;color:var(--muted)">Target users who: opened 3+ emails, used the product 5+ times, or hit the free tier limit.</p>
+      </div>
+      <div>
+        <p style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Follow-up</p>
+        <p style="font-size:13px;color:var(--muted)">Send a single follow-up 4 days later if no reply. A/B test subject lines.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 06: PROMOTIONAL ASSETS ───────────────────────── -->
+<section class="section" id="assets">
+  <div class="section-header">
+    <div class="section-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    </div>
+    <div>
+      <h2 class="section-title">06 — Promotional Assets</h2>
+      <p class="section-desc">Everything your affiliates need to start promoting on day one.</p>
+    </div>
+  </div>
+
+  <!-- Banner Previews -->
+  <div style="margin-bottom:40px">
+    <p style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Banner Ad Previews (use these specs for design)</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="banner-mock">
+        <div class="b-label">Prompt Helper Gemini</div>
+        <div class="b-title">Write better prompts.<br>Get smarter AI.</div>
+        <div class="b-sub">Chrome extension with 430+ power users. Free to start.</div>
+        <a href="#" class="b-cta">Get Started Free</a>
+      </div>
+      <div class="banner-mock banner-mock-2">
+        <div class="b-label">Affiliate Offer — Limited Time</div>
+        <div class="b-title">Earn 30% recurring<br>on every referral ✦</div>
+        <div class="b-sub" style="color:#166534">Join the affiliate program. Get paid forever.</div>
+        <a href="#" class="b-cta">Join Now</a>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap">
+      <div class="asset-badge badge-green">728×90 Leaderboard</div>
+      <div class="asset-badge badge-blue">300×250 Medium Rectangle</div>
+      <div class="asset-badge badge-purple">320×50 Mobile Banner</div>
+      <div class="asset-badge badge-orange">120×600 Wide Skyscraper</div>
+    </div>
+  </div>
+
+  <!-- Copy Templates -->
+  <div style="margin-bottom:40px">
+    <p style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Copy Templates — Social & Blog</p>
+    <div class="card-grid">
+      <div class="card">
+        <h3>Twitter / X (280 chars)</h3>
+        <div class="copy-block">
+          <div class="copy-label">Short Tweet</div>
+          Prompt Helper Gemini has replaced 80% of my ChatGPT rewrites. Free Chrome extension, no signup needed. 🔗 [LINK] — I'm an affiliate, btw. <span class="copy-btn" onclick="copyText(this)">Copy</span>
+        </div>
+        <div class="copy-block" style="margin-top:10px">
+          <div class="copy-label">Engagement Tweet</div>
+          If you use ChatGPT, Claude, or Gemini and still get generic responses — the problem is your prompts. This free Chrome extension fixes that. I'm an affiliate because it genuinely works. <span class="copy-btn" onclick="copyText(this)">Copy</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>LinkedIn Post</h3>
+        <div class="copy-block">
+          <div class="copy-label">Recommendation Post</div>
+          I've been testing @Prompt Helper Gemini for 3 weeks and it's become my default prompt editor.
+
+Why I like it: [YOUR REASON]
+
+If you write prompts for AI tools regularly — this is worth 5 minutes of your time. 
+
+I'm also part of their affiliate program (referral link in comments), so if you find it useful, you can support me by signing up through there. Win-win. <span class="copy-btn" onclick="copyText(this)">Copy</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Blog / Email Introduction</h3>
+        <div class="copy-block">
+          <div class="copy-label">Review Intro</div>
+          I've tried dozens of prompt management tools. Most either overcomplicate things or don't integrate where I actually work. Prompt Helper Gemini is the first one I've stuck with — it lives in my Chrome browser and just works.
+
+In this [post/newsletter/video], I'll walk through exactly how I use it, what I like, and how you can try it for free. If you decide to upgrade, you can use my affiliate link to support my work at no extra cost to you. <span class="copy-btn" onclick="copyText(this)">Copy</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video & CTA -->
+  <div>
+    <p style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Demo Video Specs</p>
+    <div class="card-grid">
+      <div class="card">
+        <h3>What to Record</h3>
+        <ul style="font-size:13.5px;color:var(--muted);line-height:1.8;margin-left:18px">
+          <li><strong>0:00–0:15</strong> — Hook: show the before/after of a generic vs. optimized prompt</li>
+          <li><strong>0:15–0:45</strong> — Quick product walkthrough: install, core features, UI</li>
+          <li><strong>0:45–1:15</strong> — Show a real use case (your most common workflow)</li>
+          <li><strong>1:15–1:30</strong> — Pricing & upgrade path (show free vs premium)</li>
+          <li><strong>1:30–1:45</strong> — CTA: your affiliate link + why you're recommending it</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Recording Setup</h3>
+        <ul style="font-size:13.5px;color:var(--muted);line-height:1.8;margin-left:18px">
+          <li>Tool: Loom (loops.com) — free, easy sharing, built-in CTA overlays</li>
+          <li>Screen resolution: 1920×1080 minimum</li>
+          <li>Audio: use a lapel mic or AirPods — clear voice matters most</li>
+          <li>Length: 60–90 seconds for social; 3–5 min for YouTube/blog</li>
+          <li>Add a branded intro/outro slide with your affiliate link visible</li>
+        </ul>
+        <div style="margin-top:12px">
+          <div class="asset-badge badge-blue">Format: MP4 / WebM</div>
+          <div class="asset-badge badge-green" style="margin-left:6px">Host: Loom / YouTube / Vimeo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── QUICK-START CHECKLIST ─────────────────────────── -->
+<section class="section">
+  <hr class="divider">
+  <div class="card" style="background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border-color:#bbf7d0">
+    <h3 style="margin-bottom:20px;font-size:18px;font-weight:700">Your Affiliate Program Launch Checklist</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Choose platform (Rewardful = recommended)</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Connect Stripe and configure 30% recurring commission</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Set 90-day cookie window</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Customize affiliate portal with branding</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Test tracking with a pilot affiliate</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Prepare affiliate agreement (use platform template + add your terms)</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Create banner assets (4 sizes: 728×90, 300×250, 320×50, 120×600)</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Record a 90-sec demo video</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Segment your 430 users for targeted email send</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Send recruitment email + follow-up 4 days later</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Monitor Rewardful/Gumroad dashboard weekly for new signups</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" style="margin-top:3px;accent-color:var(--accent)">
+        <span>Reach out to top-performing affiliates with exclusive bonuses</span>
+      </label>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ───────────────────────────────────────── -->
+<footer>
+  <p>Prompt Helper Gemini — Affiliate Program Setup Guide · Ready to launch in 2–4 hours</p>
+</footer>
+
+<script>
+function copyText(btn) {
+  const text = btn.parentElement.textContent.replace('Copy', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--accent)';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.color = '';
+    }, 1500);
+  });
+}
+</script>
+
+</body>
+</html>

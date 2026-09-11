@@ -5,7 +5,7 @@
 **Price: $0/month**
 
 ### Features:
-- ✅ **10 prompt enhancements per week**
+- ✅ **5 prompt enhancements per week**
 - ✅ **5 "Ask" questions per week**
 - ✅ Basic style templates (default, concise, detailed)
 - ✅ View last 1 history item
@@ -55,7 +55,7 @@
 - **Cost per enhancement: ~$0.00012** (0.012 cents)
 
 ### Free User Usage:
-- 10 enhancements/week × 4.3 weeks = 43/month
+- 5 enhancements/week × 4.3 weeks ≈ 22/month
 - 5 questions/week × 4.3 weeks = 22/month
 - **Total cost: ~$0.007/month**
 
