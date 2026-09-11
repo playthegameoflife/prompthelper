@@ -1430,7 +1430,8 @@ function geminiComposerHasText() {
 }
 
 /**
- * ChatGPT-specific injection (persistent container = zero flicker when typing)
+ * ChatGPT-specific injection — injects directly into DOM as a flex sibling of the send button,
+ * so other controls naturally shift out of the way.
  */
 async function injectChatGPT(inputElement) {
     const sendButton = _findSendButton(inputElement, 'chatgpt');
@@ -1438,19 +1439,53 @@ async function injectChatGPT(inputElement) {
         console.warn('[Prompt Architect] ChatGPT: send button not found. Input found:', !!inputElement);
         throw new Error('ChatGPT send button not found');
     }
-    // Remove any old inline container from composer so only the persistent one remains
-    const wrapperEl = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
-    const anyContainer = document.getElementById('prompt-architect-buttons-container');
-    if (anyContainer && (!wrapperEl || !wrapperEl.contains(anyContainer))) anyContainer.remove();
-    const wrapper = getOrCreateChatGPTPersistentWrapper();
-    ensureChatGPTButtonInWrapper(wrapper);
-    updateChatGPTPersistentPosition();
-    // Only show the button when the composer has text (avoids wrong position when not signed in / empty)
-    wrapper.style.display = chatGPTComposerHasText() ? '' : 'none';
+
+    // Remove any old persistent wrapper (we're switching to inline injection)
+    const oldWrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
+    if (oldWrapper) oldWrapper.remove();
+
+    // Remove any stray inline containers from previous attempts
+    const existing = document.getElementById('prompt-architect-buttons-container');
+    if (existing) existing.remove();
+
+    // Only show when there's text
+    if (!chatGPTComposerHasText()) return;
+
+    const parent = sendButton.parentElement;
+    // Ensure the row is a flex row so the button pushes siblings left
+    parent.style.setProperty('display', 'flex', 'important');
+    parent.style.setProperty('flex-direction', 'row', 'important');
+    parent.style.setProperty('align-items', 'center', 'important');
+
+    // Create button container
+    const design = getPlatformDesign('chatgpt');
+    const enhancerDiv = document.createElement('div');
+    enhancerDiv.id = 'prompt-architect-buttons-container';
+    enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
+    enhancerDiv.style.setProperty('align-items', 'center', 'important');
+    enhancerDiv.style.setProperty('gap', '6px', 'important');
+    enhancerDiv.style.setProperty('margin-right', '6px', 'important');
+    enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+    enhancerDiv.style.setProperty('position', 'relative', 'important');
+    enhancerDiv.style.setProperty('visibility', 'visible', 'important');
+    enhancerDiv.style.setProperty('opacity', '1', 'important');
+    enhancerDiv.style.setProperty('z-index', '999999', 'important');
+
+    const statusArea = document.createElement('div');
+    statusArea.id = 'prompt-architect-status-area';
+    statusArea.style.cssText = 'display:none;align-items:center;gap:6px;';
+    const statusEl = document.createElement('span');
+    statusEl.id = 'prompt-architect-status';
+    statusArea.appendChild(statusEl);
+    enhancerDiv.appendChild(statusArea);
+    enhancerDiv.appendChild(createEnhanceButton(inputElement, enhancerDiv));
+
+    // Insert immediately before the send button — everything else shifts right naturally
+    parent.insertBefore(enhancerDiv, sendButton);
 }
 
 /**
- * Gemini-specific injection (persistent fixed wrapper — avoids mutating the composer toolbar flex row, which clipped Gemini's model/avatar/menu UI).
+ * Gemini-specific injection — injects directly into DOM as a flex sibling of the send button.
  */
 async function injectGemini(inputElement) {
     if (!geminiComposerHasText()) {
@@ -1469,13 +1504,43 @@ async function injectGemini(inputElement) {
         console.warn('[Prompt Architect] Gemini: send button not found. Input found:', !!inputElement);
         throw new Error('Gemini send button not found');
     }
-    const wrapperEl = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-    const anyContainer = document.getElementById('prompt-architect-buttons-container');
-    if (anyContainer && (!wrapperEl || !wrapperEl.contains(anyContainer))) anyContainer.remove();
-    const wrapper = getOrCreateGeminiPersistentWrapper();
-    ensureGeminiButtonInWrapper(wrapper);
-    updateGeminiPersistentPosition();
-    wrapper.style.display = '';
+
+    // Remove any old persistent wrapper
+    const oldWrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
+    if (oldWrapper) oldWrapper.remove();
+
+    // Remove any stray inline containers
+    const existing = document.getElementById('prompt-architect-buttons-container');
+    if (existing) existing.remove();
+
+    const parent = sendButton.parentElement;
+    parent.style.setProperty('display', 'flex', 'important');
+    parent.style.setProperty('flex-direction', 'row', 'important');
+    parent.style.setProperty('align-items', 'center', 'important');
+
+    const design = getPlatformDesign('gemini');
+    const enhancerDiv = document.createElement('div');
+    enhancerDiv.id = 'prompt-architect-buttons-container';
+    enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
+    enhancerDiv.style.setProperty('align-items', 'center', 'important');
+    enhancerDiv.style.setProperty('gap', '6px', 'important');
+    enhancerDiv.style.setProperty('margin-right', '6px', 'important');
+    enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+    enhancerDiv.style.setProperty('position', 'relative', 'important');
+    enhancerDiv.style.setProperty('visibility', 'visible', 'important');
+    enhancerDiv.style.setProperty('opacity', '1', 'important');
+    enhancerDiv.style.setProperty('z-index', '999999', 'important');
+
+    const statusArea = document.createElement('div');
+    statusArea.id = 'prompt-architect-status-area';
+    statusArea.style.cssText = 'display:none;align-items:center;gap:6px;';
+    const statusEl = document.createElement('span');
+    statusEl.id = 'prompt-architect-status';
+    statusArea.appendChild(statusEl);
+    enhancerDiv.appendChild(statusArea);
+    enhancerDiv.appendChild(createEnhanceButton(inputElement, enhancerDiv));
+
+    parent.insertBefore(enhancerDiv, sendButton);
 }
 
 /**
@@ -1908,7 +1973,7 @@ async function injectButtonNextToSend(inputElement, sendButton, container = null
                 return;
             }
 
-            // Gemini uses injectGemini (body-level fixed wrapper). Never apply flex+nowrap+insertion into the composer here.
+            // Gemini uses injectGemini (DOM injection into composer row)
             if (detectPlatform() === 'gemini') {
                 const input = inputElement || findPlatformSpecificInput();
                 if (!input) {
