@@ -1121,6 +1121,114 @@ let geminiLockedPosition = null;
 let geminiLastAnchorElement = null;
 let geminiLastAnchorKey = null;
 
+// Review nudge
+const REVIEW_THRESHOLD = 4;
+const REVIEW_NUDGE_KEY = 'reviewNudged';
+
+// ─── Review Nudge ────────────────────────────────────────────────────────────────
+/**
+ * Shows a one-time review prompt after a successful enhancement.
+ * Fires once per user, after REVIEW_THRESHOLD successful enhancements.
+ */
+function maybeShowReviewNudge() {
+    const existing = document.getElementById('pa-review-nudge');
+    if (existing) return;
+
+    chrome.storage.local.get([REVIEW_NUDGE_KEY], (result) => {
+        if (result[REVIEW_NUDGE_KEY]) return; // already nudged or dismissed
+
+        const countKey = 'paEnhancementCount';
+        chrome.storage.local.get([countKey], (r) => {
+            const count = (r[countKey] || 0) + 1;
+            chrome.storage.local.set({ [countKey]: count });
+
+            if (count < REVIEW_THRESHOLD) return;
+
+            // Mark as nudged so we never show again
+            chrome.storage.local.set({ [REVIEW_NUDGE_KEY]: true });
+
+            const platform = detectPlatform();
+            const design = getPlatformDesign(platform);
+
+            const nudge = document.createElement('div');
+            nudge.id = 'pa-review-nudge';
+            nudge.style.cssText = `
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                z-index: 9999999;
+                background: rgba(15, 15, 20, 0.95);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 14px;
+                padding: 16px 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+                max-width: 280px;
+                animation: pa-nudge-slide-in 0.3s cubic-bezier(0.34, 1.2, 0.64, 1);
+            `;
+
+            // Add animation
+            if (!document.getElementById('pa-review-animations')) {
+                const style = document.createElement('style');
+                style.id = 'pa-review-animations';
+                style.textContent = `
+                    @keyframes pa-nudge-slide-in {
+                        from { opacity: 0; transform: translateY(12px) scale(0.96); }
+                        to   { opacity: 1; transform: translateY(0) scale(1); }
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            nudge.innerHTML = `
+                <div style="display:flex; align-items:flex-start; gap:10px;">
+                    <span style="font-size:20px; line-height:1;">✨</span>
+                    <div>
+                        <div style="color:#ffffff; font-size:14px; font-weight:600; line-height:1.3;">
+                            Glad it's working for you!
+                        </div>
+                        <div style="color:rgba(255,255,255,0.55); font-size:13px; margin-top:4px; line-height:1.4;">
+                            A quick review helps others find Prompt Helper too. Takes 30 seconds.
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button id="pa-review-great" style="
+                        flex:1; padding:8px 12px; border-radius:8px; border:none; cursor:pointer;
+                        background:${design.primary}; color:#fff; font-size:13px; font-weight:600;
+                        transition:opacity 0.2s;
+                    ">Leave a review</button>
+                    <button id="pa-review-dismiss" style="
+                        flex:1; padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);
+                        cursor:pointer; background:transparent; color:rgba(255,255,255,0.5);
+                        font-size:13px; transition:opacity 0.2s;
+                    ">Not now</button>
+                </div>
+            `;
+
+            document.body.appendChild(nudge);
+
+            nudge.querySelector('#pa-review-great').onclick = () => {
+                nudge.remove();
+                // Open Chrome Web Store review page
+                window.open('https://chrome.google.com/webstore/detail/prompt-helper-gemini/reviews', '_blank');
+            };
+
+            nudge.querySelector('#pa-review-dismiss').onclick = () => {
+                nudge.remove();
+            };
+
+            // Auto-dismiss after 12s
+            setTimeout(() => { if (nudge.parentElement) nudge.remove(); }, 12000);
+        });
+    });
+}
+
 /** Nearest ancestor of the send/anchor row that still contains the composer input (avoids scanning the whole page). */
 function findGeminiComposerRowRoot(inputEl, anchorEl) {
     if (!inputEl || !anchorEl) return null;
@@ -3051,7 +3159,7 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
                         if (result.autoSendAfterEnhancement) {
                             // Wait a moment for the input to settle
                             await new Promise(resolve => setTimeout(resolve, 300));
-                            
+
                             // Find and click the send button
                             const sendButton = findSendButton(elementToUpdate || currentInputElement);
                             if (sendButton && sendButton.offsetParent !== null) {
@@ -3060,6 +3168,9 @@ async function handleButtonClick(inputElement, enhancementType, statusContainer)
                             }
                         }
                     });
+
+                    // Fire review nudge after a few successful enhancements
+                    maybeShowReviewNudge();
                 }
             }).catch(error => {
                 console.error('[Prompt Architect] Error updating input:', error);
