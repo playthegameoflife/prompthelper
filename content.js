@@ -1115,23 +1115,6 @@ function setupButtonProtection(enhancerDiv, inputElement) {
  * Zero-flicker ChatGPT: persistent container in body so the button is never removed when composer re-renders.
  */
 const CHATGPT_PERSISTENT_WRAPPER_ID = 'prompt-architect-chatgpt-persistent';
-const GEMINI_PERSISTENT_WRAPPER_ID = 'prompt-architect-gemini-persistent';
-let geminiLockedPosition = null;
-/** When Gemini swaps toolbar nodes, invalidate the anti-jitter lock so the button re-snaps. */
-let geminiLastAnchorElement = null;
-let geminiLastAnchorKey = null;
-
-/** Nearest ancestor of the send/anchor row that still contains the composer input (avoids scanning the whole page). */
-function findGeminiComposerRowRoot(inputEl, anchorEl) {
-    if (!inputEl || !anchorEl) return null;
-    let el = anchorEl.parentElement;
-    for (let depth = 0; depth < 30 && el; depth++) {
-        if (el.contains(inputEl)) return el;
-        el = el.parentElement;
-    }
-    return inputEl.closest('form');
-}
-
 function getOrCreateChatGPTPersistentWrapper() {
     let wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
     if (wrapper) return wrapper;
@@ -1142,11 +1125,11 @@ function getOrCreateChatGPTPersistentWrapper() {
     return wrapper;
 }
 
-function getOrCreateGeminiPersistentWrapper() {
-    let wrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
+function getOrCreateChatGPTPersistentWrapper() {
+    let wrapper = document.getElementById(CHATGPT_PERSISTENT_WRAPPER_ID);
     if (wrapper) return wrapper;
     wrapper = document.createElement('div');
-    wrapper.id = GEMINI_PERSISTENT_WRAPPER_ID;
+    wrapper.id = CHATGPT_PERSISTENT_WRAPPER_ID;
     wrapper.style.cssText = 'position:fixed;z-index:999999;pointer-events:none;margin:0;padding:0;';
     document.body.appendChild(wrapper);
     return wrapper;
@@ -1229,135 +1212,6 @@ function updateChatGPTPersistentPosition() {
     wrapper.style.pointerEvents = '';
 }
 
-function updateGeminiPersistentPosition() {
-    const wrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-    if (!wrapper || !wrapper.firstElementChild) return;
-    const input = findPlatformSpecificInput();
-    const inner = wrapper.firstElementChild;
-    const w = inner.offsetWidth || 48;
-    const h = inner.offsetHeight || 40;
-
-    const inputRect = input ? input.getBoundingClientRect() : null;
-    const findGeminiRightActionButton = (inputEl) => {
-        if (!inputEl) return null;
-        const rect = inputEl.getBoundingClientRect();
-        const scope = inputEl.closest('form') || inputEl.parentElement || document.body;
-        const candidates = scope.querySelectorAll('button, [role="button"], a[role="button"]');
-        let best = null;
-        let bestScore = -Infinity;
-        for (const el of candidates) {
-            if (!el || el.offsetParent === null) continue;
-            const r = el.getBoundingClientRect();
-            const verticalDistance = Math.abs((r.top + r.height / 2) - (rect.top + rect.height / 2));
-            // Keep candidates in the composer row neighborhood.
-            if (verticalDistance > 120) continue;
-            // Must be on or to the right half of composer.
-            if (r.right < rect.left + rect.width * 0.45) continue;
-            // Prefer buttons farther right and close in Y.
-            const score = (r.left * 2) - verticalDistance;
-            if (score > bestScore) {
-                bestScore = score;
-                best = el;
-            }
-        }
-        return best;
-    };
-
-    const anchorButton = input ? (findGeminiRightActionButton(input) || _findSendButton(input, 'gemini')) : null;
-    if (geminiLastAnchorElement && !geminiLastAnchorElement.isConnected) {
-        geminiLockedPosition = null;
-        geminiLastAnchorElement = null;
-    }
-    if (anchorButton !== geminiLastAnchorElement) {
-        geminiLockedPosition = null;
-        geminiLastAnchorElement = anchorButton;
-    }
-    if (!anchorButton) {
-        if (inputRect && inputRect.width > 0 && inputRect.height > 0) {
-            const fallbackX = inputRect.left - w - 8;
-            const fallbackY = inputRect.top + inputRect.height / 2 - h / 2;
-            applyClampedFixedPosition(wrapper, fallbackX, fallbackY, w, h);
-            geminiLockedPosition = { x: parseFloat(wrapper.style.left) || fallbackX, y: parseFloat(wrapper.style.top) || fallbackY };
-            wrapper.style.pointerEvents = '';
-        }
-        return;
-    }
-
-    const anchorRect = anchorButton.getBoundingClientRect();
-    const rowCenterY = anchorRect.top + anchorRect.height / 2;
-    const controlRects = [];
-    const composerScope = findGeminiComposerRowRoot(input, anchorButton) || input?.closest('form') || document.body;
-    const controls = composerScope.querySelectorAll('button, [role="button"], a[role="button"]');
-    for (const el of controls) {
-        if (!el || el.offsetParent === null) continue;
-        const r = el.getBoundingClientRect();
-        // Same composer row neighborhood only
-        if (Math.abs((r.top + r.height / 2) - rowCenterY) > 26) continue;
-        // Keep controls near current composer horizontally
-        if (inputRect) {
-            const centerX = r.left + r.width / 2;
-            if (centerX < (inputRect.left - 120) || centerX > (inputRect.right + 120)) continue;
-        }
-        controlRects.push(r);
-    }
-
-    const getNonOverlappingX = (startX, y) => {
-        const gap = 8;
-        let x = startX;
-        let guard = 0;
-        while (guard++ < 20) {
-            const btnLeft = x;
-            const btnRight = x + w;
-            const btnTop = y;
-            const btnBottom = y + h;
-            const overlap = controlRects.find((r) =>
-                btnRight > (r.left - 2) &&
-                btnLeft < (r.right + 2) &&
-                btnBottom > (r.top - 2) &&
-                btnTop < (r.bottom + 2)
-            );
-            if (!overlap) return x;
-            x = overlap.left - w - gap;
-            if (inputRect && x < inputRect.left - w - gap) break;
-        }
-        return x;
-    };
-
-    const maxRowBelowInput = 120;
-    if (inputRect && inputRect.height > 0 && (anchorRect.top - (inputRect.top + inputRect.height)) > maxRowBelowInput) {
-        applyClampedFixedPosition(wrapper, inputRect.left - w - 8, inputRect.top + inputRect.height / 2 - h / 2, w, h);
-    } else {
-        // Keep Improve left of Gemini's entire right control cluster (e.g., model picker/sparkle/send).
-        const y = rowCenterY - h / 2;
-        let baseX = anchorRect.left - w - 8;
-        if (inputRect && controlRects.length) {
-            const rightCluster = controlRects.filter((r) => (r.left + r.width / 2) > (inputRect.left + inputRect.width * 0.55));
-            if (rightCluster.length) {
-                const clusterLeft = Math.min(...rightCluster.map((r) => r.left));
-                baseX = clusterLeft - w - 8;
-            }
-        }
-        const x = getNonOverlappingX(baseX, y);
-
-        // Keep Gemini stable while typing: only move when layout changed significantly.
-        if (geminiLockedPosition) {
-            const dx = Math.abs(x - geminiLockedPosition.x);
-            const dy = Math.abs(y - geminiLockedPosition.y);
-            const relayoutThreshold = 28;
-            if (dx < relayoutThreshold && dy < relayoutThreshold) {
-                applyClampedFixedPosition(wrapper, geminiLockedPosition.x, geminiLockedPosition.y, w, h);
-            } else {
-                applyClampedFixedPosition(wrapper, x, y, w, h);
-                geminiLockedPosition = { x: parseFloat(wrapper.style.left) || x, y: parseFloat(wrapper.style.top) || y };
-            }
-        } else {
-            applyClampedFixedPosition(wrapper, x, y, w, h);
-            geminiLockedPosition = { x: parseFloat(wrapper.style.left) || x, y: parseFloat(wrapper.style.top) || y };
-        }
-    }
-    wrapper.style.pointerEvents = '';
-}
-
 function ensureChatGPTButtonInWrapper(wrapper) {
     if (wrapper.querySelector('#prompt-architect-buttons-container')) return;
     const design = getPlatformDesign('chatgpt');
@@ -1386,33 +1240,6 @@ function ensureChatGPTButtonInWrapper(wrapper) {
     wrapper.appendChild(enhancerDiv);
 }
 
-function ensureGeminiButtonInWrapper(wrapper) {
-    if (wrapper.querySelector('#prompt-architect-buttons-container')) return;
-    const design = getPlatformDesign('gemini');
-    const enhancerDiv = document.createElement('div');
-    enhancerDiv.id = 'prompt-architect-buttons-container';
-    enhancerDiv.className = 'flex items-center';
-    enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
-    enhancerDiv.style.setProperty('align-items', 'center', 'important');
-    enhancerDiv.style.setProperty('gap', '8px', 'important');
-    enhancerDiv.style.setProperty('margin-right', '8px', 'important');
-    enhancerDiv.style.setProperty('pointer-events', 'auto', 'important');
-    enhancerDiv.style.setProperty('visibility', 'visible', 'important');
-    enhancerDiv.style.setProperty('opacity', '1', 'important');
-    enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
-    enhancerDiv.style.setProperty('position', 'relative', 'important');
-    enhancerDiv.style.setProperty('align-self', 'center', 'important');
-    const statusArea = document.createElement('div');
-    statusArea.id = 'prompt-architect-status-area';
-    statusArea.style.cssText = 'display:none;align-items:center;gap:6px;';
-    const statusEl = document.createElement('span');
-    statusEl.id = 'prompt-architect-status';
-    statusArea.appendChild(statusEl);
-    enhancerDiv.appendChild(statusArea);
-    // Resolve input at click time (same as ChatGPT) so Gemini SPA re-renders never leave a stale contenteditable on the handler.
-    enhancerDiv.appendChild(createEnhanceButton(null, enhancerDiv));
-    wrapper.appendChild(enhancerDiv);
-}
 
 /** Returns true if the ChatGPT composer input has any text (so we can show the button only after they start typing). */
 function chatGPTComposerHasText() {
