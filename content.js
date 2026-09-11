@@ -1488,30 +1488,58 @@ async function injectChatGPT(inputElement) {
  * Gemini-specific injection — uses fixed-position persistent wrapper to avoid
  * mutating the composer toolbar flex row (which clips and breaks Gemini's layout).
  */
+/**
+ * Gemini-specific injection — injects directly into DOM as a flex sibling of the send button,
+ * so the button shifts naturally with the toolbar as the conversation grows.
+ * Uses the same pattern as injectChatGPT.
+ */
 async function injectGemini(inputElement) {
-    if (!geminiComposerHasText()) {
-        const gemWrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-        const anyContainer = document.getElementById('prompt-architect-buttons-container');
-        if (anyContainer && (!gemWrapper || !gemWrapper.contains(anyContainer))) anyContainer.remove();
-        if (gemWrapper) {
-            gemWrapper.style.display = 'none';
-        }
-        geminiLockedPosition = null;
-        geminiLastAnchorElement = null;
-        return;
-    }
     const sendButton = _findSendButton(inputElement, 'gemini');
     if (!sendButton || !sendButton.parentElement) {
         console.warn('[Prompt Architect] Gemini: send button not found. Input found:', !!inputElement);
         throw new Error('Gemini send button not found');
     }
-    const wrapperEl = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-    const anyContainer = document.getElementById('prompt-architect-buttons-container');
-    if (anyContainer && (!wrapperEl || !wrapperEl.contains(anyContainer))) anyContainer.remove();
-    const wrapper = getOrCreateGeminiPersistentWrapper();
-    ensureGeminiButtonInWrapper(wrapper);
-    updateGeminiPersistentPosition();
-    wrapper.style.display = '';
+
+    // Remove any old persistent wrapper (we're switching to inline injection)
+    const oldWrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
+    if (oldWrapper) oldWrapper.remove();
+
+    // Remove any stray inline containers from previous attempts
+    const existing = document.getElementById('prompt-architect-buttons-container');
+    if (existing) existing.remove();
+
+    // Only show when there's text
+    if (!geminiComposerHasText()) return;
+
+    const parent = sendButton.parentElement;
+    parent.style.setProperty('display', 'flex', 'important');
+    parent.style.setProperty('flex-direction', 'row', 'important');
+    parent.style.setProperty('align-items', 'center', 'important');
+
+    const design = getPlatformDesign('gemini');
+    const enhancerDiv = document.createElement('div');
+    enhancerDiv.id = 'prompt-architect-buttons-container';
+    enhancerDiv.style.setProperty('display', 'inline-flex', 'important');
+    enhancerDiv.style.setProperty('align-items', 'center', 'important');
+    enhancerDiv.style.setProperty('gap', '6px', 'important');
+    enhancerDiv.style.setProperty('margin-right', '6px', 'important');
+    enhancerDiv.style.setProperty('flex-shrink', '0', 'important');
+    enhancerDiv.style.setProperty('position', 'relative', 'important');
+    enhancerDiv.style.setProperty('visibility', 'visible', 'important');
+    enhancerDiv.style.setProperty('opacity', '1', 'important');
+    enhancerDiv.style.setProperty('z-index', '999999', 'important');
+
+    const statusArea = document.createElement('div');
+    statusArea.id = 'prompt-architect-status-area';
+    statusArea.style.cssText = 'display:none;align-items:center;gap:6px;';
+    const statusEl = document.createElement('span');
+    statusEl.id = 'prompt-architect-status';
+    statusArea.appendChild(statusEl);
+    enhancerDiv.appendChild(statusArea);
+    enhancerDiv.appendChild(createEnhanceButton(inputElement, enhancerDiv));
+
+    // Insert immediately before the send button — everything else shifts right naturally
+    parent.insertBefore(enhancerDiv, sendButton);
 }
 
 /**
@@ -3887,26 +3915,19 @@ async function observeDOM() {
                 }
             }
             if (platform === 'gemini') {
-                const wrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-                if (wrapper && wrapper.firstElementChild) {
+                const container = document.getElementById('prompt-architect-buttons-container');
+                if (container && document.body.contains(container)) {
+                    // DOM injection — just toggle visibility based on text content
                     const hasText = geminiComposerHasText();
-                    if (hasText) {
-                        wrapper.style.display = '';
-                        // Stale-anchor guard: only re-position if the Gemini anchor button was replaced.
-                        const input = findPlatformSpecificInput();
-                        const anchorBtn = input ? (findGeminiRightActionButton(input) || _findSendButton(input, 'gemini')) : null;
-                        const anchorKey = anchorBtn ? (anchorBtn.isConnected ? anchorBtn.dataset?.paAnchorKey : 'detached') : 'none';
-                        if (anchorKey !== (geminiLastAnchorKey || 'none')) {
-                            geminiLastAnchorKey = anchorKey;
-                            updateGeminiPersistentPosition();
-                        }
-                    } else {
-                        wrapper.style.display = 'none';
-                        geminiLockedPosition = null;
-                        geminiLastAnchorElement = null;
-                    }
+                    container.style.display = hasText ? '' : 'none';
                     return;
                 }
+                // Container gone — re-inject
+                const input = findPlatformSpecificInput();
+                if (input) {
+                    await injectGemini(input);
+                }
+                return;
             }
             const existingUI = document.getElementById('prompt-architect-buttons-container');
             if (existingUI && document.body.contains(existingUI)) return;
@@ -3937,18 +3958,18 @@ async function observeDOM() {
                 }
             }
             if (platformForComposer === 'gemini') {
-                const wrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-                if (wrapper && wrapper.firstElementChild) {
+                const container = document.getElementById('prompt-architect-buttons-container');
+                if (container && document.body.contains(container)) {
                     if (geminiComposerHasText()) {
-                        wrapper.style.display = '';
-                        updateGeminiPersistentPosition();
+                        container.style.display = '';
                     } else {
-                        wrapper.style.display = 'none';
-                        geminiLockedPosition = null;
-                        geminiLastAnchorElement = null;
+                        container.style.display = 'none';
                     }
                     return;
                 }
+                // Re-inject if container is gone
+                if (input) injectGemini(input).catch(() => {});
+                return;
             }
             const existingUI = document.getElementById('prompt-architect-buttons-container');
             if (existingUI && document.body.contains(existingUI)) return;
@@ -3972,18 +3993,9 @@ async function observeDOM() {
             }
         }
         if (platformForComposer === 'gemini' && e.type === 'input') {
-            const wrapper = document.getElementById(GEMINI_PERSISTENT_WRAPPER_ID);
-            if (geminiComposerHasText()) {
-                if (wrapper && wrapper.firstElementChild) {
-                    wrapper.style.display = '';
-                    updateGeminiPersistentPosition();
-                }
-            } else {
-                const anyContainer = document.getElementById('prompt-architect-buttons-container');
-                if (anyContainer && (!wrapper || !wrapper.contains(anyContainer))) anyContainer.remove();
-                if (wrapper) wrapper.style.display = 'none';
-                geminiLockedPosition = null;
-                geminiLastAnchorElement = null;
+            const container = document.getElementById('prompt-architect-buttons-container');
+            if (container && document.body.contains(container)) {
+                container.style.display = geminiComposerHasText() ? '' : 'none';
             }
         }
         const now = Date.now();
