@@ -1119,6 +1119,7 @@ const GEMINI_PERSISTENT_WRAPPER_ID = 'prompt-architect-gemini-persistent';
 let geminiLockedPosition = null;
 /** When Gemini swaps toolbar nodes, invalidate the anti-jitter lock so the button re-snaps. */
 let geminiLastAnchorElement = null;
+let geminiLastAnchorKey = null;
 
 /** Nearest ancestor of the send/anchor row that still contains the composer input (avoids scanning the whole page). */
 function findGeminiComposerRowRoot(inputEl, anchorEl) {
@@ -1151,6 +1152,9 @@ function getOrCreateGeminiPersistentWrapper() {
     return wrapper;
 }
 
+// Tracks last known good position per wrapper to detect and smooth layout jumps
+const _lastKnownPositions = {};
+
 function applyClampedFixedPosition(wrapper, x, y, width, height) {
     const margin = 8;
     const viewportW = window.innerWidth || document.documentElement.clientWidth || 0;
@@ -1161,8 +1165,23 @@ function applyClampedFixedPosition(wrapper, x, y, width, height) {
     const clampedX = Math.min(Math.max(x, margin), maxX);
     const clampedY = Math.min(Math.max(y, margin), maxY);
 
-    wrapper.style.left = clampedX + 'px';
-    wrapper.style.top = clampedY + 'px';
+    // Jump guard: if this wrapper jumped >6px, ease toward the new position rather than snapping.
+    // This masks the staleness race between getBoundingClientRect() and the next paint.
+    const wrapperId = wrapper.id || 'default';
+    const prev = _lastKnownPositions[wrapperId];
+    const JUMP_THRESHOLD_PX = 6;
+    const LERP_FACTOR = 0.55; // move 55% of the way each frame — converges in ~3 frames
+
+    if (prev && (Math.abs(clampedX - prev.x) > JUMP_THRESHOLD_PX || Math.abs(clampedY - prev.y) > JUMP_THRESHOLD_PX)) {
+        // Ease toward new position
+        wrapper.style.left = (prev.x + (clampedX - prev.x) * LERP_FACTOR) + 'px';
+        wrapper.style.top = (prev.y + (clampedY - prev.y) * LERP_FACTOR) + 'px';
+    } else {
+        wrapper.style.left = clampedX + 'px';
+        wrapper.style.top = clampedY + 'px';
+    }
+
+    _lastKnownPositions[wrapperId] = { x: clampedX, y: clampedY };
 }
 
 function updateChatGPTPersistentPosition() {
@@ -1428,8 +1447,6 @@ async function injectChatGPT(inputElement) {
     updateChatGPTPersistentPosition();
     // Only show the button when the composer has text (avoids wrong position when not signed in / empty)
     wrapper.style.display = chatGPTComposerHasText() ? '' : 'none';
-    setTimeout(updateChatGPTPersistentPosition, 350);
-    setTimeout(updateChatGPTPersistentPosition, 900);
 }
 
 /**
@@ -1459,8 +1476,6 @@ async function injectGemini(inputElement) {
     ensureGeminiButtonInWrapper(wrapper);
     updateGeminiPersistentPosition();
     wrapper.style.display = '';
-    setTimeout(updateGeminiPersistentPosition, 350);
-    setTimeout(updateGeminiPersistentPosition, 900);
 }
 
 /**
@@ -1830,6 +1845,13 @@ function _findSendButton(inputElement, platform) {
                 parentGeneric = parentGeneric.parentElement;
             }
             break;
+    }
+    // Tag the found button with a stable key so the stale-anchor guard in the 150ms
+    // interval can detect when it was replaced by a new DOM node.
+    if (sendButton) {
+        if (!sendButton.dataset.paAnchorKey) {
+            sendButton.dataset.paAnchorKey = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+        }
     }
     return sendButton;
 }
@@ -3587,6 +3609,7 @@ function findPlatformSpecificInput() {
  */
 let injectionDebounceTimer = null;
 let chatgptReinjectInterval = null;
+let chatgptLastSendKey = null;
 let lastInjectedInput = null;
 
 /**
@@ -3812,7 +3835,15 @@ async function observeDOM() {
                     const hasText = chatGPTComposerHasText();
                     if (hasText) {
                         wrapper.style.display = '';
-                        updateChatGPTPersistentPosition();
+                        // Stale-anchor guard: only re-position if the send button actually moved or was replaced.
+                        // Skipping when nothing changed avoids the getBoundingClientRect→paint race that causes jumps.
+                        const input = findPlatformSpecificInput();
+                        const sendBtn = input ? _findSendButton(input, 'chatgpt') : null;
+                        const sendKey = sendBtn ? (sendBtn.isConnected ? sendBtn.dataset?.paAnchorKey : 'detached') : 'none';
+                        if (sendKey !== (chatgptLastSendKey || 'none')) {
+                            chatgptLastSendKey = sendKey;
+                            updateChatGPTPersistentPosition();
+                        }
                     } else {
                         wrapper.style.display = 'none';
                     }
@@ -3825,7 +3856,14 @@ async function observeDOM() {
                     const hasText = geminiComposerHasText();
                     if (hasText) {
                         wrapper.style.display = '';
-                        updateGeminiPersistentPosition();
+                        // Stale-anchor guard: only re-position if the Gemini anchor button was replaced.
+                        const input = findPlatformSpecificInput();
+                        const anchorBtn = input ? (findGeminiRightActionButton(input) || _findSendButton(input, 'gemini')) : null;
+                        const anchorKey = anchorBtn ? (anchorBtn.isConnected ? anchorBtn.dataset?.paAnchorKey : 'detached') : 'none';
+                        if (anchorKey !== (geminiLastAnchorKey || 'none')) {
+                            geminiLastAnchorKey = anchorKey;
+                            updateGeminiPersistentPosition();
+                        }
                     } else {
                         wrapper.style.display = 'none';
                         geminiLockedPosition = null;
